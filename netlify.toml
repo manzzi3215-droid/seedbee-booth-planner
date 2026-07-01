@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# SPA 라우팅: 모든 경로를 index.html 로 (public/_redirects 와 동일 효과)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

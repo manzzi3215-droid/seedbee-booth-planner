@@ -1,0 +1,7 @@
+/* MUI CssBaseline 이 대부분의 리셋을 담당합니다.
+   여기서는 전역 최소 스타일만 둡니다. */
+html,
+body,
+#root {
+  height: 100%;
+}
