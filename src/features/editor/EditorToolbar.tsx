@@ -3,8 +3,9 @@ import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Switch from '@mui/material/Switch';
+import Tooltip from '@mui/material/Tooltip';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Snackbar from '@mui/material/Snackbar';
@@ -22,6 +23,7 @@ import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded';
 import TextFieldsRoundedIcon from '@mui/icons-material/TextFieldsRounded';
 import StraightenRoundedIcon from '@mui/icons-material/StraightenRounded';
 import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
+import WallpaperRoundedIcon from '@mui/icons-material/WallpaperRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import IsoPreviewDialog from '../iso/IsoPreviewDialog';
@@ -37,6 +39,7 @@ import {
 import { computeFixtureUsage } from '../export/fixtureUsage';
 import FixtureUsageDialog from '../export/FixtureUsageDialog';
 import { isWallView, getViewModeLabel, getWallLengthMm } from '../wall/constants';
+import { hasBoothHeight } from '../../constants/booth';
 
 /**
  * 편집기 상단 저장 툴바.
@@ -51,7 +54,11 @@ export default function EditorToolbar() {
     texts,
     dimensions,
     planImages,
+    planBackgrounds,
     fixturesById,
+    showFixtureNames,
+    setShowFixtureNames,
+    addBackground,
     layouts,
     currentLayoutId,
     dirty,
@@ -67,6 +74,7 @@ export default function EditorToolbar() {
   } = useEditor();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const svgInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -90,6 +98,8 @@ export default function EditorToolbar() {
       texts,
       dimensions,
       images: planImages,
+      backgrounds: planBackgrounds,
+      showFixtureNames,
       fixturesById,
     };
   };
@@ -115,7 +125,7 @@ export default function EditorToolbar() {
       wall,
       wallLabel: getViewModeLabel(wall),
       wallLengthMm: getWallLengthMm(project.boothConfig, wall),
-      heightMm: project.boothConfig.heightMm,
+      heightMm: project.boothConfig.heightMm ?? 0,
       texts: wallItems[wall].texts,
       dimensions: wallItems[wall].dimensions,
       images: wallItems[wall].images,
@@ -200,6 +210,39 @@ export default function EditorToolbar() {
     reader.readAsDataURL(file);
   };
 
+  const handleSvgFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !project) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const booth = project.boothConfig;
+      const widthMm = booth.widthMm;
+      const img = new window.Image();
+      img.onload = () => {
+        const aspect = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : booth.depthMm / booth.widthMm;
+        addBackground({
+          name: file.name.replace(/\.[^.]+$/, ''),
+          srcDataUrl: dataUrl,
+          widthMm,
+          heightMm: Math.max(1, Math.round(widthMm * aspect)),
+        });
+      };
+      img.onerror = () => {
+        // SVG 크기 산출 실패 시 부스 비율로 대체
+        addBackground({
+          name: file.name.replace(/\.[^.]+$/, ''),
+          srcDataUrl: dataUrl,
+          widthMm,
+          heightMm: booth.depthMm,
+        });
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const openSaveAs = () => {
     setNewName(suggestLayoutName());
     setDialogOpen(true);
@@ -230,18 +273,21 @@ export default function EditorToolbar() {
         flexWrap: 'wrap',
       }}
     >
-      <FormControl size="small" sx={{ minWidth: 180 }}>
-        <InputLabel id="layout-select-label">배치안 선택</InputLabel>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+          배치안
+        </Typography>
         <Select
-          labelId="layout-select-label"
-          label="배치안 선택"
+          size="small"
           value={currentLayoutId ?? ''}
           displayEmpty
           onChange={handleSelect}
-          renderValue={(val) => {
-            if (!val) return <em>저장된 배치안 없음</em>;
-            return layouts.find((l) => l.id === val)?.name ?? '';
-          }}
+          sx={{ minWidth: 150 }}
+          renderValue={(val) =>
+            val
+              ? layouts.find((l) => l.id === val)?.name ?? ''
+              : <Box component="em" sx={{ color: 'text.disabled' }}>저장된 배치안 없음</Box>
+          }
         >
           {layouts.length === 0 && (
             <MenuItem value="" disabled>
@@ -254,7 +300,7 @@ export default function EditorToolbar() {
             </MenuItem>
           ))}
         </Select>
-      </FormControl>
+      </Box>
 
       {dirty && (
         <Typography variant="caption" color="warning.main" sx={{ fontWeight: 700 }}>
@@ -316,6 +362,36 @@ export default function EditorToolbar() {
         style={{ display: 'none' }}
         onChange={handleImageFile}
       />
+      {viewMode === 'plan' && (
+        <>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<WallpaperRoundedIcon />}
+            onClick={() => svgInputRef.current?.click()}
+          >
+            SVG 배경 추가
+          </Button>
+          <input
+            ref={svgInputRef}
+            type="file"
+            accept="image/svg+xml,.svg"
+            style={{ display: 'none' }}
+            onChange={handleSvgFile}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showFixtureNames}
+                onChange={(e) => setShowFixtureNames(e.target.checked)}
+              />
+            }
+            label={<Typography variant="caption">집기명</Typography>}
+            sx={{ ml: 0 }}
+          />
+        </>
+      )}
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
@@ -347,14 +423,19 @@ export default function EditorToolbar() {
       >
         집기 리스트
       </Button>
-      <Button
-        variant="text"
-        size="small"
-        startIcon={<ViewInArRoundedIcon />}
-        onClick={() => setIsoOpen(true)}
-      >
-        3D 미리보기
-      </Button>
+      <Tooltip title={project && !hasBoothHeight(project.boothConfig) ? '부스 높이를 설정해야 사용할 수 있습니다' : ''}>
+        <span>
+          <Button
+            variant="text"
+            size="small"
+            startIcon={<ViewInArRoundedIcon />}
+            onClick={() => setIsoOpen(true)}
+            disabled={!project || !hasBoothHeight(project.boothConfig)}
+          >
+            3D 미리보기
+          </Button>
+        </span>
+      </Tooltip>
 
       <FixtureUsageDialog
         open={usageOpen}

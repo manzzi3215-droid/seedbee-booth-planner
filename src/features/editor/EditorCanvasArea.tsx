@@ -6,6 +6,7 @@ import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
+import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import KeyboardRoundedIcon from '@mui/icons-material/KeyboardRounded';
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +14,7 @@ import { useEditor } from './EditorContext';
 import BoothCanvas from '../canvas/BoothCanvas';
 import EditorToolbar from './EditorToolbar';
 import WallCanvas from '../wall/WallCanvas';
-import { getBoothSizeLabel, getFloorLabel } from '../../constants/booth';
+import { getBoothSizeLabel, getFloorLabel, hasBoothHeight } from '../../constants/booth';
 import {
   VIEW_MODE_OPTIONS,
   isWallView,
@@ -23,7 +24,7 @@ import {
 } from '../wall/constants';
 
 /**
- * 편집기 중앙 영역: 프로젝트 요약 + 2D 캔버스(배치 상호작용).
+ * 편집기 중앙 영역: 보기 탭 + 프로젝트 요약 + 캔버스(평면/벽면).
  */
 export default function EditorCanvasArea() {
   const navigate = useNavigate();
@@ -33,10 +34,15 @@ export default function EditorCanvasArea() {
     placed,
     texts,
     dimensions,
+    planImages,
+    planBackgrounds,
     fixturesById,
     selectedFixtureId,
     selectedTextId,
     selectedDimensionId,
+    selectedImageId,
+    selectedBackgroundId,
+    showFixtureNames,
     gridSizeMm,
     select,
     move,
@@ -44,6 +50,10 @@ export default function EditorCanvasArea() {
     moveText,
     selectDimension,
     moveDimension,
+    selectImage,
+    updatePlanImage,
+    selectBackground,
+    updatePlanBackground,
     viewMode,
     setViewMode,
     wallItems,
@@ -52,13 +62,9 @@ export default function EditorCanvasArea() {
     moveWallText,
     selectWallDimension,
     moveWallDimension,
-    clearSelection,
-    planImages,
-    selectedImageId,
-    selectImage,
-    updatePlanImage,
     selectWallImage,
     updateWallImage,
+    clearSelection,
   } = useEditor();
 
   if (projectLoading) {
@@ -72,71 +78,60 @@ export default function EditorCanvasArea() {
   if (!project) {
     return (
       <Box sx={{ p: 4, textAlign: 'center' }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          프로젝트를 찾을 수 없습니다
-        </Typography>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>프로젝트를 찾을 수 없습니다</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           삭제되었거나 잘못된 주소일 수 있습니다.
         </Typography>
-        <Button variant="outlined" onClick={() => navigate('/projects')}>
-          프로젝트 목록으로
-        </Button>
+        <Button variant="outlined" onClick={() => navigate('/projects')}>프로젝트 목록으로</Button>
       </Box>
     );
   }
 
   const { boothConfig } = project;
-  const wallView = isWallView(viewMode);
-  const wallLengthMm = getWallLengthMm(boothConfig, viewMode);
-  // 현재 벽면 요소 및 선택 (wallView 일 때만 의미 있음)
-  const currentWall = wallView ? (viewMode as Exclude<ViewMode, 'plan'>) : null;
+  const heightSet = hasBoothHeight(boothConfig);
+  // 높이 미설정이면 벽면 보기 불가 → 강제 평면도
+  const effectiveMode: ViewMode = !heightSet && isWallView(viewMode) ? 'plan' : viewMode;
+  const wallView = isWallView(effectiveMode);
+  const wallLengthMm = getWallLengthMm(boothConfig, effectiveMode);
+  const currentWall = wallView ? (effectiveMode as Exclude<ViewMode, 'plan'>) : null;
   const wallGroup = currentWall ? wallItems[currentWall] : { texts: [], dimensions: [], images: [] };
-  const wallSelText =
-    selectedItem?.scope === 'wall' && selectedItem.wall === currentWall && selectedItem.type === 'text'
-      ? selectedItem.id
-      : null;
-  const wallSelDim =
-    selectedItem?.scope === 'wall' && selectedItem.wall === currentWall && selectedItem.type === 'dimension'
-      ? selectedItem.id
-      : null;
-  const wallSelImg =
-    selectedItem?.scope === 'wall' && selectedItem.wall === currentWall && selectedItem.type === 'image'
+  const wallSel = (type: 'text' | 'dimension' | 'image') =>
+    selectedItem?.scope === 'wall' && selectedItem.wall === currentWall && selectedItem.type === type
       ? selectedItem.id
       : null;
 
   return (
     <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 보기 모드 탭 */}
+      {/* 보기 모드 탭 (높이 미설정 시 벽면 탭 비활성) */}
       <Tabs
-        value={viewMode}
+        value={effectiveMode}
         onChange={(_, v) => setViewMode(v as ViewMode)}
         variant="scrollable"
         scrollButtons="auto"
         sx={{ minHeight: 40, mb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
       >
         {VIEW_MODE_OPTIONS.map((opt) => (
-          <Tab key={opt.value} value={opt.value} label={opt.label} sx={{ minHeight: 40, py: 0 }} />
+          <Tab
+            key={opt.value}
+            value={opt.value}
+            label={opt.label}
+            disabled={opt.value !== 'plan' && !heightSet}
+            sx={{ minHeight: 40, py: 0 }}
+          />
         ))}
       </Tabs>
 
       {wallView ? (
         <>
-          {/* 벽면 정보 */}
           <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              {getViewModeLabel(viewMode)} · {wallLengthMm} × {boothConfig.heightMm} mm
+              {getViewModeLabel(effectiveMode)} · {wallLengthMm} × {boothConfig.heightMm} mm
             </Typography>
           </Paper>
 
-          <Stack
-            direction="row"
-            spacing={0.75}
-            sx={{ alignItems: 'center', color: 'text.secondary', mb: 1, px: 0.5 }}
-          >
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: 'text.secondary', mb: 1, px: 0.5 }}>
             <KeyboardRoundedIcon sx={{ fontSize: 16 }} />
-            <Typography variant="caption">
-              벽면에 텍스트·치수선 추가 · Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동
-            </Typography>
+            <Typography variant="caption">벽면에 텍스트·치수선·이미지 추가 · Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동</Typography>
           </Stack>
 
           <EditorToolbar />
@@ -144,14 +139,14 @@ export default function EditorCanvasArea() {
           <Box sx={{ flex: 1, minHeight: 0 }}>
             <WallCanvas
               wallLengthMm={wallLengthMm}
-              heightMm={boothConfig.heightMm}
+              heightMm={boothConfig.heightMm ?? 0}
               gridSizeMm={gridSizeMm}
               texts={wallGroup.texts}
               dimensions={wallGroup.dimensions}
               images={wallGroup.images}
-              selectedTextId={wallSelText}
-              selectedDimensionId={wallSelDim}
-              selectedImageId={wallSelImg}
+              selectedTextId={wallSel('text')}
+              selectedDimensionId={wallSel('dimension')}
+              selectedImageId={wallSel('image')}
               onSelectText={(id) => currentWall && selectWallText(currentWall, id)}
               onMoveText={(id, x, y) => currentWall && moveWallText(currentWall, id, x, y)}
               onSelectDimension={(id) => currentWall && selectWallDimension(currentWall, id)}
@@ -165,22 +160,20 @@ export default function EditorCanvasArea() {
       ) : (
         <>
           <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider', mb: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-              {project.name}
-            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>{project.name}</Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               <Chip label={`치수 ${getBoothSizeLabel(boothConfig)}`} />
               <Chip variant="outlined" label={`오픈 ${boothConfig.openSide}면`} />
               <Chip variant="outlined" label={`바닥 ${getFloorLabel(boothConfig)}`} />
             </Stack>
+            {!heightSet && (
+              <Alert severity="info" sx={{ mt: 1.5 }}>
+                부스 높이를 설정해야 벽면 전개도와 3D 미리보기를 사용할 수 있습니다.
+              </Alert>
+            )}
           </Paper>
 
-          {/* 단축키 안내 */}
-          <Stack
-            direction="row"
-            spacing={0.75}
-            sx={{ alignItems: 'center', color: 'text.secondary', mb: 1, px: 0.5 }}
-          >
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: 'text.secondary', mb: 1, px: 0.5 }}>
             <KeyboardRoundedIcon sx={{ fontSize: 16 }} />
             <Typography variant="caption">
               Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동(100mm) · Shift+방향키 500mm · Shift 드래그: 스마트 스냅
@@ -196,11 +189,14 @@ export default function EditorCanvasArea() {
               texts={texts}
               dimensions={dimensions}
               images={planImages}
+              backgrounds={planBackgrounds}
               fixturesById={fixturesById}
+              showFixtureNames={showFixtureNames}
               selectedFixtureId={selectedFixtureId}
               selectedTextId={selectedTextId}
               selectedDimensionId={selectedDimensionId}
               selectedImageId={selectedImageId}
+              selectedBackgroundId={selectedBackgroundId}
               gridSizeMm={gridSizeMm}
               onSelect={select}
               onMove={move}
@@ -210,6 +206,8 @@ export default function EditorCanvasArea() {
               onMoveDimension={moveDimension}
               onSelectImage={selectImage}
               onChangeImage={updatePlanImage}
+              onSelectBackground={selectBackground}
+              onChangeBackground={updatePlanBackground}
             />
           </Box>
         </>

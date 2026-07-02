@@ -1,4 +1,4 @@
-import { Group, Rect, Ellipse, Line, Path } from 'react-konva';
+import { Group, Rect, Ellipse, Line, Path, Text } from 'react-konva';
 import type Konva from 'konva';
 import type { FixtureDef, PlacedFixture, PointMm } from '../../types';
 import { isFixtureOutOfBounds } from './fixtureGeometry';
@@ -7,6 +7,9 @@ import { CUSTOM_PATH_VIEW } from '../fixtures/shapes';
 const SELECT_COLOR = '#2563eb';
 const WARN_COLOR = '#dc2626';
 const OUTLINE = 'rgba(0,0,0,0.35)';
+const NAME_PX = 12; // 집기명 화면 폰트 크기
+const NAME_MIN_W_PX = 36; // 이 너비(px)보다 작으면 이름 숨김
+const NAME_MIN_H_PX = 18;
 
 /** placeholder(반투명 + 대각선) — 아직 실제 형태가 없는 경우 */
 function ShapePlaceholder({ w, d, color }: { w: number; d: number; color: string }) {
@@ -100,6 +103,8 @@ interface FixtureNodeProps {
   boothPolygon: PointMm[];
   /** Stage 배율(px/mm). 선택 핸들을 화면상 일정 크기로 그리는 데 사용 */
   scale: number;
+  /** 집기명 표시 여부 */
+  showName: boolean;
   onSelect: (id: string) => void;
   /** 드래그 중 위치 보정(스마트 스냅). 보정된 좌표(mm) 반환 */
   onDragMove: (id: string, xMm: number, yMm: number, shiftKey: boolean) => { xMm: number; yMm: number };
@@ -157,6 +162,7 @@ export default function FixtureNode({
   selected,
   boothPolygon,
   scale,
+  showName,
   onSelect,
   onDragMove,
   onDragEnd,
@@ -165,6 +171,14 @@ export default function FixtureNode({
   const showBorder = selected || oob;
   // 부스 밖이면 항상 빨간 테두리 유지, 그 외 선택 시 파란 테두리
   const borderColor = oob ? WARN_COLOR : SELECT_COLOR;
+
+  // 집기명 표시: 화면상 충분히 클 때만
+  const nameVisible =
+    showName &&
+    def.name.length > 0 &&
+    def.widthMm * scale >= NAME_MIN_W_PX &&
+    def.depthMm * scale >= NAME_MIN_H_PX;
+  const nameFontMm = NAME_PX / scale;
 
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
@@ -192,6 +206,26 @@ export default function FixtureNode({
       onDragEnd={handleDragEnd}
     >
       <ShapeBody def={def} />
+      {nameVisible && (
+        <Text
+          text={def.name}
+          width={def.widthMm}
+          height={def.depthMm}
+          align="center"
+          verticalAlign="middle"
+          wrap="none"
+          ellipsis
+          fontSize={nameFontMm}
+          fontStyle={selected ? 'bold' : 'normal'}
+          fill="#ffffff"
+          stroke="rgba(0,0,0,0.7)"
+          strokeWidth={(selected ? 2.4 : 1.6) / scale}
+          fillAfterStrokeEnabled
+          opacity={selected ? 1 : 0.9}
+          listening={false}
+          padding={2}
+        />
+      )}
       {showBorder && (
         <Rect
           width={def.widthMm}

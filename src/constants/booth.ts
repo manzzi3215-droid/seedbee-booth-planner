@@ -40,7 +40,15 @@ export function getFloorLabel(config: BoothConfig): string {
   return FLOOR_TYPE_OPTIONS.find((o) => o.value === config.floorType)?.label ?? '-';
 }
 
-/** 부스 치수를 "W×D×H mm" 문자열로 */
+/** 부스에 높이가 설정되어 있는지 */
+export function hasBoothHeight(config: BoothConfig): boolean {
+  return config.heightMm != null && config.heightMm > 0;
+}
+
+/** 부스 치수를 "W×D×H mm" 문자열로 (높이 미설정 시 안내) */
 export function getBoothSizeLabel(config: BoothConfig): string {
+  if (!hasBoothHeight(config)) {
+    return `${config.widthMm} × ${config.depthMm} mm · 높이 미설정`;
+  }
   return `${config.widthMm} × ${config.depthMm} × ${config.heightMm} mm`;
 }

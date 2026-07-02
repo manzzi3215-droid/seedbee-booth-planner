@@ -10,6 +10,9 @@ import MenuItem from '@mui/material/MenuItem';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import FormHelperText from '@mui/material/FormHelperText';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Alert from '@mui/material/Alert';
 import InputAdornment from '@mui/material/InputAdornment';
 import { useNavigate } from 'react-router-dom';
 import type { OpenSide, FloorType, Project, BoothShape, PointMm } from '../types';
@@ -53,6 +56,7 @@ export default function NewProjectPage() {
   const [widthMm, setWidthMm] = useState('');
   const [depthMm, setDepthMm] = useState('');
   const [heightMm, setHeightMm] = useState('');
+  const [heightUnset, setHeightUnset] = useState(false);
   const [openSide, setOpenSide] = useState<OpenSide>(1);
   const [floorType, setFloorType] = useState<FloorType>('pytex');
   const [customFloorName, setCustomFloorName] = useState('');
@@ -90,7 +94,8 @@ export default function NewProjectPage() {
       next.name = '행사명을 입력하세요.';
     }
 
-    const h = validateDimension(heightMm);
+    // 높이는 선택값: "설정 안 함" 이면 검증 생략(null)
+    const h = heightUnset ? { value: NaN as number, error: undefined } : validateDimension(heightMm);
     if (h.error) next.heightMm = h.error;
 
     if (floorType === 'custom' && customFloorName.trim().length === 0) {
@@ -146,7 +151,7 @@ export default function NewProjectPage() {
       boothConfig: {
         widthMm: width,
         depthMm: depth,
-        heightMm: h.value,
+        heightMm: heightUnset ? null : h.value,
         openSide,
         floorType,
         customFloorName: floorType === 'custom' ? customFloorName.trim() : undefined,
@@ -255,14 +260,30 @@ export default function NewProjectPage() {
             <TextField
               label="부스 높이"
               type="number"
-              value={heightMm}
+              value={heightUnset ? '' : heightMm}
               onChange={(e) => setHeightMm(e.target.value)}
               fullWidth
+              disabled={heightUnset}
               error={Boolean(errors.heightMm)}
               helperText={errors.heightMm}
               slotProps={{ input: { endAdornment: mmAdornment } }}
             />
           </Stack>
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={heightUnset}
+                onChange={(e) => setHeightUnset(e.target.checked)}
+              />
+            }
+            label="높이 설정 안 함 (벽면 전개도·3D 미리보기는 나중에 높이를 설정해야 사용 가능)"
+          />
+          {heightUnset && (
+            <Alert severity="info">
+              높이를 설정하지 않으면 벽면 전개도와 3D 미리보기 기능을 사용할 수 없습니다.
+            </Alert>
+          )}
 
           {boothShape === 'polygon' && (
             <PolygonPointsEditor

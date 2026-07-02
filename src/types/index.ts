@@ -32,7 +32,8 @@ export type BoothShape = 'rectangle' | 'polygon';
 export interface BoothConfig {
   widthMm: number; // 부스 가로(mm) — bounding box
   depthMm: number; // 부스 세로(mm) — bounding box
-  heightMm: number; // 부스 높이(mm)
+  /** 부스 높이(mm). null 이면 "높이 미설정"(벽면/3D 미리보기 비활성) */
+  heightMm: number | null;
   openSide: OpenSide; // 오픈면 (rectangle 전용)
   floorType: FloorType; // 바닥 종류
   customFloorName?: string; // floorType === 'custom' 일 때 사용
@@ -156,6 +157,8 @@ export interface PlacedImage {
   heightMm: number;
   rotationDeg: number;
   opacity: number; // 0~1
+  /** SVG 배경 등에서 사용: 잠금 시 선택/이동 불가 */
+  locked?: boolean;
   memo?: string;
 }
 
@@ -184,6 +187,8 @@ export interface Layout {
   texts?: PlacedText[];
   dimensions?: PlacedDimension[];
   planImages?: PlacedImage[];
+  /** 평면도 SVG 배경 도면 (PlacedImage 재사용, locked 지원) */
+  planBackgrounds?: PlacedImage[];
   wallItems?: WallItems;
   createdAt: number;
   updatedAt: number;

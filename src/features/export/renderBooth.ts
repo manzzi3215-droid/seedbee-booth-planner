@@ -45,8 +45,10 @@ export function createBoothDrawingDataURL(
   texts: PlacedText[],
   dimensions: PlacedDimension[],
   images: PlacedImage[],
+  backgrounds: PlacedImage[],
   imageElements: Map<string, HTMLImageElement>,
   fixturesById: Map<string, FixtureDef>,
+  showFixtureNames: boolean,
   options: RenderOptions = {},
 ): string {
   const gridSizeMm = options.gridSizeMm ?? DEFAULT_GRID_SIZE_MM;
@@ -161,6 +163,12 @@ export function createBoothDrawingDataURL(
       if (edges.left) addWall([minX, minY, minX, maxY]);
     }
 
+    // SVG 배경 (맨 아래)
+    for (const bg of backgrounds) {
+      const node = buildImageNode(bg, imageElements);
+      if (node) layer.add(node);
+    }
+
     // 이미지 (집기 아래)
     for (const img of images) {
       const node = buildImageNode(img, imageElements);
@@ -171,7 +179,7 @@ export function createBoothDrawingDataURL(
     for (const p of placed) {
       const def = fixturesById.get(p.fixtureDefId);
       if (!def) continue;
-      layer.add(buildFixtureGroup(p, def, scale));
+      layer.add(buildFixtureGroup(p, def, scale, showFixtureNames));
     }
 
     // 텍스트
@@ -318,8 +326,8 @@ function addPlaceholder(group: Konva.Group, color: string, w: number, d: number)
   );
 }
 
-/** 배치 집기 하나를 그리는 Konva.Group (형태별) + 이름 라벨 */
-function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number): Konva.Group {
+/** 배치 집기 하나를 그리는 Konva.Group (형태별) + 이름 라벨(옵션) */
+function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number, showName: boolean): Konva.Group {
   const group = new Konva.Group({ x: p.xMm, y: p.yMm, rotation: p.rotationDeg });
   const w = def.widthMm;
   const d = def.depthMm;
@@ -374,23 +382,27 @@ function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number): Ko
       break;
   }
 
-  // 이름 라벨 (어떤 배경색에서도 읽히도록 흰 글자 + 어두운 외곽선)
-  group.add(
-    new Konva.Text({
-      width: w,
-      height: d,
-      align: 'center',
-      verticalAlign: 'middle',
-      text: def.name,
-      fontSize: 20 / scale,
-      fontStyle: 'bold',
-      fill: '#ffffff',
-      stroke: 'rgba(0,0,0,0.65)',
-      strokeWidth: (2 / scale),
-      fillAfterStrokeEnabled: true,
-      listening: false,
-    }),
-  );
+  // 이름 라벨 (토글 ON, 어떤 배경색에서도 읽히도록 흰 글자 + 어두운 외곽선)
+  if (showName && def.name) {
+    group.add(
+      new Konva.Text({
+        width: w,
+        height: d,
+        align: 'center',
+        verticalAlign: 'middle',
+        wrap: 'none',
+        ellipsis: true,
+        text: def.name,
+        fontSize: 20 / scale,
+        fontStyle: 'bold',
+        fill: '#ffffff',
+        stroke: 'rgba(0,0,0,0.65)',
+        strokeWidth: 2 / scale,
+        fillAfterStrokeEnabled: true,
+        listening: false,
+      }),
+    );
+  }
 
   return group;
 }

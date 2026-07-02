@@ -50,7 +50,7 @@ type ItemType = 'fixture' | 'text' | 'dimension' | 'image';
  *  - wall 스코프: 특정 벽면의 텍스트/치수선/이미지
  */
 export type SelectedItem =
-  | { scope: 'plan'; type: ItemType; id: string }
+  | { scope: 'plan'; type: ItemType | 'background'; id: string }
   | { scope: 'wall'; wall: WallSide; type: 'text' | 'dimension' | 'image'; id: string }
   | null;
 
@@ -90,9 +90,14 @@ interface EditorContextValue {
   texts: PlacedText[];
   dimensions: PlacedDimension[];
   planImages: PlacedImage[];
+  planBackgrounds: PlacedImage[];
   // 벽면 배치
   wallItems: WallItems;
   gridSizeMm: number;
+
+  // 집기명 표시 토글 (저장 안 함)
+  showFixtureNames: boolean;
+  setShowFixtureNames: (v: boolean) => void;
 
   // 선택
   selectedItem: SelectedItem;
@@ -100,10 +105,12 @@ interface EditorContextValue {
   selectedTextId: string | null; // plan 스코프
   selectedDimensionId: string | null; // plan 스코프
   selectedImageId: string | null; // plan 스코프
+  selectedBackgroundId: string | null; // plan 스코프
   /** 선택된 텍스트/치수선/이미지 객체 (plan/wall 공통) — 패널용 */
   selectedText: PlacedText | null;
   selectedDimension: PlacedDimension | null;
   selectedImage: PlacedImage | null;
+  selectedBackground: PlacedImage | null;
 
   // 집기 액션 (plan 전용)
   place: (def: FixtureDef) => void;
@@ -136,10 +143,16 @@ interface EditorContextValue {
   selectWallImage: (wall: WallSide, id: string | null) => void;
   updateWallImage: (wall: WallSide, id: string, patch: Partial<PlacedImage>) => void;
 
+  // SVG 배경 (평면도 전용)
+  addBackground: (input: NewImageInput) => void;
+  selectBackground: (id: string | null) => void;
+  updatePlanBackground: (id: string, patch: Partial<PlacedImage>) => void;
+
   // 선택 속성 수정 (패널)
   updateSelectedText: (patch: Partial<PlacedText>) => void;
   updateSelectedDimension: (patch: Partial<PlacedDimension>) => void;
   updateSelectedImage: (patch: Partial<PlacedImage>) => void;
+  updateSelectedBackground: (patch: Partial<PlacedImage>) => void;
 
   // 선택 대상 공통(분기)
   rotateSelected: () => void;
@@ -199,10 +212,12 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [texts, setTexts] = useState<PlacedText[]>([]);
   const [dimensions, setDimensions] = useState<PlacedDimension[]>([]);
   const [planImages, setPlanImages] = useState<PlacedImage[]>([]);
+  const [planBackgrounds, setPlanBackgrounds] = useState<PlacedImage[]>([]);
   const [wallItems, setWallItems] = useState<WallItems>(emptyWallItems());
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
   const [gridSizeMm] = useState(DEFAULT_GRID_SIZE_MM);
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
+  const [showFixtureNames, setShowFixtureNames] = useState(true);
 
   const [layouts, setLayouts] = useState<Layout[]>([]);
   const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
@@ -226,6 +241,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setTexts(latest?.texts ? cloneTexts(latest.texts) : []);
       setDimensions(latest?.dimensions ? cloneDims(latest.dimensions) : []);
       setPlanImages(latest?.planImages ? cloneImages(latest.planImages) : []);
+      setPlanBackgrounds(latest?.planBackgrounds ? cloneImages(latest.planBackgrounds) : []);
       setWallItems(cloneWallItems(normalizeWallItems(latest?.wallItems)));
       setCurrentLayoutId(latest?.id ?? null);
       setSelectedItem(null);
@@ -246,6 +262,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     selectedItem?.scope === 'plan' && selectedItem.type === 'dimension' ? selectedItem.id : null;
   const selectedImageId =
     selectedItem?.scope === 'plan' && selectedItem.type === 'image' ? selectedItem.id : null;
+  const selectedBackgroundId =
+    selectedItem?.scope === 'plan' && selectedItem.type === 'background' ? selectedItem.id : null;
 
   // 선택된 텍스트/치수선/이미지 객체 (scope 무관)
   const selectedText: PlacedText | null = (() => {
@@ -266,6 +284,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     const arr = it.scope === 'plan' ? planImages : wallItems[it.wall].images;
     return arr.find((i) => i.id === it.id) ?? null;
   })();
+  const selectedBackground: PlacedImage | null =
+    selectedBackgroundId ? planBackgrounds.find((b) => b.id === selectedBackgroundId) ?? null : null;
 
   const value = useMemo<EditorContextValue>(() => {
     const boothW = project?.boothConfig.widthMm ?? 0;
@@ -412,6 +432,27 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     const updateWallImage = (wall: WallSide, id: string, patch: Partial<PlacedImage>) =>
       updateWall(wall, (g) => ({ ...g, images: g.images.map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
 
+    // ---------- SVG 배경 (평면도 전용) ----------
+    const addBackground = (input: NewImageInput) => {
+      const bg: PlacedImage = {
+        id: generateId(),
+        name: input.name,
+        srcDataUrl: input.srcDataUrl,
+        xMm: 0,
+        yMm: 0,
+        widthMm: input.widthMm,
+        heightMm: input.heightMm,
+        rotationDeg: 0,
+        opacity: 0.8,
+        locked: false,
+      };
+      setPlanBackgrounds((prev) => [...prev, bg]);
+      setSelectedItem({ scope: 'plan', type: 'background', id: bg.id });
+    };
+    const selectBackground = (id: string | null) => setSelectedItem(id ? { scope: 'plan', type: 'background', id } : null);
+    const updatePlanBackground = (id: string, patch: Partial<PlacedImage>) =>
+      setPlanBackgrounds((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+
     // ---------- 선택 텍스트/치수선 수정 (scope 분기) ----------
     const mutateSelText = (fn: (t: PlacedText) => PlacedText) => {
       const it = selectedItem;
@@ -431,9 +472,15 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       if (it.scope === 'plan') setPlanImages((prev) => prev.map((i) => (i.id === it.id ? fn(i) : i)));
       else updateWall(it.wall, (g) => ({ ...g, images: g.images.map((i) => (i.id === it.id ? fn(i) : i)) }));
     };
+    const mutateSelBackground = (fn: (i: PlacedImage) => PlacedImage) => {
+      const it = selectedItem;
+      if (!it || it.scope !== 'plan' || it.type !== 'background') return;
+      setPlanBackgrounds((prev) => prev.map((b) => (b.id === it.id ? fn(b) : b)));
+    };
     const updateSelectedText = (patch: Partial<PlacedText>) => mutateSelText((t) => ({ ...t, ...patch }));
     const updateSelectedDimension = (patch: Partial<PlacedDimension>) => mutateSelDim((d) => ({ ...d, ...patch }));
     const updateSelectedImage = (patch: Partial<PlacedImage>) => mutateSelImage((i) => ({ ...i, ...patch }));
+    const updateSelectedBackground = (patch: Partial<PlacedImage>) => mutateSelBackground((b) => ({ ...b, ...patch }));
 
     // ---------- 선택 대상 공통 (타입·스코프 분기) ----------
     const rotateSelected = () => {
@@ -443,6 +490,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       else if (it.type === 'text') mutateSelText((t) => ({ ...t, rotationDeg: (t.rotationDeg + 90) % 360 }));
       else if (it.type === 'dimension') mutateSelDim((d) => rotateDimensionBy(d, 90));
       else if (it.type === 'image') mutateSelImage((i) => ({ ...i, rotationDeg: (i.rotationDeg + 90) % 360 }));
+      else if (it.type === 'background') mutateSelBackground((b) => ({ ...b, rotationDeg: (b.rotationDeg + 90) % 360 }));
     };
 
     const copySelected = () => {
@@ -477,6 +525,12 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         };
         if (it.scope === 'plan') { setPlanImages(dup); setSelectedItem({ scope: 'plan', type: 'image', id: newId }); }
         else { updateWall(it.wall, (g) => ({ ...g, images: dup(g.images) })); setSelectedItem({ scope: 'wall', wall: it.wall, type: 'image', id: newId }); }
+      } else if (it.type === 'background') {
+        setPlanBackgrounds((prev) => {
+          const src = prev.find((b) => b.id === it.id);
+          return src ? [...prev, { ...src, id: newId, xMm: src.xMm + gridSizeMm, yMm: src.yMm + gridSizeMm, locked: false }] : prev;
+        });
+        setSelectedItem({ scope: 'plan', type: 'background', id: newId });
       }
     };
 
@@ -493,6 +547,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       } else if (it.type === 'image') {
         if (it.scope === 'plan') setPlanImages((prev) => prev.filter((i) => i.id !== it.id));
         else updateWall(it.wall, (g) => ({ ...g, images: g.images.filter((i) => i.id !== it.id) }));
+      } else if (it.type === 'background') {
+        setPlanBackgrounds((prev) => prev.filter((b) => b.id !== it.id));
       }
       setSelectedItem(null);
     };
@@ -504,6 +560,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       else if (it.type === 'text') mutateSelText((t) => ({ ...t, xMm: t.xMm + dxMm, yMm: t.yMm + dyMm }));
       else if (it.type === 'dimension') mutateSelDim((d) => ({ ...d, startXMm: d.startXMm + dxMm, startYMm: d.startYMm + dyMm, endXMm: d.endXMm + dxMm, endYMm: d.endYMm + dyMm }));
       else if (it.type === 'image') mutateSelImage((i) => ({ ...i, xMm: i.xMm + dxMm, yMm: i.yMm + dyMm }));
+      else if (it.type === 'background') mutateSelBackground((b) => ({ ...b, xMm: b.xMm + dxMm, yMm: b.yMm + dyMm }));
     };
 
     // ---------- 배치안 저장/불러오기 ----------
@@ -514,8 +571,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         JSON.stringify(texts) !== JSON.stringify(currentLayout.texts ?? []) ||
         JSON.stringify(dimensions) !== JSON.stringify(currentLayout.dimensions ?? []) ||
         JSON.stringify(planImages) !== JSON.stringify(currentLayout.planImages ?? []) ||
+        JSON.stringify(planBackgrounds) !== JSON.stringify(currentLayout.planBackgrounds ?? []) ||
         JSON.stringify(wallItems) !== JSON.stringify(normalizeWallItems(currentLayout.wallItems))
-      : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 ||
+      : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 || planBackgrounds.length > 0 ||
         WALL_SIDES.some((s) => wallItems[s].texts.length > 0 || wallItems[s].dimensions.length > 0 || wallItems[s].images.length > 0);
 
     const suggestLayoutName = () => `v${layouts.length + 1}`;
@@ -532,6 +590,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       texts: cloneTexts(texts),
       dimensions: cloneDims(dimensions),
       planImages: cloneImages(planImages),
+      planBackgrounds: cloneImages(planBackgrounds),
       wallItems: cloneWallItems(wallItems),
     });
 
@@ -554,6 +613,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setTexts(cloneTexts(layout.texts ?? []));
       setDimensions(cloneDims(layout.dimensions ?? []));
       setPlanImages(cloneImages(layout.planImages ?? []));
+      setPlanBackgrounds(cloneImages(layout.planBackgrounds ?? []));
       setWallItems(cloneWallItems(normalizeWallItems(layout.wallItems)));
       setCurrentLayoutId(layout.id);
       setSelectedItem(null);
@@ -580,16 +640,21 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       texts,
       dimensions,
       planImages,
+      planBackgrounds,
       wallItems,
       gridSizeMm,
+      showFixtureNames,
+      setShowFixtureNames,
       selectedItem,
       selectedFixtureId,
       selectedTextId,
       selectedDimensionId,
       selectedImageId,
+      selectedBackgroundId,
       selectedText,
       selectedDimension,
       selectedImage,
+      selectedBackground,
       place,
       select,
       move,
@@ -611,9 +676,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       updatePlanImage,
       selectWallImage,
       updateWallImage,
+      addBackground,
+      selectBackground,
+      updatePlanBackground,
       updateSelectedText,
       updateSelectedDimension,
       updateSelectedImage,
+      updateSelectedBackground,
       rotateSelected,
       copySelected,
       deleteSelected,
@@ -632,15 +701,19 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     texts,
     dimensions,
     planImages,
+    planBackgrounds,
     wallItems,
+    showFixtureNames,
     selectedItem,
     selectedFixtureId,
     selectedTextId,
     selectedDimensionId,
     selectedImageId,
+    selectedBackgroundId,
     selectedText,
     selectedDimension,
     selectedImage,
+    selectedBackground,
     gridSizeMm,
     layouts,
     currentLayoutId,

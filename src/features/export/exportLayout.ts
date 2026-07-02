@@ -15,6 +15,8 @@ export interface ExportInput {
   texts: PlacedText[];
   dimensions: PlacedDimension[];
   images: PlacedImage[];
+  backgrounds: PlacedImage[];
+  showFixtureNames: boolean;
   fixturesById: Map<string, FixtureDef>;
 }
 
@@ -28,15 +30,17 @@ function formatDate(ms: number): string {
 
 /** 1. PNG 저장 — 부스 전체 도면 */
 export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
-  const imageEls = await preloadImages(input.images.map((i) => i.srcDataUrl));
+  const imageEls = await preloadImages([...input.backgrounds, ...input.images].map((i) => i.srcDataUrl));
   const url = createBoothDrawingDataURL(
     input.project.boothConfig,
     input.placed,
     input.texts,
     input.dimensions,
     input.images,
+    input.backgrounds,
     imageEls,
     input.fixturesById,
+    input.showFixtureNames,
   );
   downloadDataURL(url, `${buildBaseName(input.project.name, input.layoutName)}_layout.png`);
 }
@@ -111,9 +115,9 @@ async function buildReportDataURL(input: ExportInput): Promise<string> {
   ctx.font = font(4, true);
   ctx.fillText('부스 도면', mm(drawBoxX), mm(drawBoxY - 1));
 
-  const imageEls = await preloadImages(input.images.map((i) => i.srcDataUrl));
+  const imageEls = await preloadImages([...input.backgrounds, ...input.images].map((i) => i.srcDataUrl));
   const boothImg = await loadImage(
-    createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, imageEls, input.fixturesById, { pixelRatio: 2 }),
+    createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2 }),
   );
   // 박스 안에 비율 유지하여 맞춤
   const boxRatio = drawBoxW / drawBoxH;

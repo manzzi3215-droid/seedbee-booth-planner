@@ -64,7 +64,7 @@ const DEFAULT_FIXTURE_HEIGHT_MM = 1000;
 /** 벽 4면(bbox 기준) 정의 */
 function buildWalls(booth: BoothConfig, wallItems: WallItems): IsoWall[] {
   const b = getBoothBounds(booth);
-  const h = booth.heightMm;
+  const h = booth.heightMm ?? 0;
   const v = (x: number, y: number): V3 => ({ x, y, z: 0 });
 
   const defs: { side: WallSide; start: V3; end: V3; len: number; facingSum: number }[] = [

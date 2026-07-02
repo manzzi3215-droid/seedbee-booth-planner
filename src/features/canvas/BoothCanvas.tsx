@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Line, Text, Group, Transformer } from 'react-konva';
+import { Stage, Layer, Line, Text, Group, Transformer, Image as KonvaImage } from 'react-konva';
 import Konva from 'konva';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -55,11 +55,14 @@ interface BoothCanvasProps {
   texts: PlacedText[];
   dimensions: PlacedDimension[];
   images: PlacedImage[];
+  backgrounds: PlacedImage[];
   fixturesById: Map<string, FixtureDef>;
+  showFixtureNames: boolean;
   selectedFixtureId: string | null;
   selectedTextId: string | null;
   selectedDimensionId: string | null;
   selectedImageId: string | null;
+  selectedBackgroundId: string | null;
   gridSizeMm?: number;
   onSelect: (id: string | null) => void;
   onMove: (id: string, xMm: number, yMm: number, snapToGrid?: boolean) => void;
@@ -69,6 +72,8 @@ interface BoothCanvasProps {
   onMoveDimension: (id: string, dxMm: number, dyMm: number) => void;
   onSelectImage: (id: string | null) => void;
   onChangeImage: (id: string, patch: Partial<PlacedImage>) => void;
+  onSelectBackground: (id: string | null) => void;
+  onChangeBackground: (id: string, patch: Partial<PlacedImage>) => void;
 }
 
 /**
@@ -85,11 +90,14 @@ export default function BoothCanvas({
   texts,
   dimensions,
   images,
+  backgrounds,
   fixturesById,
+  showFixtureNames,
   selectedFixtureId,
   selectedTextId,
   selectedDimensionId,
   selectedImageId,
+  selectedBackgroundId,
   gridSizeMm = DEFAULT_GRID_SIZE_MM,
   onSelect,
   onMove,
@@ -99,12 +107,15 @@ export default function BoothCanvas({
   onMoveDimension,
   onSelectImage,
   onChangeImage,
+  onSelectBackground,
+  onChangeBackground,
 }: BoothCanvasProps) {
   const { ref, size } = useContainerSize<HTMLDivElement>();
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
   const guideLayerRef = useRef<Konva.Layer>(null);
-  const imageMap = useImageMap(images.map((i) => i.srcDataUrl));
-  const { transformerRef, register } = useImageTransformer(selectedImageId);
+  const imageMap = useImageMap([...backgrounds, ...images].map((i) => i.srcDataUrl));
+  // 이미지 또는 배경 중 선택된 것에 Transformer 부착
+  const { transformerRef, register } = useImageTransformer(selectedImageId ?? selectedBackgroundId);
 
   const isPolygon = getBoothShape(booth) === 'polygon';
   const polygon = getBoothPolygon(booth);
@@ -262,8 +273,33 @@ export default function BoothCanvas({
             <Dimensions bounds={bounds} scale={viewport.scale} />
           </Layer>
 
-          {/* 집기 + 텍스트 + 이미지 레이어: 드래그/선택 상호작용 */}
+          {/* 집기/텍스트/이미지/배경 레이어: 드래그/선택 상호작용 */}
           <Layer>
+            {/* SVG 배경 (맨 아래). 잠금 시 비상호작용 */}
+            {backgrounds.map((bg) =>
+              bg.locked ? (
+                <KonvaImage
+                  key={bg.id}
+                  image={imageMap.get(bg.srcDataUrl)}
+                  x={bg.xMm}
+                  y={bg.yMm}
+                  width={bg.widthMm}
+                  height={bg.heightMm}
+                  rotation={bg.rotationDeg}
+                  opacity={bg.opacity}
+                  listening={false}
+                />
+              ) : (
+                <ImageNode
+                  key={bg.id}
+                  image={bg}
+                  imageEl={imageMap.get(bg.srcDataUrl)}
+                  register={register(bg.id)}
+                  onSelect={onSelectBackground}
+                  onChange={onChangeBackground}
+                />
+              ),
+            )}
             {images.map((img) => (
               <ImageNode
                 key={img.id}
@@ -274,7 +310,7 @@ export default function BoothCanvas({
                 onChange={onChangeImage}
               />
             ))}
-            {selectedImageId && (
+            {(selectedImageId || selectedBackgroundId) && (
               <Transformer
                 ref={transformerRef}
                 rotateEnabled
@@ -297,6 +333,7 @@ export default function BoothCanvas({
                   selected={p.id === selectedFixtureId}
                   boothPolygon={polygon}
                   scale={viewport.scale}
+                  showName={showFixtureNames}
                   onSelect={onSelect}
                   onDragMove={handleFixtureDragMove}
                   onDragEnd={handleFixtureDragEnd}

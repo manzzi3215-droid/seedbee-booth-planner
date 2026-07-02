@@ -1,3 +1,3 @@
 /** 앱 버전 (README / 헤더에 표시) */
-export const APP_VERSION = 'v0.5.0';
-export const APP_VERSION_LABEL = 'v0.5.0 - Isometric Preview';
+export const APP_VERSION = 'v0.5.1';
+export const APP_VERSION_LABEL = 'v0.5.1 - Optional Height & SVG Background';
