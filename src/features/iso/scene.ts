@@ -10,6 +10,7 @@ import type {
 } from '../../types';
 import { getBoothPolygon, getBoothBounds } from '../canvas/boothGeometry';
 import { getFixtureCorners } from '../canvas/fixtureGeometry';
+import { isWallEnabled } from '../wall/constants';
 
 /**
  * 아이소메트릭 3D 씬 데이터 (렌더러 비의존, mm 좌표).
@@ -87,17 +88,19 @@ function buildWalls(booth: BoothConfig, wallItems: WallItems): IsoWall[] {
     { side: 'rightWall', start: v(b.maxX, b.minY), end: v(b.maxX, b.maxY), len: b.depthMm, facingSum: +1 },
   ];
 
-  return defs.map((d) => ({
-    side: d.side,
-    baseStart: d.start,
-    baseEnd: d.end,
-    wallLengthMm: d.len,
-    heightMm: h,
-    facingSum: d.facingSum,
-    texts: wallItems[d.side].texts,
-    dimensions: wallItems[d.side].dimensions,
-    images: wallItems[d.side].images,
-  }));
+  return defs
+    .filter((d) => isWallEnabled(booth, d.side)) // OFF 벽면은 3D 에서 제외
+    .map((d) => ({
+      side: d.side,
+      baseStart: d.start,
+      baseEnd: d.end,
+      wallLengthMm: d.len,
+      heightMm: h,
+      facingSum: d.facingSum,
+      texts: wallItems[d.side].texts,
+      dimensions: wallItems[d.side].dimensions,
+      images: wallItems[d.side].images,
+    }));
 }
 
 /** 배치 데이터로부터 아이소메트릭 3D 씬을 구성 */

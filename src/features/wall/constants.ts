@@ -41,6 +41,16 @@ export function isWallView(mode: ViewMode): boolean {
   return mode !== 'plan';
 }
 
+/** 해당 벽면이 사용(ON) 상태인지. usedWalls 누락/undefined 는 ON (하위 호환) */
+export function isWallEnabled(booth: BoothConfig, side: WallSide): boolean {
+  return booth.usedWalls?.[side] !== false;
+}
+
+/** 사용(ON) 중인 벽면 목록 */
+export function getEnabledWalls(booth: BoothConfig): WallSide[] {
+  return WALL_SIDES.filter((s) => isWallEnabled(booth, s));
+}
+
 /**
  * 벽면 가로 길이(mm).
  * 정면/후면 = bbox 가로, 좌/우 = bbox 세로.

@@ -6,6 +6,7 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
 import Chip from '@mui/material/Chip';
+import Checkbox from '@mui/material/Checkbox';
 import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip from '@mui/material/Tooltip';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -36,11 +37,15 @@ function ColorSwatch({ color }: { color: string }) {
 /** 집기 카드 (사이드바용 컴팩트) */
 function FixtureCard({
   fixture,
+  selected,
+  onToggleSelect,
   onPlace,
   onEdit,
   onDelete,
 }: {
   fixture: FixtureDef;
+  selected: boolean;
+  onToggleSelect: () => void;
   onPlace: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -51,13 +56,23 @@ function FixtureCard({
       sx={{
         p: 1.25,
         border: '1px solid',
-        borderColor: 'divider',
+        borderColor: selected ? 'primary.main' : 'divider',
+        bgcolor: selected ? 'action.selected' : 'background.paper',
+        borderRadius: 1.5,
+        transition: 'border-color 0.15s, background-color 0.15s',
+        '&:hover': { borderColor: selected ? 'primary.main' : 'text.disabled' },
         '&:hover .fixture-actions': { opacity: 1 },
       }}
     >
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        <Checkbox
+          size="small"
+          checked={selected}
+          onChange={onToggleSelect}
+          sx={{ p: 0.25, mr: 0.25 }}
+        />
         <ColorSwatch color={fixture.color} />
-        <Typography variant="body2" sx={{ fontWeight: 700, flex: 1 }} noWrap>
+        <Typography variant="body2" sx={{ fontWeight: 700, flex: 1 }} noWrap title={fixture.name}>
           {fixture.name}
         </Typography>
         <Stack
@@ -77,10 +92,10 @@ function FixtureCard({
           </Tooltip>
         </Stack>
       </Stack>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, ml: 3.5 }}>
         {fixture.widthMm}×{fixture.depthMm}×{fixture.heightMm ?? '-'} mm
       </Typography>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75, ml: 3.5 }}>
         <Chip
           label={getShapeLabel(fixture.shape)}
           size="small"
@@ -103,12 +118,13 @@ function FixtureCard({
 
 /**
  * 집기 라이브러리 패널 (편집기 왼쪽 사이드바).
- * 라이브러리 CRUD 와 [배치](캔버스에 추가)를 제공합니다.
+ * 라이브러리 CRUD, [배치](캔버스에 추가), 다중 선택/일괄 삭제를 제공합니다.
  */
 export default function FixtureLibraryPanel() {
   const { fixtures, fixturesLoading, saveFixture, deleteFixture, place } = useEditor();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<FixtureDef | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const openAdd = () => {
     setEditing(null);
@@ -122,24 +138,94 @@ export default function FixtureLibraryPanel() {
   const handleDelete = async (fixture: FixtureDef) => {
     if (!window.confirm(`"${fixture.name}" 집기를 삭제할까요?`)) return;
     await deleteFixture(fixture.id);
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      n.delete(fixture.id);
+      return n;
+    });
   };
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const allSelected = fixtures.length > 0 && selectedIds.size === fixtures.length;
+  const toggleAll = () =>
+    setSelectedIds(allSelected ? new Set() : new Set(fixtures.map((f) => f.id)));
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        `선택한 ${ids.length}개 집기를 삭제할까요?\n` +
+          `기본 제공(시드) 집기가 포함되어 있으면 함께 삭제되며 되돌릴 수 없습니다.`,
+      )
+    ) {
+      return;
+    }
+    for (const id of ids) await deleteFixture(id);
+    setSelectedIds(new Set());
+  };
+
+  const selectedCount = selectedIds.size;
 
   return (
     <Box sx={{ p: 1.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-        집기 라이브러리
-      </Typography>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+          집기 라이브러리
+        </Typography>
+        <Chip label={`${fixtures.length}개`} size="small" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+      </Stack>
 
       <Button
-        variant="outlined"
+        variant="contained"
         size="small"
         fullWidth
         startIcon={<AddRoundedIcon />}
         onClick={openAdd}
-        sx={{ mb: 1.5 }}
+        sx={{ mb: 1 }}
       >
         집기 추가
       </Button>
+
+      {/* 다중 선택 컨트롤 */}
+      {!fixturesLoading && fixtures.length > 0 && (
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1, pl: 0.25 }}
+        >
+          <Stack direction="row" sx={{ alignItems: 'center' }}>
+            <Checkbox
+              size="small"
+              checked={allSelected}
+              indeterminate={selectedCount > 0 && !allSelected}
+              onChange={toggleAll}
+              sx={{ p: 0.25 }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {selectedCount > 0 ? `${selectedCount}개 선택` : '전체 선택'}
+            </Typography>
+          </Stack>
+          {selectedCount > 0 && (
+            <Button
+              size="small"
+              color="error"
+              variant="outlined"
+              startIcon={<DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />}
+              onClick={handleBulkDelete}
+              sx={{ py: 0.1, px: 1 }}
+            >
+              선택 삭제
+            </Button>
+          )}
+        </Stack>
+      )}
 
       {fixturesLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -151,6 +237,8 @@ export default function FixtureLibraryPanel() {
             <FixtureCard
               key={f.id}
               fixture={f}
+              selected={selectedIds.has(f.id)}
+              onToggleSelect={() => toggleOne(f.id)}
               onPlace={() => place(f)}
               onEdit={() => openEdit(f)}
               onDelete={() => handleDelete(f)}

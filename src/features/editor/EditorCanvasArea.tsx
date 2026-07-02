@@ -8,8 +8,17 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import KeyboardRoundedIcon from '@mui/icons-material/KeyboardRounded';
+import ViewSidebarRoundedIcon from '@mui/icons-material/ViewSidebarRounded';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { WallSide } from '../../types';
 import { useEditor } from './EditorContext';
 import BoothCanvas from '../canvas/BoothCanvas';
 import EditorToolbar from './EditorToolbar';
@@ -17,7 +26,9 @@ import WallCanvas from '../wall/WallCanvas';
 import { getBoothSizeLabel, getFloorLabel, hasBoothHeight } from '../../constants/booth';
 import {
   VIEW_MODE_OPTIONS,
+  WALL_SIDES,
   isWallView,
+  isWallEnabled,
   getViewModeLabel,
   getWallLengthMm,
   type ViewMode,
@@ -67,7 +78,10 @@ export default function EditorCanvasArea() {
     selectWallImage,
     updateWallImage,
     clearSelection,
+    setWallEnabled,
   } = useEditor();
+
+  const [wallMenuAnchor, setWallMenuAnchor] = useState<null | HTMLElement>(null);
 
   if (projectLoading) {
     return (
@@ -91,8 +105,11 @@ export default function EditorCanvasArea() {
 
   const { boothConfig } = project;
   const heightSet = hasBoothHeight(boothConfig);
-  // 높이 미설정이면 벽면 보기 불가 → 강제 평면도
-  const effectiveMode: ViewMode = !heightSet && isWallView(viewMode) ? 'plan' : viewMode;
+  // 높이 미설정 또는 현재 벽면이 OFF 이면 벽면 보기 불가 → 강제 평면도
+  const currentWallOff =
+    isWallView(viewMode) && !isWallEnabled(boothConfig, viewMode as WallSide);
+  const effectiveMode: ViewMode =
+    isWallView(viewMode) && (!heightSet || currentWallOff) ? 'plan' : viewMode;
   const wallView = isWallView(effectiveMode);
   const wallLengthMm = getWallLengthMm(boothConfig, effectiveMode);
   const currentWall = wallView ? (effectiveMode as Exclude<ViewMode, 'plan'>) : null;
@@ -104,24 +121,57 @@ export default function EditorCanvasArea() {
 
   return (
     <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 보기 모드 탭 (높이 미설정 시 벽면 탭 비활성) */}
-      <Tabs
-        value={effectiveMode}
-        onChange={(_, v) => setViewMode(v as ViewMode)}
-        variant="scrollable"
-        scrollButtons="auto"
-        sx={{ minHeight: 40, mb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
+      {/* 보기 모드 탭 (높이 미설정/OFF 벽면 비활성) + 사용할 벽면 설정 */}
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', mb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
       >
-        {VIEW_MODE_OPTIONS.map((opt) => (
-          <Tab
-            key={opt.value}
-            value={opt.value}
-            label={opt.label}
-            disabled={opt.value !== 'plan' && !heightSet}
-            sx={{ minHeight: 40, py: 0 }}
-          />
-        ))}
-      </Tabs>
+        <Tabs
+          value={effectiveMode}
+          onChange={(_, v) => setViewMode(v as ViewMode)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ minHeight: 40, flex: 1 }}
+        >
+          {VIEW_MODE_OPTIONS.map((opt) => (
+            <Tab
+              key={opt.value}
+              value={opt.value}
+              label={opt.label}
+              disabled={
+                opt.value !== 'plan' &&
+                (!heightSet || !isWallEnabled(boothConfig, opt.value as WallSide))
+              }
+              sx={{ minHeight: 40, py: 0 }}
+            />
+          ))}
+        </Tabs>
+        <Tooltip title="사용할 벽면 설정">
+          <IconButton size="small" onClick={(e) => setWallMenuAnchor(e.currentTarget)} sx={{ ml: 0.5 }}>
+            <ViewSidebarRoundedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Menu anchorEl={wallMenuAnchor} open={wallMenuAnchor !== null} onClose={() => setWallMenuAnchor(null)}>
+          <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 0.5, display: 'block' }}>
+            사용할 벽면 (OFF 시 탭·출력·3D 제외)
+          </Typography>
+          {WALL_SIDES.map((side) => (
+            <MenuItem key={side} dense disableRipple sx={{ py: 0 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={isWallEnabled(boothConfig, side)}
+                    onChange={(e) => setWallEnabled(side, e.target.checked)}
+                  />
+                }
+                label={getViewModeLabel(side)}
+                sx={{ m: 0 }}
+              />
+            </MenuItem>
+          ))}
+        </Menu>
+      </Stack>
 
       {wallView ? (
         <>

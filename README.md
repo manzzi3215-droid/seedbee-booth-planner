@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.7.2 - Save Converted SVG Fixtures to Library**
+> **v0.7.3 - UI & Fixture Library Management**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -189,6 +189,15 @@ src/
 
 ### Changelog
 
+**v0.7.3 — UI & Fixture Library Management**
+- **UI 가시성 개선:** 툴바 버튼을 그룹/메뉴로 정리(`요소 추가 ▾`, `내보내기 ▾`), 주요 버튼(저장·3D 미리보기)
+  강조, 좌측 라이브러리 카드 가독성 개선(선택 하이라이트·개수 표시), 데스크톱 우선
+- **집기 라이브러리 다중 선택/일괄 삭제:** 카드 체크박스 + 전체 선택 + `선택 삭제(N)` + 삭제 confirm
+  (기본 시드 집기 포함 경고), 목록 즉시 갱신, 기존 단일 삭제 유지
+- **벽면 보기 선택(사용할 벽면 ON/OFF):** 프로젝트별로 정면/좌측/우측/후면 벽 사용 여부 선택
+  (`boothConfig.usedWalls`). OFF 벽면은 **탭 비활성 + 벽면 출력 제외 + 3D 미리보기에서 렌더 안 함**.
+  기존 프로젝트는 모든 벽 ON(하위 호환), 높이 미설정 시 기존처럼 벽면 기능 비활성.
+
 **v0.7.2 — Save Converted SVG Fixtures to Library**
 - **변환 집기 편집:** SVG 변환 집기 선택 시 오른쪽 패널에서 이름·형태·가로·세로·높이·색상·메모 수정
   - 크기/색상은 캔버스에 즉시 반영, 값은 `localFixture` 에 저장, placedFixture 위치는 유지
@@ -260,6 +269,48 @@ src/
 - **SVG text 변환** · 자동 그룹화 · Transformer 기반 크기 조절
 - polygon 실제 edge 기반 벽면 길이 · 다중 선택
 - Firebase(Firestore + Storage) 전환 · Three.js 실 3D 뷰
+
+### 설계 (미구현) — 곡선/패스 부스 편집 (Path Booth)
+
+포토샵 Pen Tool 같은 곡선 부스 편집 기능. **이번 단계에서는 구현하지 않고 설계만** 정리합니다.
+
+**목표**
+- BoothShape 확장: `rectangle` / `polygon` / **`path`** (SVG path 기반 곡선 부스)
+- Pen Tool 처럼 점 추가/삭제, 베지어 핸들 편집, 직선/곡선 혼합
+- edge hover 시 해당 변 길이 표시, 전체 둘레·면적 계산(곡선은 샘플링 기반)
+- PNG/PDF/3D 미리보기까지 반영
+
+**데이터 모델(안)**
+```ts
+// BoothConfig 확장 (기존 필드와 병행, 하위 호환)
+boothShape?: 'rectangle' | 'polygon' | 'path';
+// path 부스: 앵커 + 베지어 핸들 (모두 mm)
+boothPath?: {
+  nodes: {
+    xMm: number; yMm: number;           // 앵커
+    inHandle?:  { xMm: number; yMm: number }; // 들어오는 제어점(없으면 직선)
+    outHandle?: { xMm: number; yMm: number }; // 나가는 제어점(없으면 직선)
+  }[];
+  closed: boolean;                       // 부스는 항상 closed 예정
+};
+```
+
+**기하/계산(안)**
+- 렌더/판정용으로 path 를 폴리라인으로 **샘플링**(예: 곡선 segment 당 16~32 분할) → 기존
+  `getBoothPolygon`/`getBoothBounds`/`pointInPolygon`/벽/스냅/iso 로직 재사용
+- 곡선 변 길이 = 샘플 점 사이 거리 합, 둘레 = 전체 합, 면적 = shoelace(샘플 폴리곤)
+- 벽면 전개도: 각 edge(직선/곡선)를 한 벽으로 매핑, 곡선은 전개 길이 = 샘플 길이
+
+**편집 UX(안)**
+- 전용 "부스 편집" 모드: 캔버스에 앵커(원)·핸들(선+점) 표시
+- 클릭=앵커 추가, Alt+드래그=핸들 분리(코너↔스무스), 앵커 드래그=이동, Del=삭제
+- edge hover 시 길이 툴팁, 상단에 둘레/면적 실시간 표시
+
+**단계 제안**
+1. 데이터 모델 + path→폴리라인 샘플러 + 렌더(읽기 전용)
+2. 앵커 추가/이동/삭제(직선만)
+3. 베지어 핸들 편집(곡선)
+4. edge 길이/둘레/면적 + 벽면 전개 + PNG/PDF/3D 반영
 
 ---
 

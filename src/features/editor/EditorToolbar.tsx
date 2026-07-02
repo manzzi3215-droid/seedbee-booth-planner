@@ -29,6 +29,9 @@ import StraightenRoundedIcon from '@mui/icons-material/StraightenRounded';
 import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import WallpaperRoundedIcon from '@mui/icons-material/WallpaperRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
@@ -103,6 +106,8 @@ export default function EditorToolbar() {
   const [renameName, setRenameName] = useState('');
   const [svgImport, setSvgImport] = useState<{ text: string; name: string; dataUrl: string } | null>(null);
   const [svgMenuAnchor, setSvgMenuAnchor] = useState<null | HTMLElement>(null);
+  const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
+  const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
 
   const currentLayout = layouts.find((l) => l.id === currentLayoutId) ?? null;
 
@@ -456,30 +461,36 @@ export default function EditorToolbar() {
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
+      {/* 요소 추가 (메뉴로 그룹화) */}
       <Button
         variant="outlined"
         size="small"
-        startIcon={<TextFieldsRoundedIcon />}
-        onClick={addText}
+        startIcon={<AddRoundedIcon />}
+        endIcon={<ExpandMoreRoundedIcon />}
+        onClick={(e) => setAddMenuAnchor(e.currentTarget)}
       >
-        텍스트 추가
+        요소 추가
       </Button>
-      <Button
-        variant="outlined"
-        size="small"
-        startIcon={<StraightenRoundedIcon />}
-        onClick={addDimension}
-      >
-        치수선 추가
-      </Button>
-      <Button
-        variant="outlined"
-        size="small"
-        startIcon={<AddPhotoAlternateRoundedIcon />}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        이미지 추가
-      </Button>
+      <Menu anchorEl={addMenuAnchor} open={addMenuAnchor !== null} onClose={() => setAddMenuAnchor(null)}>
+        <MenuItem onClick={() => { addText(); setAddMenuAnchor(null); }}>
+          <ListItemIcon><TextFieldsRoundedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>텍스트</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => { addDimension(); setAddMenuAnchor(null); }}>
+          <ListItemIcon><StraightenRoundedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>치수선</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => { fileInputRef.current?.click(); setAddMenuAnchor(null); }}>
+          <ListItemIcon><AddPhotoAlternateRoundedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>이미지</ListItemText>
+        </MenuItem>
+        {viewMode === 'plan' && (
+          <MenuItem onClick={() => { svgInputRef.current?.click(); setAddMenuAnchor(null); }}>
+            <ListItemIcon><WallpaperRoundedIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>SVG 가져오기</ListItemText>
+          </MenuItem>
+        )}
+      </Menu>
       <input
         ref={fileInputRef}
         type="file"
@@ -487,97 +498,87 @@ export default function EditorToolbar() {
         style={{ display: 'none' }}
         onChange={handleImageFile}
       />
-      {viewMode === 'plan' && (
+      <input
+        ref={svgInputRef}
+        type="file"
+        accept="image/svg+xml,.svg"
+        style={{ display: 'none' }}
+        onChange={handleSvgFile}
+      />
+      {viewMode === 'plan' && svgDocuments.length > 0 && (
         <>
           <Button
-            variant="outlined"
+            variant="text"
             size="small"
-            startIcon={<WallpaperRoundedIcon />}
-            onClick={() => svgInputRef.current?.click()}
+            startIcon={<AccountTreeRoundedIcon />}
+            onClick={(e) => setSvgMenuAnchor(e.currentTarget)}
           >
-            SVG 가져오기
+            SVG 도면 {svgDocuments.length}
           </Button>
-          <input
-            ref={svgInputRef}
-            type="file"
-            accept="image/svg+xml,.svg"
-            style={{ display: 'none' }}
-            onChange={handleSvgFile}
-          />
-          {svgDocuments.length > 0 && (
-            <>
-              <Button
-                variant="text"
-                size="small"
-                startIcon={<AccountTreeRoundedIcon />}
-                onClick={(e) => setSvgMenuAnchor(e.currentTarget)}
+          <Menu anchorEl={svgMenuAnchor} open={svgMenuAnchor !== null} onClose={() => setSvgMenuAnchor(null)}>
+            {svgDocuments.map((d) => (
+              <MenuItem
+                key={d.id}
+                onClick={() => {
+                  selectSvgDocument(d.id);
+                  setSvgMenuAnchor(null);
+                }}
               >
-                SVG 도면 {svgDocuments.length}
-              </Button>
-              <Menu anchorEl={svgMenuAnchor} open={svgMenuAnchor !== null} onClose={() => setSvgMenuAnchor(null)}>
-                {svgDocuments.map((d) => (
-                  <MenuItem
-                    key={d.id}
-                    onClick={() => {
-                      selectSvgDocument(d.id);
-                      setSvgMenuAnchor(null);
-                    }}
-                  >
-                    {d.name} · 도형 {d.elements.length}
-                  </MenuItem>
-                ))}
-              </Menu>
-            </>
-          )}
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={showFixtureNames}
-                onChange={(e) => setShowFixtureNames(e.target.checked)}
-              />
-            }
-            label={<Typography variant="caption">집기명</Typography>}
-            sx={{ ml: 0 }}
-          />
+                {d.name} · 도형 {d.elements.length}
+              </MenuItem>
+            ))}
+          </Menu>
         </>
+      )}
+      {viewMode === 'plan' && (
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={showFixtureNames}
+              onChange={(e) => setShowFixtureNames(e.target.checked)}
+            />
+          }
+          label={<Typography variant="caption">집기명</Typography>}
+          sx={{ ml: 0 }}
+        />
       )}
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
+      {/* 내보내기 (메뉴로 그룹화) */}
       <Button
         variant="outlined"
         size="small"
         color="secondary"
-        startIcon={<ImageRoundedIcon />}
-        onClick={handleExportPNG}
+        startIcon={<FileDownloadRoundedIcon />}
+        endIcon={<ExpandMoreRoundedIcon />}
+        onClick={(e) => setExportMenuAnchor(e.currentTarget)}
         disabled={exporting}
       >
-        PNG 저장
+        내보내기
       </Button>
-      <Button
-        variant="outlined"
-        size="small"
-        color="secondary"
-        startIcon={<PictureAsPdfRoundedIcon />}
-        onClick={handleExportPDF}
-        disabled={exporting}
-      >
-        PDF 저장
-      </Button>
-      <Button
-        variant="text"
-        size="small"
-        startIcon={<ListAltRoundedIcon />}
-        onClick={() => setUsageOpen(true)}
-      >
-        집기 리스트
-      </Button>
+      <Menu anchorEl={exportMenuAnchor} open={exportMenuAnchor !== null} onClose={() => setExportMenuAnchor(null)}>
+        <MenuItem onClick={() => { setExportMenuAnchor(null); handleExportPNG(); }}>
+          <ListItemIcon><ImageRoundedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>PNG 저장</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => { setExportMenuAnchor(null); handleExportPDF(); }}>
+          <ListItemIcon><PictureAsPdfRoundedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>PDF 저장</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => { setExportMenuAnchor(null); setUsageOpen(true); }}>
+          <ListItemIcon><ListAltRoundedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>집기 리스트</ListItemText>
+        </MenuItem>
+      </Menu>
+
       <Tooltip title={project && !hasBoothHeight(project.boothConfig) ? '부스 높이를 설정해야 사용할 수 있습니다' : ''}>
         <span>
           <Button
-            variant="text"
+            variant="contained"
             size="small"
+            color="secondary"
             startIcon={<ViewInArRoundedIcon />}
             onClick={() => setIsoOpen(true)}
             disabled={!project || !hasBoothHeight(project.boothConfig)}

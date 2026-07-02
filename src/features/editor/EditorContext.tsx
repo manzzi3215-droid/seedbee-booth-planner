@@ -71,6 +71,9 @@ interface EditorContextValue {
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
 
+  /** 사용할 벽면 ON/OFF 변경 (프로젝트에 저장) — v0.7.3 */
+  setWallEnabled: (side: WallSide, enabled: boolean) => Promise<void>;
+
   // 배치안(Layout)
   layouts: Layout[];
   currentLayoutId: string | null;
@@ -332,6 +335,17 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
     const updateWall = (wall: WallSide, updater: (g: WallItems[WallSide]) => WallItems[WallSide]) =>
       setWallItems((prev) => ({ ...prev, [wall]: updater(prev[wall]) }));
+
+    // 사용할 벽면 ON/OFF (프로젝트 boothConfig 에 저장)
+    const setWallEnabled = async (side: WallSide, enabled: boolean) => {
+      if (!project) return;
+      const usedWalls = { ...(project.boothConfig.usedWalls ?? {}), [side]: enabled };
+      const updated: Project = { ...project, boothConfig: { ...project.boothConfig, usedWalls }, updatedAt: Date.now() };
+      setProject(updated);
+      // 현재 보고 있는 벽면을 끄면 평면도로 전환 (출력/캔버스 일관성)
+      if (!enabled && viewMode === side) setViewMode('plan');
+      await storage.saveProject(updated);
+    };
 
     // ---------- 집기 (plan) ----------
     const place = (def: FixtureDef) => {
@@ -782,6 +796,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       projectLoading,
       viewMode,
       setViewMode,
+      setWallEnabled,
       layouts,
       currentLayoutId,
       dirty,

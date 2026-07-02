@@ -42,6 +42,12 @@ export interface BoothConfig {
   boothShape?: BoothShape;
   /** boothShape === 'polygon' 일 때 꼭짓점(mm). 시계/반시계 순서 */
   polygonPoints?: PointMm[];
+
+  /**
+   * 사용할 벽면 ON/OFF (v0.7.3). 누락/undefined 인 벽면은 ON 으로 취급(하위 호환).
+   * OFF 벽면은 벽면 탭/출력/3D 미리보기에서 제외됩니다.
+   */
+  usedWalls?: Partial<Record<WallSide, boolean>>;
 }
 
 /**
