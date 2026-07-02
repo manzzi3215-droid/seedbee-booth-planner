@@ -90,6 +90,10 @@ interface EditorContextValue {
   saveFixture: (f: FixtureDef) => Promise<void>;
   deleteFixture: (id: string) => Promise<void>;
 
+  // SVG 변환 집기(배치안 로컬 정의) — v0.7.2
+  localFixtures: FixtureDef[];
+  updateLocalFixture: (defId: string, patch: Partial<FixtureDef>) => void;
+
   // 평면도 배치
   placed: PlacedFixture[];
   texts: PlacedText[];
@@ -497,6 +501,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setSelectedSvgElementId(null);
       setSelectedItem(id ? { scope: 'plan', type: 'svg', id } : null);
     };
+    const updateLocalFixture = (defId: string, patch: Partial<FixtureDef>) =>
+      setLocalFixtures((prev) => prev.map((f) => (f.id === defId ? { ...f, ...patch } : f)));
+
     const markElementConverted = (docId: string, elId: string) =>
       setSvgDocuments((prev) =>
         prev.map((d) =>
@@ -790,6 +797,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       fixturesById,
       saveFixture,
       deleteFixture,
+      localFixtures,
+      updateLocalFixture,
       placed,
       texts,
       dimensions,

@@ -8,10 +8,16 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import Alert from '@mui/material/Alert';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
 import { useEditor } from './EditorContext';
-import { countElements, SVG_ELEMENT_TYPES, SVG_ELEMENT_LABEL } from '../svg/SvgModel';
+import {
+  countElements,
+  isLikelyBackgroundElement,
+  SVG_ELEMENT_TYPES,
+  SVG_ELEMENT_LABEL,
+} from '../svg/SvgModel';
 
 /**
  * SVG Inspector — 선택된 SvgDocument 의 내부 구조를 검사(읽기)합니다.
@@ -31,10 +37,24 @@ export default function SvgInspectorPanel() {
   const counts = countElements(doc);
   const selectedEl = selectedSvgElementId ? doc.elements.find((e) => e.id === selectedSvgElementId) ?? null : null;
   const canConvert = !!selectedEl && selectedEl.type !== 'text' && !selectedEl.converted;
+  const isBackground = !!selectedEl && isLikelyBackgroundElement(selectedEl);
   const convertHint =
     selectedEl?.type === 'line'
       ? '선(line)은 치수선으로 변환됩니다.'
       : '선택 도형을 집기로 변환합니다. (라이브러리 저장 안 함)';
+
+  const handleConvert = () => {
+    if (!canConvert || !selectedEl) return;
+    if (
+      isBackground &&
+      !window.confirm(
+        '이 도형은 배경/아트보드로 추정됩니다(문서의 80% 이상 차지).\n그래도 집기로 변환할까요?',
+      )
+    ) {
+      return;
+    }
+    convertSvgElementToFixture(doc.id, selectedEl.id);
+  };
 
   return (
     <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -130,6 +150,11 @@ export default function SvgInspectorPanel() {
             </Typography>
           ) : (
             <>
+              {isBackground && (
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  배경/아트보드로 추정되는 큰 도형입니다(문서의 80% 이상). 변환 시 확인을 거칩니다.
+                </Alert>
+              )}
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>
                 {convertHint}
               </Typography>
@@ -137,7 +162,7 @@ export default function SvgInspectorPanel() {
                 variant="contained"
                 size="small"
                 startIcon={<CategoryRoundedIcon />}
-                onClick={() => canConvert && convertSvgElementToFixture(doc.id, selectedEl.id)}
+                onClick={handleConvert}
                 fullWidth
                 sx={{ mb: 1 }}
               >

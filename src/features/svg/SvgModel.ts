@@ -59,6 +59,14 @@ export function elementRectMm(doc: SvgDocument, el: SvgElement): RectMm {
   };
 }
 
+/**
+ * 요소가 문서(viewBox)의 대부분을 차지하는지 — 배경/아트보드로 추정.
+ * 가로·세로 모두 80% 이상이면 배경일 가능성이 높습니다. (대형 Rect 오변환 방지)
+ */
+export function isLikelyBackgroundElement(el: SvgElement): boolean {
+  return el.fw >= 0.8 && el.fh >= 0.8;
+}
+
 /** 문서 내 요소 타입별 개수 + 총합 */
 export function countElements(doc: SvgDocument): SvgElementCounts {
   const byType = {

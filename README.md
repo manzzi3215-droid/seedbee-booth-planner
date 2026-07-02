@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.7.1 - SVG to Fixture Converter**
+> **v0.7.2 - Save Converted SVG Fixtures to Library**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -24,8 +24,11 @@
     **SVG 검사기(Inspector)** 로 도형 개수 확인 + 도형 선택 시 캔버스 하이라이트
   - **SVG → 집기 변환(v0.7.1):** Inspector 에서 도형 선택 후 **[집기로 변환]** —
     rect→사각형, circle→원형, ellipse/polygon/polyline/path→customPath, line→치수선.
-    위치·크기·색상 유지, 자동 이름(Rect 1…), 변환 완료 표시(중복 변환 방지). **Canvas 에만 생성**
-    (Fixture Library 저장은 v0.7.2 예정)
+    위치·크기·색상 유지, 자동 이름(Rect 1…), 변환 완료 표시(중복 변환 방지).
+  - **변환 집기 편집 + 라이브러리 저장(v0.7.2):** 변환된 집기를 선택하면 오른쪽 패널에서
+    이름·형태·가로·세로·높이·색상·메모를 즉시 수정(캔버스 실시간 반영, 위치 유지).
+    **[집기 라이브러리에 저장]** 으로 전역 집기로 등록(다른 프로젝트에서도 사용, 중복 저장 방지).
+    문서의 80% 이상을 차지하는 큰 도형은 **"배경/아트보드로 추정"** 경고 + 변환 확인.
   - *Adobe Illustrator(.ai)는 웹에서 안정적으로 파싱하기 어렵습니다. **Illustrator에서는 SVG로
     저장 후 업로드하는 방식을 권장합니다.***
 - **집기 라이브러리** — 등록/수정/삭제. 형태: 사각형 · 둥근 사각형 · 원형 · 반원형,
@@ -186,6 +189,15 @@ src/
 
 ### Changelog
 
+**v0.7.2 — Save Converted SVG Fixtures to Library**
+- **변환 집기 편집:** SVG 변환 집기 선택 시 오른쪽 패널에서 이름·형태·가로·세로·높이·색상·메모 수정
+  - 크기/색상은 캔버스에 즉시 반영, 값은 `localFixture` 에 저장, placedFixture 위치는 유지
+- **집기 라이브러리에 저장:** `[집기 라이브러리에 저장]` 버튼 → `storage.saveFixture` 로 전역 등록
+  - 저장 즉시 왼쪽 라이브러리에 표시, 다른 프로젝트에서도 재사용
+  - 이미 저장된 집기는 **"이미 라이브러리에 저장됨"** 표시 + 버튼 비활성(중복 저장 방지)
+- **대형 Rect 배경 추정 경고:** 요소가 문서(viewBox)의 가로·세로 80% 이상을 차지하면
+  **"배경/아트보드로 추정"** 경고 표시 + 변환 시 confirm (전체 아트보드 오변환 방지)
+
 **v0.7.1 — SVG to Fixture Converter**
 - **SVG → Fixture 변환:** SVG Inspector 에서 도형을 선택하면 **[집기로 변환]** 버튼으로 실제 집기 생성
   - 변환 규칙: `rect→rectangle` · `circle→circle` · `ellipse/polygon/polyline/path→customPath` · `line→치수선`
@@ -245,7 +257,7 @@ src/
 - **그리드 표시 ON/OFF** 토글
 - **치수선 표시 ON/OFF** 토글
 - **프로젝트 복제**
-- **SVG 변환 집기 → Fixture Library 저장** (v0.7.2 예정 · 현재는 배치안 로컬에만 생성) · text 변환 · 자동 그룹화
+- **SVG text 변환** · 자동 그룹화 · Transformer 기반 크기 조절
 - polygon 실제 edge 기반 벽면 길이 · 다중 선택
 - Firebase(Firestore + Storage) 전환 · Three.js 실 3D 뷰
 

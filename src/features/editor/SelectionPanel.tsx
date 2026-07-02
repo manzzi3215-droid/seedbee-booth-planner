@@ -21,6 +21,7 @@ import DimensionPanel from './DimensionPanel';
 import ImagePanel from './ImagePanel';
 import BackgroundPanel from './BackgroundPanel';
 import SvgInspectorPanel from './SvgInspectorPanel';
+import ConvertedFixtureEditor from './ConvertedFixtureEditor';
 
 /** 빈 선택 상태 */
 function EmptyPanel() {
@@ -67,6 +68,7 @@ function FixtureInfoPanel() {
     placed,
     selectedFixtureId,
     fixturesById,
+    localFixtures,
     project,
     rotateSelected,
     copySelected,
@@ -77,6 +79,7 @@ function FixtureInfoPanel() {
 
   const selected = placed.find((p) => p.id === selectedFixtureId) ?? null;
   const def = selected ? fixturesById.get(selected.fixtureDefId) : null;
+  const isLocalFixture = !!def && localFixtures.some((f) => f.id === def.id);
 
   // 위치/회전 직접 입력용 로컬 상태 (선택 집기 값 변화 시 동기화)
   const [xStr, setXStr] = useState('');
@@ -170,16 +173,23 @@ function FixtureInfoPanel() {
 
       <Divider sx={{ my: 1 }} />
 
-      <Stack direction="row" sx={{ justifyContent: 'space-between', py: 0.5 }}>
-        <Typography variant="body2" color="text.secondary">
-          가로×세로×높이
-        </Typography>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          {def.widthMm}×{def.depthMm}×{def.heightMm ?? '-'} mm
-        </Typography>
-      </Stack>
+      {/* SVG 변환 집기: 편집 + 라이브러리 저장. 일반 집기: 읽기 전용 치수 */}
+      {isLocalFixture && def ? (
+        <ConvertedFixtureEditor def={def} />
+      ) : (
+        <>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', py: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              가로×세로×높이
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {def.widthMm}×{def.depthMm}×{def.heightMm ?? '-'} mm
+            </Typography>
+          </Stack>
 
-      <Divider sx={{ my: 1 }} />
+          <Divider sx={{ my: 1 }} />
+        </>
+      )}
 
       {/* 위치/회전 직접 입력 */}
       <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
