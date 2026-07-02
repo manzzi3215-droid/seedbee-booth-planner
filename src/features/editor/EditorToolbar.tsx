@@ -6,6 +6,10 @@ import MenuItem from '@mui/material/MenuItem';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
+import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Snackbar from '@mui/material/Snackbar';
@@ -25,6 +29,10 @@ import StraightenRoundedIcon from '@mui/icons-material/StraightenRounded';
 import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import WallpaperRoundedIcon from '@mui/icons-material/WallpaperRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
+import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
+import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import IsoPreviewDialog from '../iso/IsoPreviewDialog';
 import { useEditor } from './EditorContext';
@@ -66,6 +74,9 @@ export default function EditorToolbar() {
     saveAs,
     loadLayout,
     suggestLayoutName,
+    renameLayout,
+    duplicateLayout,
+    deleteLayoutById,
     addText,
     addDimension,
     addImage,
@@ -82,6 +93,9 @@ export default function EditorToolbar() {
   const [newName, setNewName] = useState('');
   const [usageOpen, setUsageOpen] = useState(false);
   const [isoOpen, setIsoOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameName, setRenameName] = useState('');
 
   const currentLayout = layouts.find((l) => l.id === currentLayoutId) ?? null;
 
@@ -259,6 +273,51 @@ export default function EditorToolbar() {
     }
   };
 
+  // ── 배치안 관리 (이름 변경 / 복제 / 삭제) ──
+  const openRename = () => {
+    setMenuAnchor(null);
+    if (!currentLayout) return;
+    setRenameName(currentLayout.name);
+    setRenameOpen(true);
+  };
+
+  const handleRename = async () => {
+    if (!currentLayout) return;
+    setSaving(true);
+    try {
+      await renameLayout(currentLayout.id, renameName);
+      setRenameOpen(false);
+      setToast('배치안 이름이 변경되었습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    setMenuAnchor(null);
+    if (!currentLayout) return;
+    setSaving(true);
+    try {
+      await duplicateLayout(currentLayout.id);
+      setToast('배치안이 복제되었습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setMenuAnchor(null);
+    if (!currentLayout) return;
+    if (!window.confirm(`'${currentLayout.name}' 배치안을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setSaving(true);
+    try {
+      await deleteLayoutById(currentLayout.id);
+      setToast('배치안이 삭제되었습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Paper
       elevation={0}
@@ -300,6 +359,38 @@ export default function EditorToolbar() {
             </MenuItem>
           ))}
         </Select>
+        <Tooltip title="배치안 관리">
+          <span>
+            <IconButton
+              size="small"
+              onClick={(e) => setMenuAnchor(e.currentTarget)}
+              disabled={!currentLayout}
+              aria-label="배치안 관리"
+            >
+              <MoreVertRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Menu anchorEl={menuAnchor} open={menuAnchor !== null} onClose={() => setMenuAnchor(null)}>
+          <MenuItem onClick={openRename}>
+            <ListItemIcon>
+              <DriveFileRenameOutlineRoundedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>이름 변경</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={handleDuplicate}>
+            <ListItemIcon>
+              <ContentCopyRoundedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>복제</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
+            <ListItemIcon>
+              <DeleteOutlineRoundedIcon fontSize="small" color="error" />
+            </ListItemIcon>
+            <ListItemText>삭제</ListItemText>
+          </MenuItem>
+        </Menu>
       </Box>
 
       {dirty && (
@@ -474,6 +565,31 @@ export default function EditorToolbar() {
           </Button>
           <Button variant="contained" onClick={handleSaveAs} disabled={saving}>
             저장
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={renameOpen} onClose={() => setRenameOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>배치안 이름 변경</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="배치안 이름"
+            value={renameName}
+            onChange={(e) => setRenameName(e.target.value)}
+            fullWidth
+            autoFocus
+            sx={{ mt: 1 }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRename();
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setRenameOpen(false)} disabled={saving}>
+            취소
+          </Button>
+          <Button variant="contained" onClick={handleRename} disabled={saving || renameName.trim().length === 0}>
+            변경
           </Button>
         </DialogActions>
       </Dialog>

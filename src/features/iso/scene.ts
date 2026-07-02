@@ -59,7 +59,20 @@ export interface IsoScene {
   floorImages: IsoFloorImage[];
 }
 
-const DEFAULT_FIXTURE_HEIGHT_MM = 1000;
+/** 집기 기본 높이 (heightMm 미지정 시) */
+export const DEFAULT_FIXTURE_HEIGHT_MM = 1000;
+/** 집기 높이 clamp 범위 (너무 낮거나 높은 값 보정) */
+const MIN_FIXTURE_HEIGHT_MM = 200;
+const MAX_FIXTURE_HEIGHT_MM = 3500;
+
+/** 집기 높이를 실제값 기준으로 clamp. 부스 높이가 있으면 그 이하로 제한 */
+function resolveFixtureHeight(rawHeightMm: number | null | undefined, boothHeightMm: number | null): number {
+  const raw = rawHeightMm ?? DEFAULT_FIXTURE_HEIGHT_MM;
+  const upper = boothHeightMm && boothHeightMm > 0
+    ? Math.min(MAX_FIXTURE_HEIGHT_MM, boothHeightMm)
+    : MAX_FIXTURE_HEIGHT_MM;
+  return Math.max(MIN_FIXTURE_HEIGHT_MM, Math.min(upper, raw));
+}
 
 /** 벽 4면(bbox 기준) 정의 */
 function buildWalls(booth: BoothConfig, wallItems: WallItems): IsoWall[] {
@@ -103,7 +116,7 @@ export function buildIsoScene(
     if (!def) continue;
     boxes.push({
       footprint: getFixtureCorners(p, def).map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
-      heightMm: def.heightMm ?? DEFAULT_FIXTURE_HEIGHT_MM,
+      heightMm: resolveFixtureHeight(def.heightMm, booth.heightMm),
       color: def.color,
       name: def.name,
     });

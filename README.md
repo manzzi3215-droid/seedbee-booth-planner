@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.5.1 - Optional Height & SVG Background**
+> **v0.6.0 - Layout Management & Isometric Preview**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -178,6 +178,19 @@ src/
 
 ### Changelog
 
+**v0.6.0 — Layout Management & Isometric Preview**
+- **배치안 관리:** Select 오른쪽 "…" 메뉴로 이름 변경 / 복제 / 삭제
+  - 복제: 현재 배치안 전체(집기·텍스트·치수·이미지·배경·벽면요소) 복사, "기존이름 복사본", 자동 선택
+  - 삭제: 확인 후 삭제, 가장 최근 수정 배치안 자동 선택(없으면 빈 캔버스)
+- **아이소메트릭 Preview 개선** (Canvas 기반, Three.js 미도입)
+  - 시점 선택: 좌측 사선 / 우측 사선 / 정면 사선 / Top View
+  - 줌: 마우스 휠 · +/- · 화면 맞춤
+  - 부드러운 그림자(집기/벽), 벽면 명암 차이 + 근접 벽 반투명(투명도 슬라이더)
+  - 바닥 색 선택 · 체크 패턴 ON/OFF, 집기 실제 높이 비율 반영(min/max clamp)
+  - 3D 집기명 표시 토글, 벽면 이미지/텍스트/치수선 벽에 부착 렌더
+  - PNG 출력 화질 선택(기본 1920 / 고화질 3840 / 인쇄용 6000px), 현재 시점 그대로 저장
+  - Preview 는 Dialog 열 때만 렌더, 닫으면 상태 정리 (편집기 성능 무관)
+
 **v0.5.1 — Optional Height & SVG Background**
 - 집기명 도형 위 표시 (토글 ON/OFF, 작은 집기 자동 숨김, PNG/PDF 반영)
 - 부스 높이를 선택값으로 변경 ("높이 설정 안 함" → `heightMm: null`, 벽면/3D 비활성)
@@ -200,9 +213,8 @@ src/
 - **그리드 표시 ON/OFF** 토글
 - **치수선 표시 ON/OFF** 토글
 - **프로젝트 복제**
-- **배치안 이름 변경 / 삭제** UI
 - **SVG 도형 → 개별 집기 변환** (현재는 배경 도면 불러오기까지만)
-- polygon 실제 edge 기반 벽면 길이 · iso 시점 회전 · 다중 선택
+- polygon 실제 edge 기반 벽면 길이 · 다중 선택
 - Firebase(Firestore + Storage) 전환 · Three.js 실 3D 뷰
 
 ---

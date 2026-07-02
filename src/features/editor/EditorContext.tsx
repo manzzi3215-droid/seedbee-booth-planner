@@ -77,6 +77,9 @@ interface EditorContextValue {
   saveAs: (name: string) => Promise<void>;
   loadLayout: (layoutId: string) => void;
   suggestLayoutName: () => string;
+  renameLayout: (id: string, name: string) => Promise<void>;
+  duplicateLayout: (id: string) => Promise<void>;
+  deleteLayoutById: (id: string) => Promise<void>;
 
   // 집기 라이브러리
   fixtures: FixtureDef[];
@@ -606,17 +609,65 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       const now = Date.now();
       await persistLayout({ id: generateId(), name: name.trim() || suggestLayoutName(), ...snapshot(), createdAt: now, updatedAt: now });
     };
+    // 배치안 데이터를 편집기 상태에 적용 (null 이면 빈 캔버스)
+    const applyLayout = (layout: Layout | null) => {
+      setPlaced(layout ? clonePlaced(layout.placedFixtures) : []);
+      setTexts(cloneTexts(layout?.texts ?? []));
+      setDimensions(cloneDims(layout?.dimensions ?? []));
+      setPlanImages(cloneImages(layout?.planImages ?? []));
+      setPlanBackgrounds(cloneImages(layout?.planBackgrounds ?? []));
+      setWallItems(cloneWallItems(normalizeWallItems(layout?.wallItems)));
+      setCurrentLayoutId(layout?.id ?? null);
+      setSelectedItem(null);
+    };
     const loadLayout = (layoutId: string) => {
       const layout = layouts.find((l) => l.id === layoutId);
-      if (!layout) return;
-      setPlaced(clonePlaced(layout.placedFixtures));
-      setTexts(cloneTexts(layout.texts ?? []));
-      setDimensions(cloneDims(layout.dimensions ?? []));
-      setPlanImages(cloneImages(layout.planImages ?? []));
-      setPlanBackgrounds(cloneImages(layout.planBackgrounds ?? []));
-      setWallItems(cloneWallItems(normalizeWallItems(layout.wallItems)));
-      setCurrentLayoutId(layout.id);
-      setSelectedItem(null);
+      if (layout) applyLayout(layout);
+    };
+
+    // 이름 변경
+    const renameLayout = async (id: string, name: string) => {
+      const target = layouts.find((l) => l.id === id);
+      if (!target || !projectId) return;
+      const updated: Layout = { ...target, name: name.trim() || target.name, updatedAt: Date.now() };
+      await storage.saveLayout(projectId, updated);
+      setLayouts(await storage.getLayouts(projectId));
+    };
+
+    // 복제 (현재 배치안이면 화면 그대로 스냅샷, 아니면 저장본 복제) → 새 배치안 자동 선택
+    const duplicateLayout = async (id: string) => {
+      if (!projectId) return;
+      const src = layouts.find((l) => l.id === id);
+      if (!src) return;
+      const now = Date.now();
+      const data =
+        id === currentLayoutId
+          ? snapshot()
+          : {
+              placedFixtures: clonePlaced(src.placedFixtures),
+              texts: cloneTexts(src.texts ?? []),
+              dimensions: cloneDims(src.dimensions ?? []),
+              planImages: cloneImages(src.planImages ?? []),
+              planBackgrounds: cloneImages(src.planBackgrounds ?? []),
+              wallItems: cloneWallItems(normalizeWallItems(src.wallItems)),
+            };
+      const copy: Layout = { id: generateId(), name: `${src.name} 복사본`, ...data, createdAt: now, updatedAt: now };
+      await persistLayout(copy); // 저장 + 목록 갱신 + currentLayoutId=copy.id
+      applyLayout(copy); // 편집기에 복제 데이터 반영(자동 선택)
+    };
+
+    // 삭제 → 삭제한 게 현재면 가장 최근 배치안 자동 선택 (없으면 빈 캔버스)
+    const deleteLayoutById = async (id: string) => {
+      if (!projectId) return;
+      await storage.deleteLayout(projectId, id);
+      const remaining = await storage.getLayouts(projectId);
+      setLayouts(remaining);
+      if (currentLayoutId === id) {
+        const latest = remaining.length
+          ? remaining.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a))
+          : null;
+        applyLayout(latest);
+      }
     };
 
     return {
@@ -631,6 +682,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       saveAs,
       loadLayout,
       suggestLayoutName,
+      renameLayout,
+      duplicateLayout,
+      deleteLayoutById,
       fixtures,
       fixturesLoading,
       fixturesById,
