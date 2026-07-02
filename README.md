@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.6.0 - Layout Management & Isometric Preview**
+> **v0.7.0 - SVG Parser & Document Inspector**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -18,8 +18,12 @@
   오픈면(1/2/3면), 바닥 종류. 높이 미설정 시 벽면 전개도·3D 미리보기는 비활성
 - **비정형(polygon) 부스** — 사각형뿐 아니라 사선/다각형 부스 지원 (꼭짓점 mm 좌표 입력)
 - **집기명 표시** — 평면도 집기 위에 이름 표시(토글 ON/OFF, 작은 집기는 자동 숨김), PNG/PDF 반영
-- **SVG 배경 도면** — Illustrator에서 **SVG로 내보낸** 도면을 배경으로 업로드(이동/크기/투명도/잠금),
-  PNG/PDF 반영. *AI 파일은 Illustrator에서 SVG로 내보내기 후 업로드를 권장합니다*
+- **SVG 가져오기** — Illustrator 등에서 **SVG로 저장한** 도면을 두 가지 방식으로 가져오기
+  - ① **배경으로**: 참고용 이미지로 도면 위에 배치(이동/크기/투명도/잠금), PNG/PDF 반영
+  - ② **SVG 객체로**: 내부 구조(path/rect/circle/ellipse/polygon/polyline/line/text)를 파싱해
+    **SVG 검사기(Inspector)** 로 도형 개수 확인 + 도형 선택 시 캔버스 하이라이트 (v0.7.0, 읽기 전용)
+  - *Adobe Illustrator(.ai)는 웹에서 안정적으로 파싱하기 어렵습니다. **Illustrator에서는 SVG로
+    저장 후 업로드하는 방식을 권장합니다.***
 - **집기 라이브러리** — 등록/수정/삭제. 형태: 사각형 · 둥근 사각형 · 원형 · 반원형,
   그리고 **customPath 비정형 집기**(SVG path, 하트·물이음·콩모양 등 곡선형 테이블)
 - **배치** — 드래그 이동, 선택/하이라이트, 그리드 스냅, 부스(polygon) 밖 이탈 경고
@@ -178,6 +182,18 @@ src/
 
 ### Changelog
 
+**v0.7.0 — SVG Parser & Document Inspector**
+- **SVG Import 2단계:** SVG를 "단순 이미지"가 아니라 내부 구조 객체로 가져오기 (읽기 전용)
+  - **SvgParser:** path/rect/circle/ellipse/polygon/polyline/line/text 파싱 → `SvgElement`
+    (bbox 는 브라우저 렌더 기반 정규화 좌표로 계산해 transform/viewBox 무관하게 정확)
+  - **SvgDocument:** `elements[]` + metadata(viewBox/크기) + mm 배치, Layout 에 저장(Firebase 호환)
+  - **가져오기 방식 선택:** 파일 선택 시 ① 배경으로 ② SVG 객체로 중 선택
+  - **SVG 검사기(Inspector):** 타입별 도형 개수 + 총 개수 표시
+  - **도형 선택 → 캔버스 하이라이트:** Inspector 목록에서 도형 클릭 시 평면도에 정확한 mm 위치로 표시
+  - **역할 분리:** `SvgParser` / `SvgModel` / `SvgRenderer` / `SvgConverter` (변환기는 v0.7.1 예정)
+  - ⚠️ 이번 단계는 **읽기까지만** — SVG→집기 자동 변환은 하지 않습니다 (v0.7.1)
+  - *Illustrator(.ai)는 직접 읽지 않고 **SVG로 저장 후 업로드**하는 방식을 권장합니다.*
+
 **v0.6.0 — Layout Management & Isometric Preview**
 - **배치안 관리:** Select 오른쪽 "…" 메뉴로 이름 변경 / 복제 / 삭제
   - 복제: 현재 배치안 전체(집기·텍스트·치수·이미지·배경·벽면요소) 복사, "기존이름 복사본", 자동 선택
@@ -213,7 +229,7 @@ src/
 - **그리드 표시 ON/OFF** 토글
 - **치수선 표시 ON/OFF** 토글
 - **프로젝트 복제**
-- **SVG 도형 → 개별 집기 변환** (현재는 배경 도면 불러오기까지만)
+- **SVG 도형 → 집기/CustomPath/Background 변환** (v0.7.1 예정 · 현재는 구조 읽기까지)
 - polygon 실제 edge 기반 벽면 길이 · 다중 선택
 - Firebase(Firestore + Storage) 전환 · Three.js 실 3D 뷰
 

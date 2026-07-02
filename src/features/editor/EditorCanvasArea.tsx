@@ -54,6 +54,8 @@ export default function EditorCanvasArea() {
     updatePlanImage,
     selectBackground,
     updatePlanBackground,
+    selectedSvgDocument,
+    selectedSvgElementId,
     viewMode,
     setViewMode,
     wallItems,
@@ -136,7 +138,7 @@ export default function EditorCanvasArea() {
 
           <EditorToolbar />
 
-          <Box sx={{ flex: 1, minHeight: 0 }}>
+          <Box sx={{ flex: 1, minHeight: 320 }}>
             <WallCanvas
               wallLengthMm={wallLengthMm}
               heightMm={boothConfig.heightMm ?? 0}
@@ -182,7 +184,7 @@ export default function EditorCanvasArea() {
 
           <EditorToolbar />
 
-          <Box sx={{ flex: 1, minHeight: 0 }}>
+          <Box sx={{ flex: 1, minHeight: 320 }}>
             <BoothCanvas
               booth={boothConfig}
               placed={placed}
@@ -197,6 +199,8 @@ export default function EditorCanvasArea() {
               selectedDimensionId={selectedDimensionId}
               selectedImageId={selectedImageId}
               selectedBackgroundId={selectedBackgroundId}
+              selectedSvgDoc={selectedSvgDocument}
+              highlightedSvgElementId={selectedSvgElementId}
               gridSizeMm={gridSizeMm}
               onSelect={select}
               onMove={move}

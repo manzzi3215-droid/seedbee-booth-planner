@@ -34,8 +34,10 @@ import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRena
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import type { SelectChangeEvent } from '@mui/material/Select';
+import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import IsoPreviewDialog from '../iso/IsoPreviewDialog';
 import { useEditor } from './EditorContext';
+import { parseSvgDocument } from '../svg/SvgParser';
 import {
   downloadLayoutPNG,
   downloadLayoutPDF,
@@ -67,6 +69,9 @@ export default function EditorToolbar() {
     showFixtureNames,
     setShowFixtureNames,
     addBackground,
+    svgDocuments,
+    addSvgDocument,
+    selectSvgDocument,
     layouts,
     currentLayoutId,
     dirty,
@@ -96,6 +101,8 @@ export default function EditorToolbar() {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameName, setRenameName] = useState('');
+  const [svgImport, setSvgImport] = useState<{ text: string; name: string; dataUrl: string } | null>(null);
+  const [svgMenuAnchor, setSvgMenuAnchor] = useState<null | HTMLElement>(null);
 
   const currentLayout = layouts.find((l) => l.id === currentLayoutId) ?? null;
 
@@ -224,37 +231,64 @@ export default function EditorToolbar() {
     reader.readAsDataURL(file);
   };
 
+  /** SVG 텍스트 → dataURL (미리보기/렌더용) */
+  const svgTextToDataUrl = (text: string) =>
+    `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(text)))}`;
+
+  // SVG 파일 선택 → 가져오기 방식 선택 다이얼로그 오픈
   const handleSvgFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !project) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const booth = project.boothConfig;
-      const widthMm = booth.widthMm;
-      const img = new window.Image();
-      img.onload = () => {
-        const aspect = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : booth.depthMm / booth.widthMm;
-        addBackground({
-          name: file.name.replace(/\.[^.]+$/, ''),
-          srcDataUrl: dataUrl,
-          widthMm,
-          heightMm: Math.max(1, Math.round(widthMm * aspect)),
-        });
-      };
-      img.onerror = () => {
-        // SVG 크기 산출 실패 시 부스 비율로 대체
-        addBackground({
-          name: file.name.replace(/\.[^.]+$/, ''),
-          srcDataUrl: dataUrl,
-          widthMm,
-          heightMm: booth.depthMm,
-        });
-      };
-      img.src = dataUrl;
+      const text = reader.result as string;
+      setSvgImport({
+        text,
+        name: file.name.replace(/\.[^.]+$/, ''),
+        dataUrl: svgTextToDataUrl(text),
+      });
     };
-    reader.readAsDataURL(file);
+    reader.readAsText(file);
+  };
+
+  // ① 배경으로 가져오기 (기존 동작)
+  const importAsBackground = () => {
+    if (!svgImport || !project) return;
+    const booth = project.boothConfig;
+    const widthMm = booth.widthMm;
+    const { name, dataUrl } = svgImport;
+    const img = new window.Image();
+    img.onload = () => {
+      const aspect = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : booth.depthMm / booth.widthMm;
+      addBackground({ name, srcDataUrl: dataUrl, widthMm, heightMm: Math.max(1, Math.round(widthMm * aspect)) });
+    };
+    img.onerror = () => addBackground({ name, srcDataUrl: dataUrl, widthMm, heightMm: booth.depthMm });
+    img.src = dataUrl;
+    setSvgImport(null);
+    setToast('SVG를 배경으로 가져왔습니다.');
+  };
+
+  // ② SVG 객체로 가져오기 (구조 파싱 → SvgDocument)
+  const importAsObject = () => {
+    if (!svgImport || !project) return;
+    const booth = project.boothConfig;
+    try {
+      const doc = parseSvgDocument(svgImport.text, svgImport.name, svgImport.dataUrl, {
+        xMm: 0,
+        yMm: 0,
+        widthMm: booth.widthMm,
+        heightMm: booth.depthMm,
+      });
+      const aspect = doc.viewBox.width > 0 ? doc.viewBox.height / doc.viewBox.width : booth.depthMm / booth.widthMm;
+      doc.widthMm = booth.widthMm;
+      doc.heightMm = Math.max(1, Math.round(booth.widthMm * aspect));
+      addSvgDocument(doc);
+      setToast(`SVG 객체로 가져왔습니다. (도형 ${doc.elements.length}개)`);
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : 'SVG 파싱에 실패했습니다.');
+    }
+    setSvgImport(null);
   };
 
   const openSaveAs = () => {
@@ -461,7 +495,7 @@ export default function EditorToolbar() {
             startIcon={<WallpaperRoundedIcon />}
             onClick={() => svgInputRef.current?.click()}
           >
-            SVG 배경 추가
+            SVG 가져오기
           </Button>
           <input
             ref={svgInputRef}
@@ -470,6 +504,31 @@ export default function EditorToolbar() {
             style={{ display: 'none' }}
             onChange={handleSvgFile}
           />
+          {svgDocuments.length > 0 && (
+            <>
+              <Button
+                variant="text"
+                size="small"
+                startIcon={<AccountTreeRoundedIcon />}
+                onClick={(e) => setSvgMenuAnchor(e.currentTarget)}
+              >
+                SVG 도면 {svgDocuments.length}
+              </Button>
+              <Menu anchorEl={svgMenuAnchor} open={svgMenuAnchor !== null} onClose={() => setSvgMenuAnchor(null)}>
+                {svgDocuments.map((d) => (
+                  <MenuItem
+                    key={d.id}
+                    onClick={() => {
+                      selectSvgDocument(d.id);
+                      setSvgMenuAnchor(null);
+                    }}
+                  >
+                    {d.name} · 도형 {d.elements.length}
+                  </MenuItem>
+                ))}
+              </Menu>
+            </>
+          )}
           <FormControlLabel
             control={
               <Switch
@@ -565,6 +624,30 @@ export default function EditorToolbar() {
           </Button>
           <Button variant="contained" onClick={handleSaveAs} disabled={saving}>
             저장
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={svgImport !== null} onClose={() => setSvgImport(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>SVG 가져오기 방식</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            <b>{svgImport?.name}</b> 을(를) 어떻게 가져올까요?
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            · 배경: 도면 위에 참고용 이미지로 깔기<br />
+            · SVG 객체: 내부 도형 구조를 분석해 검사(Inspector)
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setSvgImport(null)}>
+            취소
+          </Button>
+          <Button variant="outlined" onClick={importAsBackground}>
+            배경으로 가져오기
+          </Button>
+          <Button variant="contained" onClick={importAsObject}>
+            SVG 객체로 가져오기
           </Button>
         </DialogActions>
       </Dialog>

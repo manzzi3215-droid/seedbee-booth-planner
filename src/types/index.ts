@@ -162,6 +162,73 @@ export interface PlacedImage {
   memo?: string;
 }
 
+/**
+ * --- SVG Import (v0.7.0) ---
+ * Illustrator 등에서 저장한 SVG 를 "단순 이미지"가 아니라 내부 구조를 읽을 수 있는
+ * 객체 모델로 가져오기 위한 타입. 이번 버전에서는 "읽기(파싱/검사/하이라이트)"까지만
+ * 구현하고, 집기/CustomPath/Background 로의 변환은 다음 버전(v0.7.1)에서 다룹니다.
+ */
+export type SvgElementType =
+  | 'path'
+  | 'rect'
+  | 'circle'
+  | 'ellipse'
+  | 'polygon'
+  | 'polyline'
+  | 'line'
+  | 'text';
+
+/**
+ * SVG 내부 도형 하나.
+ * bbox 는 문서 전체 대비 정규화 좌표(fx,fy = 좌상단 0..1, fw,fh = 크기 0..1)로 저장해
+ * 문서를 mm 로 배치했을 때 위치/크기를 간단히 환산할 수 있게 합니다.
+ */
+export interface SvgElement {
+  id: string;
+  type: SvgElementType;
+  stroke: string;
+  fill: string;
+  transform?: string;
+  /** 원본 속성 (d, points, x/y/width/height, cx/cy/r 등) — 향후 변환기용 */
+  attrs: Record<string, string>;
+  /** text 요소일 때 텍스트 내용 */
+  text?: string;
+  fx: number;
+  fy: number;
+  fw: number;
+  fh: number;
+}
+
+/** SVG viewBox (없으면 width/height 로 대체) */
+export interface SvgViewBox {
+  minX: number;
+  minY: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * 파싱된 SVG 문서.
+ * elements[] 로 내부 도형을 보관하고, metadata(viewBox/크기)와 mm 배치 정보를 가집니다.
+ * srcDataUrl 은 미리보기/하이라이트 렌더용 원본 SVG 입니다.
+ */
+export interface SvgDocument {
+  id: string;
+  name: string;
+  srcDataUrl: string;
+  docWidth: number; // SVG 좌표 px
+  docHeight: number;
+  viewBox: SvgViewBox;
+  elements: SvgElement[];
+  // 평면도 배치 (mm)
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** 벽면 구분 */
 export type WallSide = 'frontWall' | 'leftWall' | 'rightWall' | 'backWall';
 
@@ -189,6 +256,8 @@ export interface Layout {
   planImages?: PlacedImage[];
   /** 평면도 SVG 배경 도면 (PlacedImage 재사용, locked 지원) */
   planBackgrounds?: PlacedImage[];
+  /** 구조 파싱된 SVG 문서 (v0.7.0 SVG Import) */
+  svgDocuments?: SvgDocument[];
   wallItems?: WallItems;
   createdAt: number;
   updatedAt: number;

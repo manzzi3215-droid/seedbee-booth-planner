@@ -19,7 +19,9 @@ import type {
   PlacedImage,
   PlacedText,
   PointMm,
+  SvgDocument,
 } from '../../types';
+import SvgHighlightOverlay from '../svg/SvgRenderer';
 import { useContainerSize } from './useContainerSize';
 import { computeFit, zoomAtPoint, pxToMm, type Viewport } from './coords';
 import FixtureNode from './FixtureNode';
@@ -63,6 +65,9 @@ interface BoothCanvasProps {
   selectedDimensionId: string | null;
   selectedImageId: string | null;
   selectedBackgroundId: string | null;
+  /** 선택된 SVG 문서 (구조 검사용, 있으면 하이라이트 오버레이) */
+  selectedSvgDoc?: SvgDocument | null;
+  highlightedSvgElementId?: string | null;
   gridSizeMm?: number;
   onSelect: (id: string | null) => void;
   onMove: (id: string, xMm: number, yMm: number, snapToGrid?: boolean) => void;
@@ -98,6 +103,8 @@ export default function BoothCanvas({
   selectedDimensionId,
   selectedImageId,
   selectedBackgroundId,
+  selectedSvgDoc,
+  highlightedSvgElementId,
   gridSizeMm = DEFAULT_GRID_SIZE_MM,
   onSelect,
   onMove,
@@ -363,6 +370,17 @@ export default function BoothCanvas({
 
           {/* 스냅 가이드라인 레이어 (명령형으로 그림, 드래그 종료 시 비움) */}
           <Layer ref={guideLayerRef} listening={false} />
+
+          {/* SVG 구조 검사 하이라이트 (읽기 전용, 상호작용 없음) */}
+          {selectedSvgDoc && (
+            <Layer listening={false}>
+              <SvgHighlightOverlay
+                doc={selectedSvgDoc}
+                highlightedElementId={highlightedSvgElementId ?? null}
+                scale={viewport.scale}
+              />
+            </Layer>
+          )}
         </Stage>
       )}
 

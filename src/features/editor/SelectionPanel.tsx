@@ -20,6 +20,7 @@ import TextPanel from './TextPanel';
 import DimensionPanel from './DimensionPanel';
 import ImagePanel from './ImagePanel';
 import BackgroundPanel from './BackgroundPanel';
+import SvgInspectorPanel from './SvgInspectorPanel';
 
 /** 빈 선택 상태 */
 function EmptyPanel() {
@@ -55,6 +56,7 @@ export default function SelectionPanel() {
   if (selectedItem?.type === 'dimension') return <DimensionPanel />;
   if (selectedItem?.type === 'image') return <ImagePanel />;
   if (selectedItem?.type === 'background') return <BackgroundPanel />;
+  if (selectedItem?.type === 'svg') return <SvgInspectorPanel />;
   if (selectedItem?.type === 'fixture') return <FixtureInfoPanel />;
   return <EmptyPanel />;
 }

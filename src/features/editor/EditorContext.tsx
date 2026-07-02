@@ -15,6 +15,7 @@ import type {
   PlacedImage,
   PlacedText,
   Project,
+  SvgDocument,
   WallItems,
   WallSide,
 } from '../../types';
@@ -50,7 +51,7 @@ type ItemType = 'fixture' | 'text' | 'dimension' | 'image';
  *  - wall 스코프: 특정 벽면의 텍스트/치수선/이미지
  */
 export type SelectedItem =
-  | { scope: 'plan'; type: ItemType | 'background'; id: string }
+  | { scope: 'plan'; type: ItemType | 'background' | 'svg'; id: string }
   | { scope: 'wall'; wall: WallSide; type: 'text' | 'dimension' | 'image'; id: string }
   | null;
 
@@ -151,6 +152,16 @@ interface EditorContextValue {
   selectBackground: (id: string | null) => void;
   updatePlanBackground: (id: string, patch: Partial<PlacedImage>) => void;
 
+  // SVG 문서 (구조 파싱, 평면도 전용) — v0.7.0
+  svgDocuments: SvgDocument[];
+  selectedSvgId: string | null;
+  selectedSvgDocument: SvgDocument | null;
+  /** Inspector 에서 선택된 도형 id (저장 안 함, 하이라이트용) */
+  selectedSvgElementId: string | null;
+  setSelectedSvgElementId: (id: string | null) => void;
+  addSvgDocument: (doc: SvgDocument) => void;
+  selectSvgDocument: (id: string | null) => void;
+
   // 선택 속성 수정 (패널)
   updateSelectedText: (patch: Partial<PlacedText>) => void;
   updateSelectedDimension: (patch: Partial<PlacedDimension>) => void;
@@ -177,6 +188,8 @@ const clonePlaced = (l: PlacedFixture[]) => l.map((p) => ({ ...p }));
 const cloneTexts = (l: PlacedText[]) => l.map((t) => ({ ...t }));
 const cloneDims = (l: PlacedDimension[]) => l.map((d) => ({ ...d }));
 const cloneImages = (l: PlacedImage[]) => l.map((i) => ({ ...i }));
+const cloneSvgDocs = (l: SvgDocument[]) =>
+  l.map((d) => ({ ...d, elements: d.elements.map((e) => ({ ...e })) }));
 function cloneWallItems(w: WallItems): WallItems {
   const out = emptyWallItems();
   for (const side of WALL_SIDES) {
@@ -216,8 +229,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [dimensions, setDimensions] = useState<PlacedDimension[]>([]);
   const [planImages, setPlanImages] = useState<PlacedImage[]>([]);
   const [planBackgrounds, setPlanBackgrounds] = useState<PlacedImage[]>([]);
+  const [svgDocuments, setSvgDocuments] = useState<SvgDocument[]>([]);
   const [wallItems, setWallItems] = useState<WallItems>(emptyWallItems());
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
+  const [selectedSvgElementId, setSelectedSvgElementId] = useState<string | null>(null);
   const [gridSizeMm] = useState(DEFAULT_GRID_SIZE_MM);
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
   const [showFixtureNames, setShowFixtureNames] = useState(true);
@@ -245,9 +260,11 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setDimensions(latest?.dimensions ? cloneDims(latest.dimensions) : []);
       setPlanImages(latest?.planImages ? cloneImages(latest.planImages) : []);
       setPlanBackgrounds(latest?.planBackgrounds ? cloneImages(latest.planBackgrounds) : []);
+      setSvgDocuments(latest?.svgDocuments ? cloneSvgDocs(latest.svgDocuments) : []);
       setWallItems(cloneWallItems(normalizeWallItems(latest?.wallItems)));
       setCurrentLayoutId(latest?.id ?? null);
       setSelectedItem(null);
+      setSelectedSvgElementId(null);
       setProjectLoading(false);
     })();
     return () => {
@@ -267,6 +284,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     selectedItem?.scope === 'plan' && selectedItem.type === 'image' ? selectedItem.id : null;
   const selectedBackgroundId =
     selectedItem?.scope === 'plan' && selectedItem.type === 'background' ? selectedItem.id : null;
+  const selectedSvgId =
+    selectedItem?.scope === 'plan' && selectedItem.type === 'svg' ? selectedItem.id : null;
 
   // 선택된 텍스트/치수선/이미지 객체 (scope 무관)
   const selectedText: PlacedText | null = (() => {
@@ -289,6 +308,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   })();
   const selectedBackground: PlacedImage | null =
     selectedBackgroundId ? planBackgrounds.find((b) => b.id === selectedBackgroundId) ?? null : null;
+  const selectedSvgDocument: SvgDocument | null =
+    selectedSvgId ? svgDocuments.find((d) => d.id === selectedSvgId) ?? null : null;
 
   const value = useMemo<EditorContextValue>(() => {
     const boothW = project?.boothConfig.widthMm ?? 0;
@@ -456,6 +477,17 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     const updatePlanBackground = (id: string, patch: Partial<PlacedImage>) =>
       setPlanBackgrounds((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
 
+    // ---------- SVG 문서 (구조 파싱) ----------
+    const addSvgDocument = (doc: SvgDocument) => {
+      setSvgDocuments((prev) => [...prev, doc]);
+      setSelectedSvgElementId(null);
+      setSelectedItem({ scope: 'plan', type: 'svg', id: doc.id });
+    };
+    const selectSvgDocument = (id: string | null) => {
+      setSelectedSvgElementId(null);
+      setSelectedItem(id ? { scope: 'plan', type: 'svg', id } : null);
+    };
+
     // ---------- 선택 텍스트/치수선 수정 (scope 분기) ----------
     const mutateSelText = (fn: (t: PlacedText) => PlacedText) => {
       const it = selectedItem;
@@ -552,6 +584,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         else updateWall(it.wall, (g) => ({ ...g, images: g.images.filter((i) => i.id !== it.id) }));
       } else if (it.type === 'background') {
         setPlanBackgrounds((prev) => prev.filter((b) => b.id !== it.id));
+      } else if (it.type === 'svg') {
+        setSvgDocuments((prev) => prev.filter((d) => d.id !== it.id));
+        setSelectedSvgElementId(null);
       }
       setSelectedItem(null);
     };
@@ -575,8 +610,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         JSON.stringify(dimensions) !== JSON.stringify(currentLayout.dimensions ?? []) ||
         JSON.stringify(planImages) !== JSON.stringify(currentLayout.planImages ?? []) ||
         JSON.stringify(planBackgrounds) !== JSON.stringify(currentLayout.planBackgrounds ?? []) ||
+        JSON.stringify(svgDocuments) !== JSON.stringify(currentLayout.svgDocuments ?? []) ||
         JSON.stringify(wallItems) !== JSON.stringify(normalizeWallItems(currentLayout.wallItems))
-      : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 || planBackgrounds.length > 0 ||
+      : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 || planBackgrounds.length > 0 || svgDocuments.length > 0 ||
         WALL_SIDES.some((s) => wallItems[s].texts.length > 0 || wallItems[s].dimensions.length > 0 || wallItems[s].images.length > 0);
 
     const suggestLayoutName = () => `v${layouts.length + 1}`;
@@ -594,6 +630,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       dimensions: cloneDims(dimensions),
       planImages: cloneImages(planImages),
       planBackgrounds: cloneImages(planBackgrounds),
+      svgDocuments: cloneSvgDocs(svgDocuments),
       wallItems: cloneWallItems(wallItems),
     });
 
@@ -616,9 +653,11 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setDimensions(cloneDims(layout?.dimensions ?? []));
       setPlanImages(cloneImages(layout?.planImages ?? []));
       setPlanBackgrounds(cloneImages(layout?.planBackgrounds ?? []));
+      setSvgDocuments(cloneSvgDocs(layout?.svgDocuments ?? []));
       setWallItems(cloneWallItems(normalizeWallItems(layout?.wallItems)));
       setCurrentLayoutId(layout?.id ?? null);
       setSelectedItem(null);
+      setSelectedSvgElementId(null);
     };
     const loadLayout = (layoutId: string) => {
       const layout = layouts.find((l) => l.id === layoutId);
@@ -649,6 +688,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
               dimensions: cloneDims(src.dimensions ?? []),
               planImages: cloneImages(src.planImages ?? []),
               planBackgrounds: cloneImages(src.planBackgrounds ?? []),
+              svgDocuments: cloneSvgDocs(src.svgDocuments ?? []),
               wallItems: cloneWallItems(normalizeWallItems(src.wallItems)),
             };
       const copy: Layout = { id: generateId(), name: `${src.name} 복사본`, ...data, createdAt: now, updatedAt: now };
@@ -733,6 +773,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       addBackground,
       selectBackground,
       updatePlanBackground,
+      svgDocuments,
+      selectedSvgId,
+      selectedSvgDocument,
+      selectedSvgElementId,
+      setSelectedSvgElementId,
+      addSvgDocument,
+      selectSvgDocument,
       updateSelectedText,
       updateSelectedDimension,
       updateSelectedImage,
@@ -756,14 +803,18 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     dimensions,
     planImages,
     planBackgrounds,
+    svgDocuments,
     wallItems,
     showFixtureNames,
     selectedItem,
+    selectedSvgElementId,
     selectedFixtureId,
     selectedTextId,
     selectedDimensionId,
     selectedImageId,
     selectedBackgroundId,
+    selectedSvgId,
+    selectedSvgDocument,
     selectedText,
     selectedDimension,
     selectedImage,
