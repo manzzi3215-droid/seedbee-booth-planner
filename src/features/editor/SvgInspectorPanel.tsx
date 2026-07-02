@@ -8,6 +8,8 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
 import { useEditor } from './EditorContext';
 import { countElements, SVG_ELEMENT_TYPES, SVG_ELEMENT_LABEL } from '../svg/SvgModel';
 
@@ -21,11 +23,18 @@ export default function SvgInspectorPanel() {
     selectedSvgDocument: doc,
     selectedSvgElementId,
     setSelectedSvgElementId,
+    convertSvgElementToFixture,
     deleteSelected,
   } = useEditor();
 
   if (!doc) return null;
   const counts = countElements(doc);
+  const selectedEl = selectedSvgElementId ? doc.elements.find((e) => e.id === selectedSvgElementId) ?? null : null;
+  const canConvert = !!selectedEl && selectedEl.type !== 'text' && !selectedEl.converted;
+  const convertHint =
+    selectedEl?.type === 'line'
+      ? '선(line)은 치수선으로 변환됩니다.'
+      : '선택 도형을 집기로 변환합니다. (라이브러리 저장 안 함)';
 
   return (
     <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -86,12 +95,58 @@ export default function SvgInspectorPanel() {
                   secondary: { variant: 'caption', noWrap: true },
                 }}
               />
+              {el.converted && (
+                <Chip
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                  icon={<CheckCircleRoundedIcon />}
+                  label="Converted"
+                  sx={{ ml: 1 }}
+                />
+              )}
             </ListItemButton>
           ))}
         </List>
       </Box>
 
       <Divider sx={{ my: 1 }} />
+
+      {/* 집기로 변환 (도형 선택 시) */}
+      {selectedEl && (
+        <>
+          {selectedEl.converted ? (
+            <Chip
+              size="small"
+              color="success"
+              variant="outlined"
+              icon={<CheckCircleRoundedIcon />}
+              label={`${SVG_ELEMENT_LABEL[selectedEl.type]} 변환 완료`}
+              sx={{ alignSelf: 'flex-start', mb: 1 }}
+            />
+          ) : selectedEl.type === 'text' ? (
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+              텍스트(text)는 아직 변환할 수 없습니다.
+            </Typography>
+          ) : (
+            <>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>
+                {convertHint}
+              </Typography>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<CategoryRoundedIcon />}
+                onClick={() => canConvert && convertSvgElementToFixture(doc.id, selectedEl.id)}
+                fullWidth
+                sx={{ mb: 1 }}
+              >
+                집기로 변환
+              </Button>
+            </>
+          )}
+        </>
+      )}
 
       <Button
         variant="outlined"

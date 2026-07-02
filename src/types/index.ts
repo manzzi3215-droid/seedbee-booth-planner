@@ -197,6 +197,8 @@ export interface SvgElement {
   fy: number;
   fw: number;
   fh: number;
+  /** v0.7.1: 집기/치수선으로 변환 완료됨 (중복 변환 방지) */
+  converted?: boolean;
 }
 
 /** SVG viewBox (없으면 width/height 로 대체) */
@@ -251,6 +253,11 @@ export interface Layout {
   id: string;
   name: string;
   placedFixtures: PlacedFixture[];
+  /**
+   * 이 배치안에서만 쓰는 집기 정의 (v0.7.1 SVG→Fixture 변환 결과).
+   * 전역 집기 라이브러리(blp:fixtures)에는 저장하지 않고 배치안과 함께 보관합니다.
+   */
+  localFixtures?: FixtureDef[];
   texts?: PlacedText[];
   dimensions?: PlacedDimension[];
   planImages?: PlacedImage[];

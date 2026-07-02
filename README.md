@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.7.0 - SVG Parser & Document Inspector**
+> **v0.7.1 - SVG to Fixture Converter**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -21,7 +21,11 @@
 - **SVG 가져오기** — Illustrator 등에서 **SVG로 저장한** 도면을 두 가지 방식으로 가져오기
   - ① **배경으로**: 참고용 이미지로 도면 위에 배치(이동/크기/투명도/잠금), PNG/PDF 반영
   - ② **SVG 객체로**: 내부 구조(path/rect/circle/ellipse/polygon/polyline/line/text)를 파싱해
-    **SVG 검사기(Inspector)** 로 도형 개수 확인 + 도형 선택 시 캔버스 하이라이트 (v0.7.0, 읽기 전용)
+    **SVG 검사기(Inspector)** 로 도형 개수 확인 + 도형 선택 시 캔버스 하이라이트
+  - **SVG → 집기 변환(v0.7.1):** Inspector 에서 도형 선택 후 **[집기로 변환]** —
+    rect→사각형, circle→원형, ellipse/polygon/polyline/path→customPath, line→치수선.
+    위치·크기·색상 유지, 자동 이름(Rect 1…), 변환 완료 표시(중복 변환 방지). **Canvas 에만 생성**
+    (Fixture Library 저장은 v0.7.2 예정)
   - *Adobe Illustrator(.ai)는 웹에서 안정적으로 파싱하기 어렵습니다. **Illustrator에서는 SVG로
     저장 후 업로드하는 방식을 권장합니다.***
 - **집기 라이브러리** — 등록/수정/삭제. 형태: 사각형 · 둥근 사각형 · 원형 · 반원형,
@@ -182,6 +186,18 @@ src/
 
 ### Changelog
 
+**v0.7.1 — SVG to Fixture Converter**
+- **SVG → Fixture 변환:** SVG Inspector 에서 도형을 선택하면 **[집기로 변환]** 버튼으로 실제 집기 생성
+  - 변환 규칙: `rect→rectangle` · `circle→circle` · `ellipse/polygon/polyline/path→customPath` · `line→치수선`
+  - **CustomPath 정규화:** path 는 브라우저 샘플링으로, polygon/polyline 은 점 목록으로 **100×100 박스** 정규화
+    (기존 customPath 포맷과 동일 — `widthMm/100, depthMm/100` 스케일)
+  - **위치·크기:** SVG BoundingBox 기준으로 mm 자동 계산 후 현재 위치 그대로 캔버스에 생성
+  - **색상:** fill → stroke → 기본 회색 순으로 결정
+  - **자동 이름:** 같은 타입 내 순번 (Rect 1, Circle 1, Polygon 3, Path 8 …)
+  - **변환 완료 표시(Converted):** 중복 변환 방지, 변환 직후 새 집기 자동 선택
+  - ⚠️ 이번 단계는 **"SVG → Canvas"** 까지 — 변환 집기는 배치안에만 저장(`localFixtures`),
+    **Fixture Library 저장은 하지 않습니다** (v0.7.2 예정). text 변환도 아직 미지원.
+
 **v0.7.0 — SVG Parser & Document Inspector**
 - **SVG Import 2단계:** SVG를 "단순 이미지"가 아니라 내부 구조 객체로 가져오기 (읽기 전용)
   - **SvgParser:** path/rect/circle/ellipse/polygon/polyline/line/text 파싱 → `SvgElement`
@@ -229,7 +245,7 @@ src/
 - **그리드 표시 ON/OFF** 토글
 - **치수선 표시 ON/OFF** 토글
 - **프로젝트 복제**
-- **SVG 도형 → 집기/CustomPath/Background 변환** (v0.7.1 예정 · 현재는 구조 읽기까지)
+- **SVG 변환 집기 → Fixture Library 저장** (v0.7.2 예정 · 현재는 배치안 로컬에만 생성) · text 변환 · 자동 그룹화
 - polygon 실제 edge 기반 벽면 길이 · 다중 선택
 - Firebase(Firestore + Storage) 전환 · Three.js 실 3D 뷰
 

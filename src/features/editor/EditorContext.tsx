@@ -24,6 +24,7 @@ import { generateId } from '../../utils/id';
 import { useFixtures } from '../fixtures/useFixtures';
 import { snapMmToGrid } from '../canvas/coords';
 import { DEFAULT_GRID_SIZE_MM } from '../canvas/constants';
+import { convertSvgElement } from '../svg/SvgConverter';
 import {
   DEFAULT_TEXT_CONTENT,
   DEFAULT_TEXT_FONT_MM,
@@ -161,6 +162,8 @@ interface EditorContextValue {
   setSelectedSvgElementId: (id: string | null) => void;
   addSvgDocument: (doc: SvgDocument) => void;
   selectSvgDocument: (id: string | null) => void;
+  /** SVG 도형 → 집기/치수선 변환 (Canvas 에만 생성, 라이브러리 저장 안 함) */
+  convertSvgElementToFixture: (docId: string, elementId: string) => void;
 
   // 선택 속성 수정 (패널)
   updateSelectedText: (patch: Partial<PlacedText>) => void;
@@ -190,6 +193,7 @@ const cloneDims = (l: PlacedDimension[]) => l.map((d) => ({ ...d }));
 const cloneImages = (l: PlacedImage[]) => l.map((i) => ({ ...i }));
 const cloneSvgDocs = (l: SvgDocument[]) =>
   l.map((d) => ({ ...d, elements: d.elements.map((e) => ({ ...e })) }));
+const cloneFixtureDefs = (l: FixtureDef[]) => l.map((f) => ({ ...f }));
 function cloneWallItems(w: WallItems): WallItems {
   const out = emptyWallItems();
   for (const side of WALL_SIDES) {
@@ -229,6 +233,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [dimensions, setDimensions] = useState<PlacedDimension[]>([]);
   const [planImages, setPlanImages] = useState<PlacedImage[]>([]);
   const [planBackgrounds, setPlanBackgrounds] = useState<PlacedImage[]>([]);
+  const [localFixtures, setLocalFixtures] = useState<FixtureDef[]>([]);
   const [svgDocuments, setSvgDocuments] = useState<SvgDocument[]>([]);
   const [wallItems, setWallItems] = useState<WallItems>(emptyWallItems());
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
@@ -260,6 +265,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setDimensions(latest?.dimensions ? cloneDims(latest.dimensions) : []);
       setPlanImages(latest?.planImages ? cloneImages(latest.planImages) : []);
       setPlanBackgrounds(latest?.planBackgrounds ? cloneImages(latest.planBackgrounds) : []);
+      setLocalFixtures(latest?.localFixtures ? cloneFixtureDefs(latest.localFixtures) : []);
       setSvgDocuments(latest?.svgDocuments ? cloneSvgDocs(latest.svgDocuments) : []);
       setWallItems(cloneWallItems(normalizeWallItems(latest?.wallItems)));
       setCurrentLayoutId(latest?.id ?? null);
@@ -272,7 +278,11 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     };
   }, [projectId]);
 
-  const fixturesById = useMemo(() => new Map(fixtures.map((f) => [f.id, f])), [fixtures]);
+  // 전역 라이브러리 + 배치안-로컬(SVG 변환) 집기 정의를 함께 조회
+  const fixturesById = useMemo(
+    () => new Map([...fixtures, ...localFixtures].map((f) => [f.id, f])),
+    [fixtures, localFixtures],
+  );
 
   const selectedFixtureId =
     selectedItem?.scope === 'plan' && selectedItem.type === 'fixture' ? selectedItem.id : null;
@@ -487,6 +497,52 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setSelectedSvgElementId(null);
       setSelectedItem(id ? { scope: 'plan', type: 'svg', id } : null);
     };
+    const markElementConverted = (docId: string, elId: string) =>
+      setSvgDocuments((prev) =>
+        prev.map((d) =>
+          d.id !== docId
+            ? d
+            : {
+                ...d,
+                elements: d.elements.map((e) => (e.id === elId ? { ...e, converted: true } : e)),
+                updatedAt: Date.now(),
+              },
+        ),
+      );
+    const convertSvgElementToFixture = (docId: string, elementId: string) => {
+      const doc = svgDocuments.find((d) => d.id === docId);
+      if (!doc) return;
+      const el = doc.elements.find((e) => e.id === elementId);
+      if (!el || el.converted) return;
+      const out = convertSvgElement(doc, el);
+      if (!out) return;
+      if (out.kind === 'fixture') {
+        setLocalFixtures((prev) => [...prev, out.def]);
+        const pid = generateId();
+        setPlaced((prev) => [...prev, { id: pid, fixtureDefId: out.def.id, xMm: out.xMm, yMm: out.yMm, rotationDeg: 0 }]);
+        setSelectedItem({ scope: 'plan', type: 'fixture', id: pid });
+      } else {
+        const did = generateId();
+        setDimensions((prev) => [
+          ...prev,
+          {
+            id: did,
+            startXMm: out.startXMm,
+            startYMm: out.startYMm,
+            endXMm: out.endXMm,
+            endYMm: out.endYMm,
+            label: '',
+            color: out.color,
+            textColor: DEFAULT_DIMENSION_TEXT_COLOR,
+            lineWidthPx: DEFAULT_DIMENSION_LINE_WIDTH_PX,
+            showArrows: true,
+          },
+        ]);
+        setSelectedItem({ scope: 'plan', type: 'dimension', id: did });
+      }
+      markElementConverted(docId, elementId);
+      setSelectedSvgElementId(null);
+    };
 
     // ---------- 선택 텍스트/치수선 수정 (scope 분기) ----------
     const mutateSelText = (fn: (t: PlacedText) => PlacedText) => {
@@ -611,6 +667,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         JSON.stringify(planImages) !== JSON.stringify(currentLayout.planImages ?? []) ||
         JSON.stringify(planBackgrounds) !== JSON.stringify(currentLayout.planBackgrounds ?? []) ||
         JSON.stringify(svgDocuments) !== JSON.stringify(currentLayout.svgDocuments ?? []) ||
+        JSON.stringify(localFixtures) !== JSON.stringify(currentLayout.localFixtures ?? []) ||
         JSON.stringify(wallItems) !== JSON.stringify(normalizeWallItems(currentLayout.wallItems))
       : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 || planBackgrounds.length > 0 || svgDocuments.length > 0 ||
         WALL_SIDES.some((s) => wallItems[s].texts.length > 0 || wallItems[s].dimensions.length > 0 || wallItems[s].images.length > 0);
@@ -630,6 +687,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       dimensions: cloneDims(dimensions),
       planImages: cloneImages(planImages),
       planBackgrounds: cloneImages(planBackgrounds),
+      localFixtures: cloneFixtureDefs(localFixtures),
       svgDocuments: cloneSvgDocs(svgDocuments),
       wallItems: cloneWallItems(wallItems),
     });
@@ -653,6 +711,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setDimensions(cloneDims(layout?.dimensions ?? []));
       setPlanImages(cloneImages(layout?.planImages ?? []));
       setPlanBackgrounds(cloneImages(layout?.planBackgrounds ?? []));
+      setLocalFixtures(cloneFixtureDefs(layout?.localFixtures ?? []));
       setSvgDocuments(cloneSvgDocs(layout?.svgDocuments ?? []));
       setWallItems(cloneWallItems(normalizeWallItems(layout?.wallItems)));
       setCurrentLayoutId(layout?.id ?? null);
@@ -688,6 +747,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
               dimensions: cloneDims(src.dimensions ?? []),
               planImages: cloneImages(src.planImages ?? []),
               planBackgrounds: cloneImages(src.planBackgrounds ?? []),
+              localFixtures: cloneFixtureDefs(src.localFixtures ?? []),
               svgDocuments: cloneSvgDocs(src.svgDocuments ?? []),
               wallItems: cloneWallItems(normalizeWallItems(src.wallItems)),
             };
@@ -780,6 +840,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setSelectedSvgElementId,
       addSvgDocument,
       selectSvgDocument,
+      convertSvgElementToFixture,
       updateSelectedText,
       updateSelectedDimension,
       updateSelectedImage,
@@ -803,6 +864,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     dimensions,
     planImages,
     planBackgrounds,
+    localFixtures,
     svgDocuments,
     wallItems,
     showFixtureNames,
