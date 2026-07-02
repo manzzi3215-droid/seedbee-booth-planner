@@ -22,7 +22,9 @@ import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded';
 import TextFieldsRoundedIcon from '@mui/icons-material/TextFieldsRounded';
 import StraightenRoundedIcon from '@mui/icons-material/StraightenRounded';
 import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
+import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
 import type { SelectChangeEvent } from '@mui/material/Select';
+import IsoPreviewDialog from '../iso/IsoPreviewDialog';
 import { useEditor } from './EditorContext';
 import {
   downloadLayoutPNG,
@@ -71,6 +73,7 @@ export default function EditorToolbar() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [usageOpen, setUsageOpen] = useState(false);
+  const [isoOpen, setIsoOpen] = useState(false);
 
   const currentLayout = layouts.find((l) => l.id === currentLayoutId) ?? null;
 
@@ -344,12 +347,21 @@ export default function EditorToolbar() {
       >
         집기 리스트
       </Button>
+      <Button
+        variant="text"
+        size="small"
+        startIcon={<ViewInArRoundedIcon />}
+        onClick={() => setIsoOpen(true)}
+      >
+        3D 미리보기
+      </Button>
 
       <FixtureUsageDialog
         open={usageOpen}
         rows={computeFixtureUsage(placed, fixturesById)}
         onClose={() => setUsageOpen(false)}
       />
+      <IsoPreviewDialog open={isoOpen} onClose={() => setIsoOpen(false)} />
 
       <Snackbar
         open={toast !== null}

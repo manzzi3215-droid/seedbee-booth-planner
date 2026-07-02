@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Stage, Layer, Line, Rect, Text } from 'react-konva';
+import { Stage, Layer, Line, Rect, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -17,6 +17,8 @@ import { computeFit, zoomAtPoint, pxToMm, type Viewport } from '../canvas/coords
 import TextNode from '../canvas/TextNode';
 import DimensionNode from '../canvas/DimensionNode';
 import ImageNode from '../canvas/ImageNode';
+import { useImageMap } from '../canvas/useDataUrlImage';
+import { useImageTransformer } from '../canvas/useImageTransformer';
 import {
   DEFAULT_GRID_SIZE_MM,
   ZOOM_STEP,
@@ -76,6 +78,8 @@ export default function WallCanvas({
 }: WallCanvasProps) {
   const { ref, size } = useContainerSize<HTMLDivElement>();
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
+  const imageMap = useImageMap(images.map((i) => i.srcDataUrl));
+  const { transformerRef, register } = useImageTransformer(selectedImageId);
 
   const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target === e.target.getStage()) onDeselect();
@@ -148,12 +152,24 @@ export default function WallCanvas({
               <ImageNode
                 key={img.id}
                 image={img}
-                selected={img.id === selectedImageId}
-                scale={viewport.scale}
+                imageEl={imageMap.get(img.srcDataUrl)}
+                register={register(img.id)}
                 onSelect={onSelectImage}
                 onChange={onChangeImage}
               />
             ))}
+            {selectedImageId && (
+              <Transformer
+                ref={transformerRef}
+                rotateEnabled
+                keepRatio={false}
+                anchorSize={14 / viewport.scale}
+                anchorStrokeWidth={1.5 / viewport.scale}
+                borderStrokeWidth={1.5 / viewport.scale}
+                rotateAnchorOffset={26 / viewport.scale}
+                boundBoxFunc={(oldBox, newBox) => (newBox.width < 5 || newBox.height < 5 ? oldBox : newBox)}
+              />
+            )}
             {texts.map((t) => (
               <TextNode
                 key={t.id}

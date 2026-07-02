@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Line, Text, Group } from 'react-konva';
+import { Stage, Layer, Line, Text, Group, Transformer } from 'react-konva';
 import Konva from 'konva';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -26,6 +26,8 @@ import FixtureNode from './FixtureNode';
 import TextNode from './TextNode';
 import DimensionNode from './DimensionNode';
 import ImageNode from './ImageNode';
+import { useImageMap } from './useDataUrlImage';
+import { useImageTransformer } from './useImageTransformer';
 import {
   getBoothShape,
   getBoothPolygon,
@@ -101,6 +103,8 @@ export default function BoothCanvas({
   const { ref, size } = useContainerSize<HTMLDivElement>();
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
   const guideLayerRef = useRef<Konva.Layer>(null);
+  const imageMap = useImageMap(images.map((i) => i.srcDataUrl));
+  const { transformerRef, register } = useImageTransformer(selectedImageId);
 
   const isPolygon = getBoothShape(booth) === 'polygon';
   const polygon = getBoothPolygon(booth);
@@ -264,12 +268,24 @@ export default function BoothCanvas({
               <ImageNode
                 key={img.id}
                 image={img}
-                selected={img.id === selectedImageId}
-                scale={viewport.scale}
+                imageEl={imageMap.get(img.srcDataUrl)}
+                register={register(img.id)}
                 onSelect={onSelectImage}
                 onChange={onChangeImage}
               />
             ))}
+            {selectedImageId && (
+              <Transformer
+                ref={transformerRef}
+                rotateEnabled
+                keepRatio={false}
+                anchorSize={14 / viewport.scale}
+                anchorStrokeWidth={1.5 / viewport.scale}
+                borderStrokeWidth={1.5 / viewport.scale}
+                rotateAnchorOffset={26 / viewport.scale}
+                boundBoxFunc={(oldBox, newBox) => (newBox.width < 5 || newBox.height < 5 ? oldBox : newBox)}
+              />
+            )}
             {placed.map((p) => {
               const def = fixturesById.get(p.fixtureDefId);
               if (!def) return null;

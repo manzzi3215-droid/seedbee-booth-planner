@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.4.0 - Plan & Wall Annotation MVP**
+> **v0.5.0 - Isometric Preview**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -33,7 +33,10 @@
 - **보기 모드** — 평면도 / 정면 · 좌측 · 우측 · 후면 벽 탭 전환
 - **벽면 캔버스** — 벽 길이 × 높이(mm) 전개도에 텍스트·치수선·이미지 배치
 
-**저장 · 출력**
+**미리보기 · 저장 · 출력**
+- **아이소메트릭 3D 미리보기** — 평면 배치 · 벽면 요소 · 집기 heightMm를 기반으로
+  30° 사선 시점 시안 생성(집기는 박스, 벽면 이미지/텍스트는 벽에 부착). PNG 저장.
+  편집 없는 preview 전용(편집은 2D/벽면에서)
 - **배치안 버전 관리** — 한 프로젝트에 여러 배치안(v1, v2, "체험존 강조안" 등)
   저장/불러오기, 최근 배치안 자동 로드
 - **출력** — 평면도/벽면 각각 PNG 저장 + A4 가로 PDF(도면 + 정보 + 요소 요약),
@@ -140,6 +143,7 @@ src/
 │  ├─ fixtures/              # 집기 라이브러리 (폼, 시드, customPath 프리셋)
 │  ├─ texts/ · dimensions/   # 텍스트 · 치수선 상수/헬퍼
 │  ├─ wall/                  # 벽면 전개도 캔버스 · 보기 모드
+│  ├─ iso/                    # 아이소메트릭 미리보기 (3D 씬 데이터 + 2D 렌더러, 분리)
 │  ├─ editor/                # 편집기 상태(Context), 툴바, 패널(집기/텍스트/치수선/이미지), 단축키
 │  └─ export/                # 평면도/벽면 PNG/PDF 출력, 집기 리스트
 ├─ types/                    # 도메인 타입 (Project, Layout, FixtureDef 등)
@@ -166,9 +170,22 @@ src/
 | 벽면 전개도 보기 | ✅ |
 | 벽면 텍스트/치수선 | ✅ |
 | 이미지/포스터 삽입 | ✅ |
+| 아이소메트릭 3D 미리보기 | ✅ |
 
-**향후 후보** — polygon 실제 edge 기반 벽면 길이 · 배치안 삭제/이름변경 UI ·
-다중 선택 · Firebase(Firestore + Storage) 전환
+### Changelog
+
+**v0.5.0 — Isometric Preview**
+- 아이소메트릭 3D 미리보기 추가 (평면 배치 + 벽면 요소 + 집기 높이 기반 30° 시안)
+- 3D preview PNG 저장 (`프로젝트명_배치안명_isometric.png`)
+- **버그 수정:** ImageNode 가 Konva Stage 트리 내부에서 React 훅을 호출해 발생하던
+  "Invalid hook call" 오류 수정 (이미지 로드/Transformer 를 캔버스 레벨 훅으로 이동)
+
+**v0.4.0 — Plan & Wall Annotation**
+- polygon 부스 · customPath 집기 · 스마트 스냅 · 텍스트 · 치수선 ·
+  벽면 전개도(보기/요소) · 이미지 삽입
+
+**향후 후보** — polygon 실제 edge 기반 벽면 길이 · 시점 회전(iso) · 배치안 삭제/이름변경 UI ·
+다중 선택 · Firebase(Firestore + Storage) 전환 · Three.js 실 3D 뷰
 
 ---
 
