@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
 import Select from '@mui/material/Select';
@@ -19,15 +19,22 @@ import SaveAsRoundedIcon from '@mui/icons-material/SaveAsRounded';
 import ImageRoundedIcon from '@mui/icons-material/ImageRounded';
 import PictureAsPdfRoundedIcon from '@mui/icons-material/PictureAsPdfRounded';
 import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded';
+import TextFieldsRoundedIcon from '@mui/icons-material/TextFieldsRounded';
+import StraightenRoundedIcon from '@mui/icons-material/StraightenRounded';
+import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useEditor } from './EditorContext';
 import {
   downloadLayoutPNG,
   downloadLayoutPDF,
+  downloadWallPNG,
+  downloadWallPDF,
   type ExportInput,
+  type WallExportInput,
 } from '../export/exportLayout';
 import { computeFixtureUsage } from '../export/fixtureUsage';
 import FixtureUsageDialog from '../export/FixtureUsageDialog';
+import { isWallView, getViewModeLabel, getWallLengthMm } from '../wall/constants';
 
 /**
  * 편집기 상단 저장 툴바.
@@ -39,6 +46,9 @@ export default function EditorToolbar() {
   const {
     project,
     placed,
+    texts,
+    dimensions,
+    planImages,
     fixturesById,
     layouts,
     currentLayoutId,
@@ -47,8 +57,14 @@ export default function EditorToolbar() {
     saveAs,
     loadLayout,
     suggestLayoutName,
+    addText,
+    addDimension,
+    addImage,
+    viewMode,
+    wallItems,
   } = useEditor();
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -68,6 +84,9 @@ export default function EditorToolbar() {
       createdAt: currentLayout?.createdAt ?? now,
       updatedAt: currentLayout?.updatedAt ?? now,
       placed,
+      texts,
+      dimensions,
+      images: planImages,
       fixturesById,
     };
   };
@@ -80,18 +99,53 @@ export default function EditorToolbar() {
     );
   };
 
-  const handleExportPNG = () => {
-    const input = buildExportInput();
-    if (!input || !confirmIfDirty()) return;
-    downloadLayoutPNG(input);
+  /** 벽면 export 입력 구성 (현재 벽면 기준) */
+  const buildWallExportInput = (): WallExportInput | null => {
+    if (!project || viewMode === 'plan') return null;
+    const wall = viewMode;
+    const now = Date.now();
+    return {
+      project,
+      layoutName: currentLayout?.name ?? '미저장',
+      createdAt: currentLayout?.createdAt ?? now,
+      updatedAt: currentLayout?.updatedAt ?? now,
+      wall,
+      wallLabel: getViewModeLabel(wall),
+      wallLengthMm: getWallLengthMm(project.boothConfig, wall),
+      heightMm: project.boothConfig.heightMm,
+      texts: wallItems[wall].texts,
+      dimensions: wallItems[wall].dimensions,
+      images: wallItems[wall].images,
+    };
+  };
+
+  const handleExportPNG = async () => {
+    if (!confirmIfDirty()) return;
+    setExporting(true);
+    try {
+      if (isWallView(viewMode)) {
+        const wi = buildWallExportInput();
+        if (wi) await downloadWallPNG(wi);
+      } else {
+        const input = buildExportInput();
+        if (input) await downloadLayoutPNG(input);
+      }
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleExportPDF = async () => {
-    const input = buildExportInput();
-    if (!input || !confirmIfDirty()) return;
+    if (!confirmIfDirty()) return;
     setExporting(true);
     try {
-      await downloadLayoutPDF(input);
+      if (isWallView(viewMode)) {
+        const wi = buildWallExportInput();
+        if (wi) await downloadWallPDF(wi);
+      } else {
+        const input = buildExportInput();
+        if (input) await downloadLayoutPDF(input);
+      }
     } finally {
       setExporting(false);
     }
@@ -119,6 +173,28 @@ export default function EditorToolbar() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 같은 파일 재선택 허용
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const aspect = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : 1;
+        addImage({
+          name: file.name.replace(/\.[^.]+$/, ''),
+          srcDataUrl: dataUrl,
+          widthMm: 1000,
+          heightMm: Math.max(1, Math.round(1000 * aspect)),
+        });
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
   };
 
   const openSaveAs = () => {
@@ -203,6 +279,40 @@ export default function EditorToolbar() {
       >
         다른 이름으로 저장
       </Button>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <Button
+        variant="outlined"
+        size="small"
+        startIcon={<TextFieldsRoundedIcon />}
+        onClick={addText}
+      >
+        텍스트 추가
+      </Button>
+      <Button
+        variant="outlined"
+        size="small"
+        startIcon={<StraightenRoundedIcon />}
+        onClick={addDimension}
+      >
+        치수선 추가
+      </Button>
+      <Button
+        variant="outlined"
+        size="small"
+        startIcon={<AddPhotoAlternateRoundedIcon />}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        이미지 추가
+      </Button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        style={{ display: 'none' }}
+        onChange={handleImageFile}
+      />
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 

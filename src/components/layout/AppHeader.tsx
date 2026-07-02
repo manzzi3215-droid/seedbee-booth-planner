@@ -2,8 +2,10 @@ import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
+import Chip from '@mui/material/Chip';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import { Link as RouterLink } from 'react-router-dom';
+import { APP_VERSION } from '../../constants/app';
 
 /**
  * 앱 상단 헤더.
@@ -40,6 +42,12 @@ export default function AppHeader() {
             Booth Layout Planner
           </Typography>
         </Box>
+        <Chip
+          label={APP_VERSION}
+          size="small"
+          variant="outlined"
+          sx={{ ml: 1.5, height: 22, fontSize: 11, color: 'text.secondary' }}
+        />
       </Toolbar>
     </AppBar>
   );

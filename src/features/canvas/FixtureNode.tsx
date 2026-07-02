@@ -1,11 +1,31 @@
-import { Group, Rect, Ellipse, Line } from 'react-konva';
+import { Group, Rect, Ellipse, Line, Path } from 'react-konva';
 import type Konva from 'konva';
-import type { FixtureDef, PlacedFixture } from '../../types';
+import type { FixtureDef, PlacedFixture, PointMm } from '../../types';
 import { isFixtureOutOfBounds } from './fixtureGeometry';
+import { CUSTOM_PATH_VIEW } from '../fixtures/shapes';
 
 const SELECT_COLOR = '#2563eb';
 const WARN_COLOR = '#dc2626';
 const OUTLINE = 'rgba(0,0,0,0.35)';
+
+/** placeholder(반투명 + 대각선) — 아직 실제 형태가 없는 경우 */
+function ShapePlaceholder({ w, d, color }: { w: number; d: number; color: string }) {
+  return (
+    <>
+      <Rect width={w} height={d} fill={color} opacity={0.3} />
+      <Line points={[0, 0, w, d]} stroke={color} strokeWidth={1} strokeScaleEnabled={false} />
+      <Line points={[w, 0, 0, d]} stroke={color} strokeWidth={1} strokeScaleEnabled={false} />
+      <Rect
+        width={w}
+        height={d}
+        stroke={color}
+        dash={[10, 6]}
+        strokeWidth={1.5}
+        strokeScaleEnabled={false}
+      />
+    </>
+  );
+}
 
 /** 형태별 도형 렌더링 (mm 좌표) */
 function ShapeBody({ def }: { def: FixtureDef }) {
@@ -48,23 +68,24 @@ function ShapeBody({ def }: { def: FixtureDef }) {
           strokeScaleEnabled={false}
         />
       );
-    // semicircle / customPath: 이번 단계에서는 placeholder (반투명 + 대각선)
-    default:
-      return (
-        <>
-          <Rect width={w} height={d} fill={color} opacity={0.3} />
-          <Line points={[0, 0, w, d]} stroke={color} strokeWidth={1} strokeScaleEnabled={false} />
-          <Line points={[w, 0, 0, d]} stroke={color} strokeWidth={1} strokeScaleEnabled={false} />
-          <Rect
-            width={w}
-            height={d}
-            stroke={color}
-            dash={[10, 6]}
-            strokeWidth={1.5}
+    case 'customPath':
+      if (def.svgPath) {
+        return (
+          <Path
+            data={def.svgPath}
+            scaleX={w / CUSTOM_PATH_VIEW}
+            scaleY={d / CUSTOM_PATH_VIEW}
+            fill={color}
+            stroke={OUTLINE}
+            strokeWidth={1}
             strokeScaleEnabled={false}
           />
-        </>
-      );
+        );
+      }
+      return <ShapePlaceholder w={w} d={d} color={color} />;
+    // semicircle (및 path 없는 customPath): placeholder
+    default:
+      return <ShapePlaceholder w={w} d={d} color={color} />;
   }
 }
 
@@ -75,12 +96,15 @@ interface FixtureNodeProps {
   placed: PlacedFixture;
   def: FixtureDef;
   selected: boolean;
-  boothW: number;
-  boothD: number;
+  /** 부스 외곽 폴리곤(mm) — 부스 밖 판정용 */
+  boothPolygon: PointMm[];
   /** Stage 배율(px/mm). 선택 핸들을 화면상 일정 크기로 그리는 데 사용 */
   scale: number;
   onSelect: (id: string) => void;
-  onMove: (id: string, xMm: number, yMm: number) => void;
+  /** 드래그 중 위치 보정(스마트 스냅). 보정된 좌표(mm) 반환 */
+  onDragMove: (id: string, xMm: number, yMm: number, shiftKey: boolean) => { xMm: number; yMm: number };
+  /** 드래그 종료. shiftKey(스마트 스냅) 여부 전달 */
+  onDragEnd: (id: string, xMm: number, yMm: number, shiftKey: boolean) => void;
 }
 
 /** 선택된 집기의 네 모서리 핸들 */
@@ -131,20 +155,28 @@ export default function FixtureNode({
   placed,
   def,
   selected,
-  boothW,
-  boothD,
+  boothPolygon,
   scale,
   onSelect,
-  onMove,
+  onDragMove,
+  onDragEnd,
 }: FixtureNodeProps) {
-  const oob = isFixtureOutOfBounds(placed, def, boothW, boothD);
+  const oob = isFixtureOutOfBounds(placed, def, boothPolygon);
   const showBorder = selected || oob;
   // 부스 밖이면 항상 빨간 테두리 유지, 그 외 선택 시 파란 테두리
   const borderColor = oob ? WARN_COLOR : SELECT_COLOR;
 
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    const node = e.target;
+    const shift = e.evt.shiftKey;
+    const snapped = onDragMove(placed.id, node.x(), node.y(), shift);
+    // 스마트 스냅으로 보정된 위치를 즉시 노드에 반영(자석 효과)
+    node.position({ x: snapped.xMm, y: snapped.yMm });
+  };
+
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
-    onMove(placed.id, node.x(), node.y());
+    onDragEnd(placed.id, node.x(), node.y(), e.evt.shiftKey);
   };
 
   return (
@@ -156,6 +188,7 @@ export default function FixtureNode({
       onMouseDown={() => onSelect(placed.id)}
       onTouchStart={() => onSelect(placed.id)}
       onDragStart={() => onSelect(placed.id)}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
     >
       <ShapeBody def={def} />

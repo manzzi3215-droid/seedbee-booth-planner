@@ -15,15 +15,53 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useEditor } from './EditorContext';
 import { getShapeLabel } from '../fixtures/shapes';
 import { isFixtureOutOfBounds } from '../canvas/fixtureGeometry';
+import { getBoothPolygon } from '../canvas/boothGeometry';
+import TextPanel from './TextPanel';
+import DimensionPanel from './DimensionPanel';
+import ImagePanel from './ImagePanel';
+
+/** 빈 선택 상태 */
+function EmptyPanel() {
+  return (
+    <Box sx={{ p: 2, height: '100%' }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 2 }}>
+        선택 정보
+      </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 1,
+          color: 'text.secondary',
+          mt: 6,
+        }}
+      >
+        <InfoOutlinedIcon sx={{ fontSize: 40 }} />
+        <Typography variant="body2">선택된 항목이 없습니다</Typography>
+      </Box>
+    </Box>
+  );
+}
 
 /**
- * 오른쪽 선택 정보 패널.
- * 선택된 배치 집기의 정보 표시 + 위치/회전 직접 입력 + 회전/복사/삭제 액션.
+ * 오른쪽 선택 정보 패널 (디스패처).
+ * 선택 타입(집기/텍스트)에 따라 알맞은 패널을 렌더링합니다.
  */
 export default function SelectionPanel() {
+  const { selectedItem } = useEditor();
+  if (selectedItem?.type === 'text') return <TextPanel />;
+  if (selectedItem?.type === 'dimension') return <DimensionPanel />;
+  if (selectedItem?.type === 'image') return <ImagePanel />;
+  if (selectedItem?.type === 'fixture') return <FixtureInfoPanel />;
+  return <EmptyPanel />;
+}
+
+/** 집기 선택 정보 + 위치/회전 직접 입력 + 회전/복사/삭제 */
+function FixtureInfoPanel() {
   const {
     placed,
-    selectedId,
+    selectedFixtureId,
     fixturesById,
     project,
     rotateSelected,
@@ -33,7 +71,7 @@ export default function SelectionPanel() {
     setSelectedRotation,
   } = useEditor();
 
-  const selected = placed.find((p) => p.id === selectedId) ?? null;
+  const selected = placed.find((p) => p.id === selectedFixtureId) ?? null;
   const def = selected ? fixturesById.get(selected.fixtureDefId) : null;
 
   // 위치/회전 직접 입력용 로컬 상태 (선택 집기 값 변화 시 동기화)
@@ -75,7 +113,7 @@ export default function SelectionPanel() {
   const booth = project?.boothConfig;
   const oob =
     booth != null &&
-    isFixtureOutOfBounds(selected, def, booth.widthMm, booth.depthMm);
+    isFixtureOutOfBounds(selected, def, getBoothPolygon(booth));
 
   const applyTransform = () => {
     const x = Number(xStr);

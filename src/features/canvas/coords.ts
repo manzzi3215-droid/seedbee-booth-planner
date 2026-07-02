@@ -56,12 +56,15 @@ export function snapMmToGrid(mm: number, gridMm: number): number {
 
 /**
  * 컨테이너 크기에 맞춰 부스 전체가 보이도록 하는 Viewport 계산(화면 맞춤).
+ * 부스 바운딩 박스가 원점(0,0)에서 시작하지 않을 수 있으므로 minX/minY 오프셋을 받는다.
  */
 export function computeFit(
   containerW: number,
   containerH: number,
   boothWMm: number,
   boothDMm: number,
+  minXMm = 0,
+  minYMm = 0,
 ): Viewport {
   if (boothWMm <= 0 || boothDMm <= 0 || containerW <= 0 || containerH <= 0) {
     return { scale: 1, x: 0, y: 0 };
@@ -71,8 +74,9 @@ export function computeFit(
   );
   return {
     scale,
-    x: (containerW - boothWMm * scale) / 2,
-    y: (containerH - boothDMm * scale) / 2,
+    // 부스 점 (minX,minY) 이 여백 시작점에 오도록 오프셋 보정
+    x: (containerW - boothWMm * scale) / 2 - minXMm * scale,
+    y: (containerH - boothDMm * scale) / 2 - minYMm * scale,
   };
 }
 

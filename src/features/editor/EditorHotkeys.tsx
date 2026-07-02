@@ -17,7 +17,7 @@ const NUDGE_MM_SHIFT = 500;
  */
 export default function EditorHotkeys() {
   const {
-    selectedId,
+    selectedItem,
     deleteSelected,
     rotateSelected,
     copySelected,
@@ -34,7 +34,7 @@ export default function EditorHotkeys() {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
-      if (!selectedId) return;
+      if (!selectedItem) return;
 
       const step = e.shiftKey ? NUDGE_MM_SHIFT : NUDGE_MM;
 
@@ -77,7 +77,7 @@ export default function EditorHotkeys() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedId, deleteSelected, rotateSelected, copySelected, nudgeSelected]);
+  }, [selectedItem, deleteSelected, rotateSelected, copySelected, nudgeSelected]);
 
   return null;
 }

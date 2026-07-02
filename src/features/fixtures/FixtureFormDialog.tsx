@@ -13,7 +13,12 @@ import InputAdornment from '@mui/material/InputAdornment';
 import Typography from '@mui/material/Typography';
 import type { FixtureDef, FixtureShape } from '../../types';
 import { generateId } from '../../utils/id';
-import { SHAPE_OPTIONS, NOT_YET_RENDERED_SHAPES } from './shapes';
+import {
+  SHAPE_OPTIONS,
+  NOT_YET_RENDERED_SHAPES,
+  CUSTOM_PATH_PRESETS,
+  CUSTOM_PATH_VIEW,
+} from './shapes';
 
 interface FixtureFormDialogProps {
   open: boolean;
@@ -29,6 +34,7 @@ interface FormErrors {
   depthMm?: string;
   heightMm?: string;
   cornerRadiusMm?: string;
+  svgPath?: string;
 }
 
 const DEFAULT_COLOR = '#8d6e63';
@@ -66,6 +72,7 @@ export default function FixtureFormDialog({
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [memo, setMemo] = useState('');
   const [cornerRadiusMm, setCornerRadiusMm] = useState('');
+  const [svgPath, setSvgPath] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
 
@@ -83,7 +90,20 @@ export default function FixtureFormDialog({
     setCornerRadiusMm(
       fixture?.cornerRadiusMm != null ? String(fixture.cornerRadiusMm) : '',
     );
+    setSvgPath(fixture?.svgPath ?? '');
   }, [open, fixture]);
+
+  /** customPath 프리셋 적용: path + (비어있으면) 가로/세로/이름/색상 채움 */
+  const applyPreset = (presetKey: string) => {
+    const preset = CUSTOM_PATH_PRESETS.find((p) => p.key === presetKey);
+    if (!preset) return;
+    setSvgPath(preset.svgPath);
+    setWidthMm((prev) => (prev.trim() === '' ? String(preset.widthMm) : prev));
+    setDepthMm((prev) => (prev.trim() === '' ? String(preset.depthMm) : prev));
+    setHeightMm((prev) => (prev.trim() === '' ? String(preset.heightMm) : prev));
+    setName((prev) => (prev.trim() === '' ? preset.name : prev));
+    setColor(preset.color);
+  };
 
   const validate = (): { ok: boolean; errors: FormErrors; result?: FixtureDef } => {
     const next: FormErrors = {};
@@ -112,6 +132,10 @@ export default function FixtureFormDialog({
       }
     }
 
+    if (shape === 'customPath' && svgPath.trim().length === 0) {
+      next.svgPath = 'SVG path를 입력하거나 프리셋을 선택하세요.';
+    }
+
     const ok = Object.keys(next).length === 0;
     if (!ok) return { ok, errors: next };
 
@@ -128,7 +152,8 @@ export default function FixtureFormDialog({
         color,
         memo: memo.trim() || undefined,
         cornerRadiusMm: shape === 'roundedRectangle' ? corner : undefined,
-        // 기존 pathPoints 는 편집 시 보존 (customPath 편집기는 추후)
+        svgPath: shape === 'customPath' ? svgPath.trim() : undefined,
+        // 기존 pathPoints 는 편집 시 보존
         pathPoints: fixture?.pathPoints,
       },
     };
@@ -240,10 +265,62 @@ export default function FixtureFormDialog({
             />
           )}
 
+          {shape === 'customPath' && (
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                비정형 형태 (customPath)
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+                {CUSTOM_PATH_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.key}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => applyPreset(preset.key)}
+                  >
+                    {preset.name}
+                  </Button>
+                ))}
+              </Stack>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                <TextField
+                  label="SVG Path"
+                  value={svgPath}
+                  onChange={(e) => setSvgPath(e.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  error={Boolean(errors.svgPath)}
+                  helperText={
+                    errors.svgPath ?? `0~${CUSTOM_PATH_VIEW} 좌표계 기준 path (프리셋 선택 또는 직접 입력)`
+                  }
+                />
+                {/* 미리보기 */}
+                <Box
+                  sx={{
+                    width: 96,
+                    height: 96,
+                    flexShrink: 0,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    p: 0.5,
+                    bgcolor: 'action.hover',
+                  }}
+                >
+                  {svgPath.trim() && (
+                    <svg viewBox={`0 0 ${CUSTOM_PATH_VIEW} ${CUSTOM_PATH_VIEW}`} width="100%" height="100%">
+                      <path d={svgPath} fill={color} stroke="rgba(0,0,0,0.35)" strokeWidth={1} />
+                    </svg>
+                  )}
+                </Box>
+              </Box>
+            </Box>
+          )}
+
           {NOT_YET_RENDERED_SHAPES.includes(shape) && (
             <Alert severity="info">
-              커스텀 경로(customPath) 형태의 캔버스 렌더링은 추후 지원 예정입니다.
-              지금은 등록/수정만 가능합니다.
+              반원형(semicircle)은 아직 placeholder 로 표시됩니다.
             </Alert>
           )}
 

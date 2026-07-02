@@ -1,4 +1,5 @@
 import type { FixtureDef } from '../../types';
+import { CUSTOM_PATH_PRESETS } from './shapes';
 
 /**
  * 기본 집기 목록(시드용).
@@ -33,4 +34,16 @@ export const DEFAULT_FIXTURES: FixtureSeed[] = [
     cornerRadiusMm: 80,
   },
   { name: '원형 테이블', shape: 'circle', widthMm: 900, depthMm: 900, heightMm: 750, color: '#66bb6a' },
+  // 기본 비정형(customPath) 테이블
+  ...CUSTOM_PATH_PRESETS.map(
+    (p): FixtureSeed => ({
+      name: p.name,
+      shape: 'customPath',
+      widthMm: p.widthMm,
+      depthMm: p.depthMm,
+      heightMm: p.heightMm,
+      color: p.color,
+      svgPath: p.svgPath,
+    }),
+  ),
 ];

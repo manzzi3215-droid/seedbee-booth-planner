@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Stage, Layer, Line, Rect, Text } from 'react-konva';
-import type Konva from 'konva';
+import { useEffect, useRef, useState } from 'react';
+import { Stage, Layer, Line, Text, Group } from 'react-konva';
+import Konva from 'konva';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
@@ -11,15 +11,36 @@ import Typography from '@mui/material/Typography';
 import FitScreenRoundedIcon from '@mui/icons-material/FitScreenRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
-import type { BoothConfig, FixtureDef, PlacedFixture } from '../../types';
+import type {
+  BoothConfig,
+  FixtureDef,
+  PlacedDimension,
+  PlacedFixture,
+  PlacedImage,
+  PlacedText,
+  PointMm,
+} from '../../types';
 import { useContainerSize } from './useContainerSize';
 import { computeFit, zoomAtPoint, pxToMm, type Viewport } from './coords';
 import FixtureNode from './FixtureNode';
+import TextNode from './TextNode';
+import DimensionNode from './DimensionNode';
+import ImageNode from './ImageNode';
+import {
+  getBoothShape,
+  getBoothPolygon,
+  getBoothBounds,
+  flattenPolygon,
+  type BoothBounds,
+} from './boothGeometry';
+import { computeSmartSnap, type SnapGuide, type SnapTargetFixture } from './smartSnap';
 import {
   DEFAULT_GRID_SIZE_MM,
   ZOOM_STEP,
   WALL_STROKE_PX,
   GRID_STROKE_PX,
+  GUIDE_STROKE_PX,
+  SNAP_THRESHOLD_MM,
   DIM_LABEL_PX,
   DIM_LINE_PX,
   CANVAS_COLORS,
@@ -29,45 +50,144 @@ import {
 interface BoothCanvasProps {
   booth: BoothConfig;
   placed: PlacedFixture[];
+  texts: PlacedText[];
+  dimensions: PlacedDimension[];
+  images: PlacedImage[];
   fixturesById: Map<string, FixtureDef>;
-  selectedId: string | null;
+  selectedFixtureId: string | null;
+  selectedTextId: string | null;
+  selectedDimensionId: string | null;
+  selectedImageId: string | null;
   gridSizeMm?: number;
   onSelect: (id: string | null) => void;
-  onMove: (id: string, xMm: number, yMm: number) => void;
+  onMove: (id: string, xMm: number, yMm: number, snapToGrid?: boolean) => void;
+  onSelectText: (id: string | null) => void;
+  onMoveText: (id: string, xMm: number, yMm: number) => void;
+  onSelectDimension: (id: string | null) => void;
+  onMoveDimension: (id: string, dxMm: number, dyMm: number) => void;
+  onSelectImage: (id: string | null) => void;
+  onChangeImage: (id: string, patch: Partial<PlacedImage>) => void;
 }
 
 /**
  * 부스 2D 평면도 캔버스 (React Konva).
  *
- * - 모든 도형은 mm 좌표로 그리고, Stage 의 scale/position 이 화면 변환을 담당합니다.
- * - 선(그리드/벽체/치수선)은 strokeScaleEnabled=false 로 배율과 무관하게 일정한 두께.
- * - 텍스트는 fontSize 를 1/scale 로 counter-scale 하여 화면상 크기를 일정하게 유지.
- * - 배치된 집기는 별도의 상호작용 Layer 에 렌더링합니다(드래그/선택).
+ * - 부스는 항상 폴리곤으로 다룬다(사각형 = 4꼭짓점). rectangle/polygon 공통 처리.
+ * - 모든 도형은 mm 좌표로 그리고, Stage 의 scale/position 이 화면 변환을 담당.
+ * - 선은 strokeScaleEnabled=false 로 배율과 무관하게 일정한 두께.
+ * - 텍스트는 fontSize 를 1/scale 로 counter-scale.
  */
 export default function BoothCanvas({
   booth,
   placed,
+  texts,
+  dimensions,
+  images,
   fixturesById,
-  selectedId,
+  selectedFixtureId,
+  selectedTextId,
+  selectedDimensionId,
+  selectedImageId,
   gridSizeMm = DEFAULT_GRID_SIZE_MM,
   onSelect,
   onMove,
+  onSelectText,
+  onMoveText,
+  onSelectDimension,
+  onMoveDimension,
+  onSelectImage,
+  onChangeImage,
 }: BoothCanvasProps) {
   const { ref, size } = useContainerSize<HTMLDivElement>();
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
+  const guideLayerRef = useRef<Konva.Layer>(null);
 
-  const { widthMm, depthMm } = booth;
+  const isPolygon = getBoothShape(booth) === 'polygon';
+  const polygon = getBoothPolygon(booth);
+  const bounds = getBoothBounds(booth);
   const edges = getWallEdges(booth.openSide);
 
-  const fit = () =>
-    setViewport(computeFit(size.width, size.height, widthMm, depthMm));
+  // 스냅 가이드라인은 전용 레이어에 명령형으로 그린다(드래그 중 re-render 방지).
+  const drawGuides = (guides: SnapGuide[]) => {
+    const layer = guideLayerRef.current;
+    if (!layer) return;
+    layer.destroyChildren();
+    const ext = Math.max(bounds.widthMm, bounds.depthMm) * 0.04;
+    for (const g of guides) {
+      const points =
+        g.axis === 'x'
+          ? [g.valueMm, bounds.minY - ext, g.valueMm, bounds.maxY + ext]
+          : [bounds.minX - ext, g.valueMm, bounds.maxX + ext, g.valueMm];
+      layer.add(
+        new Konva.Line({
+          points,
+          stroke: CANVAS_COLORS.guide,
+          strokeWidth: GUIDE_STROKE_PX,
+          strokeScaleEnabled: false,
+          dash: [8, 6],
+          listening: false,
+        }),
+      );
+    }
+    layer.batchDraw();
+  };
 
-  // 컨테이너 크기 또는 부스 치수가 바뀌면 화면 맞춤
+  // 드래그 중: Shift 면 스마트 스냅, 아니면 자유 이동
+  const handleFixtureDragMove = (
+    id: string,
+    rawX: number,
+    rawY: number,
+    shift: boolean,
+  ): { xMm: number; yMm: number } => {
+    if (!shift) {
+      drawGuides([]);
+      return { xMm: rawX, yMm: rawY };
+    }
+    const dragged = placed.find((p) => p.id === id);
+    const def = dragged && fixturesById.get(dragged.fixtureDefId);
+    if (!dragged || !def) return { xMm: rawX, yMm: rawY };
+
+    const others: SnapTargetFixture[] = placed
+      .filter((p) => p.id !== id)
+      .map((p) => ({ placed: p, def: fixturesById.get(p.fixtureDefId) }))
+      .filter((o): o is SnapTargetFixture => o.def != null);
+
+    const res = computeSmartSnap(
+      { ...dragged, xMm: rawX, yMm: rawY },
+      def,
+      others,
+      bounds,
+      SNAP_THRESHOLD_MM,
+    );
+    drawGuides(res.guides);
+    return { xMm: res.xMm, yMm: res.yMm };
+  };
+
+  // 드래그 종료: 가이드 제거 + 저장(Shift 스냅이면 그리드 스냅 생략)
+  const handleFixtureDragEnd = (
+    id: string,
+    xMm: number,
+    yMm: number,
+    shift: boolean,
+  ) => {
+    drawGuides([]);
+    onMove(id, xMm, yMm, !shift);
+  };
+
+  const fit = () =>
+    setViewport(
+      computeFit(size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY),
+    );
+
+  // 컨테이너 크기 또는 부스 바운딩 박스가 바뀌면 화면 맞춤
   useEffect(() => {
     if (size.width > 0 && size.height > 0) {
-      setViewport(computeFit(size.width, size.height, widthMm, depthMm));
+      setViewport(
+        computeFit(size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY),
+      );
     }
-  }, [size.width, size.height, widthMm, depthMm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY]);
 
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
@@ -90,7 +210,8 @@ export default function BoothCanvas({
     }
   };
 
-  const ready = size.width > 0 && size.height > 0 && widthMm > 0 && depthMm > 0;
+  const ready =
+    size.width > 0 && size.height > 0 && bounds.widthMm > 0 && bounds.depthMm > 0;
 
   return (
     <Box
@@ -118,20 +239,37 @@ export default function BoothCanvas({
         >
           {/* 배경 레이어: 바닥/그리드/벽체/치수 (이벤트 비수신) */}
           <Layer listening={false}>
-            <Rect
-              x={0}
-              y={0}
-              width={widthMm}
-              height={depthMm}
+            {/* 바닥 (폴리곤) */}
+            <Line
+              points={flattenPolygon(polygon)}
+              closed
               fill={CANVAS_COLORS.floorFill}
+              stroke="#cbd5e1"
+              strokeWidth={1}
+              strokeScaleEnabled={false}
             />
-            <GridLines widthMm={widthMm} depthMm={depthMm} gridSizeMm={gridSizeMm} />
-            <Walls widthMm={widthMm} depthMm={depthMm} edges={edges} />
-            <Dimensions widthMm={widthMm} depthMm={depthMm} scale={viewport.scale} />
+            {/* 그리드 (부스 폴리곤 내부로 클립) */}
+            <Group clipFunc={(ctx) => clipPolygon(ctx, polygon)}>
+              <GridLines bounds={bounds} gridSizeMm={gridSizeMm} />
+            </Group>
+            {/* 벽체 */}
+            <Walls polygon={polygon} bounds={bounds} isPolygon={isPolygon} edges={edges} />
+            {/* 치수 (바운딩 박스 기준) */}
+            <Dimensions bounds={bounds} scale={viewport.scale} />
           </Layer>
 
-          {/* 집기 레이어: 드래그/선택 상호작용 */}
+          {/* 집기 + 텍스트 + 이미지 레이어: 드래그/선택 상호작용 */}
           <Layer>
+            {images.map((img) => (
+              <ImageNode
+                key={img.id}
+                image={img}
+                selected={img.id === selectedImageId}
+                scale={viewport.scale}
+                onSelect={onSelectImage}
+                onChange={onChangeImage}
+              />
+            ))}
             {placed.map((p) => {
               const def = fixturesById.get(p.fixtureDefId);
               if (!def) return null;
@@ -140,24 +278,43 @@ export default function BoothCanvas({
                   key={p.id}
                   placed={p}
                   def={def}
-                  selected={p.id === selectedId}
-                  boothW={widthMm}
-                  boothD={depthMm}
+                  selected={p.id === selectedFixtureId}
+                  boothPolygon={polygon}
                   scale={viewport.scale}
                   onSelect={onSelect}
-                  onMove={onMove}
+                  onDragMove={handleFixtureDragMove}
+                  onDragEnd={handleFixtureDragEnd}
                 />
               );
             })}
+            {texts.map((t) => (
+              <TextNode
+                key={t.id}
+                text={t}
+                selected={t.id === selectedTextId}
+                onSelect={onSelectText}
+                onMove={onMoveText}
+              />
+            ))}
+            {dimensions.map((d) => (
+              <DimensionNode
+                key={d.id}
+                dim={d}
+                selected={d.id === selectedDimensionId}
+                scale={viewport.scale}
+                onSelect={onSelectDimension}
+                onMove={onMoveDimension}
+              />
+            ))}
           </Layer>
+
+          {/* 스냅 가이드라인 레이어 (명령형으로 그림, 드래그 종료 시 비움) */}
+          <Layer ref={guideLayerRef} listening={false} />
         </Stage>
       )}
 
       {/* 오버레이 툴바 */}
-      <Paper
-        elevation={2}
-        sx={{ position: 'absolute', top: 12, right: 12, p: 0.5 }}
-      >
+      <Paper elevation={2} sx={{ position: 'absolute', top: 12, right: 12, p: 0.5 }}>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <Tooltip title="축소">
             <IconButton size="small" onClick={() => zoomByButton(1 / ZOOM_STEP)}>
@@ -169,12 +326,7 @@ export default function BoothCanvas({
               <AddRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Button
-            size="small"
-            startIcon={<FitScreenRoundedIcon />}
-            onClick={fit}
-            sx={{ ml: 0.5 }}
-          >
+          <Button size="small" startIcon={<FitScreenRoundedIcon />} onClick={fit} sx={{ ml: 0.5 }}>
             화면 맞춤
           </Button>
         </Stack>
@@ -193,41 +345,44 @@ export default function BoothCanvas({
           borderRadius: 1,
         }}
       >
-        1mm ≈ {viewport.scale.toFixed(3)}px · 그리드 {gridSizeMm}mm
+        1mm ≈ {viewport.scale.toFixed(3)}px · 그리드 {gridSizeMm}mm{isPolygon ? ' · 다각형' : ''}
       </Typography>
     </Box>
   );
 }
 
-/** 연한 내부 그리드 */
-function GridLines({
-  widthMm,
-  depthMm,
-  gridSizeMm,
-}: {
-  widthMm: number;
-  depthMm: number;
-  gridSizeMm: number;
-}) {
+/** 폴리곤 클립 경로 그리기 */
+function clipPolygon(ctx: Konva.Context, polygon: PointMm[]): void {
+  ctx.beginPath();
+  ctx.moveTo(polygon[0].xMm, polygon[0].yMm);
+  for (let i = 1; i < polygon.length; i++) {
+    ctx.lineTo(polygon[i].xMm, polygon[i].yMm);
+  }
+  ctx.closePath();
+}
+
+/** 연한 내부 그리드 (바운딩 박스 범위, 폴리곤 클립은 부모 Group 이 담당) */
+function GridLines({ bounds, gridSizeMm }: { bounds: BoothBounds; gridSizeMm: number }) {
+  const { minX, minY, maxX, maxY } = bounds;
   const lines: React.ReactNode[] = [];
-  for (let x = 0; x <= widthMm + 0.5; x += gridSizeMm) {
-    const xi = Math.min(x, widthMm);
+  const startX = Math.ceil(minX / gridSizeMm) * gridSizeMm;
+  const startY = Math.ceil(minY / gridSizeMm) * gridSizeMm;
+  for (let x = startX; x <= maxX + 0.5; x += gridSizeMm) {
     lines.push(
       <Line
         key={`v-${x}`}
-        points={[xi, 0, xi, depthMm]}
+        points={[x, minY, x, maxY]}
         stroke={CANVAS_COLORS.grid}
         strokeWidth={GRID_STROKE_PX}
         strokeScaleEnabled={false}
       />,
     );
   }
-  for (let y = 0; y <= depthMm + 0.5; y += gridSizeMm) {
-    const yi = Math.min(y, depthMm);
+  for (let y = startY; y <= maxY + 0.5; y += gridSizeMm) {
     lines.push(
       <Line
         key={`h-${y}`}
-        points={[0, yi, widthMm, yi]}
+        points={[minX, y, maxX, y]}
         stroke={CANVAS_COLORS.grid}
         strokeWidth={GRID_STROKE_PX}
         strokeScaleEnabled={false}
@@ -237,16 +392,36 @@ function GridLines({
   return <>{lines}</>;
 }
 
-/** 닫힌 변에만 두꺼운 회색 벽체 렌더링 (열린 면은 라인 없음) */
+/**
+ * 벽체 렌더링.
+ *  - polygon: 모든 외곽선을 벽으로 (닫힌 폴리곤)
+ *  - rectangle: 오픈면(openSide)에 따라 닫힌 변만 벽
+ */
 function Walls({
-  widthMm,
-  depthMm,
+  polygon,
+  bounds,
+  isPolygon,
   edges,
 }: {
-  widthMm: number;
-  depthMm: number;
+  polygon: PointMm[];
+  bounds: BoothBounds;
+  isPolygon: boolean;
   edges: ReturnType<typeof getWallEdges>;
 }) {
+  if (isPolygon) {
+    return (
+      <Line
+        points={flattenPolygon(polygon)}
+        closed
+        stroke={CANVAS_COLORS.wall}
+        strokeWidth={WALL_STROKE_PX}
+        strokeScaleEnabled={false}
+        lineJoin="round"
+      />
+    );
+  }
+
+  const { minX, minY, maxX, maxY } = bounds;
   const wall = (key: string, points: number[]) => (
     <Line
       key={key}
@@ -259,26 +434,19 @@ function Walls({
   );
   return (
     <>
-      {edges.top && wall('wall-top', [0, 0, widthMm, 0])}
-      {edges.right && wall('wall-right', [widthMm, 0, widthMm, depthMm])}
-      {edges.bottom && wall('wall-bottom', [0, depthMm, widthMm, depthMm])}
-      {edges.left && wall('wall-left', [0, 0, 0, depthMm])}
+      {edges.top && wall('wall-top', [minX, minY, maxX, minY])}
+      {edges.right && wall('wall-right', [maxX, minY, maxX, maxY])}
+      {edges.bottom && wall('wall-bottom', [minX, maxY, maxX, maxY])}
+      {edges.left && wall('wall-left', [minX, minY, minX, maxY])}
     </>
   );
 }
 
-/** 가로/세로 치수(mm) 표시 */
-function Dimensions({
-  widthMm,
-  depthMm,
-  scale,
-}: {
-  widthMm: number;
-  depthMm: number;
-  scale: number;
-}) {
+/** 가로/세로 치수(mm) 표시 — 바운딩 박스 기준 */
+function Dimensions({ bounds, scale }: { bounds: BoothBounds; scale: number }) {
+  const { minX, minY, maxX, maxY, widthMm, depthMm } = bounds;
   const vp: Viewport = { scale, x: 0, y: 0 };
-  const gap = pxToMm(18, vp); // 부스 외곽에서 치수선까지 거리
+  const gap = pxToMm(18, vp);
   const tick = pxToMm(5, vp);
   const font = pxToMm(DIM_LABEL_PX, vp);
 
@@ -288,19 +456,19 @@ function Dimensions({
     strokeScaleEnabled: false,
   } as const;
 
+  const yb = maxY + gap; // 가로 치수선 y
+  const xl = minX - gap; // 세로 치수선 x
+
   return (
     <>
       {/* 가로 치수 (아래쪽) */}
-      <Line points={[0, depthMm + gap, widthMm, depthMm + gap]} {...lineStyle} />
-      <Line points={[0, depthMm + gap - tick, 0, depthMm + gap + tick]} {...lineStyle} />
-      <Line
-        points={[widthMm, depthMm + gap - tick, widthMm, depthMm + gap + tick]}
-        {...lineStyle}
-      />
+      <Line points={[minX, yb, maxX, yb]} {...lineStyle} />
+      <Line points={[minX, yb - tick, minX, yb + tick]} {...lineStyle} />
+      <Line points={[maxX, yb - tick, maxX, yb + tick]} {...lineStyle} />
       <Text
         text={`${widthMm} mm`}
-        x={0}
-        y={depthMm + gap + tick}
+        x={minX}
+        y={yb + tick}
         width={widthMm}
         align="center"
         fontSize={font}
@@ -308,13 +476,13 @@ function Dimensions({
       />
 
       {/* 세로 치수 (왼쪽, 회전) */}
-      <Line points={[-gap, 0, -gap, depthMm]} {...lineStyle} />
-      <Line points={[-gap - tick, 0, -gap + tick, 0]} {...lineStyle} />
-      <Line points={[-gap - tick, depthMm, -gap + tick, depthMm]} {...lineStyle} />
+      <Line points={[xl, minY, xl, maxY]} {...lineStyle} />
+      <Line points={[xl - tick, minY, xl + tick, minY]} {...lineStyle} />
+      <Line points={[xl - tick, maxY, xl + tick, maxY]} {...lineStyle} />
       <Text
         text={`${depthMm} mm`}
-        x={-gap - tick}
-        y={depthMm}
+        x={xl - tick}
+        y={maxY}
         width={depthMm}
         align="center"
         rotation={-90}

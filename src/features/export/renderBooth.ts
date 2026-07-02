@@ -1,5 +1,14 @@
 import Konva from 'konva';
-import type { BoothConfig, FixtureDef, PlacedFixture } from '../../types';
+import type {
+  BoothConfig,
+  FixtureDef,
+  PlacedDimension,
+  PlacedFixture,
+  PlacedImage,
+  PlacedText,
+} from '../../types';
+import { TEXT_FONT_FAMILY } from '../texts/constants';
+import { dimensionDisplayLabel, DIMENSION_FONT_FAMILY } from '../dimensions/constants';
 import {
   CANVAS_COLORS,
   DEFAULT_GRID_SIZE_MM,
@@ -7,6 +16,13 @@ import {
   WALL_STROKE_PX,
   getWallEdges,
 } from '../canvas/constants';
+import {
+  getBoothShape,
+  getBoothPolygon,
+  getBoothBounds,
+  flattenPolygon,
+} from '../canvas/boothGeometry';
+import { CUSTOM_PATH_VIEW } from '../fixtures/shapes';
 
 /**
  * export 전용 부스 도면 렌더러.
@@ -26,12 +42,18 @@ interface RenderOptions {
 export function createBoothDrawingDataURL(
   booth: BoothConfig,
   placed: PlacedFixture[],
+  texts: PlacedText[],
+  dimensions: PlacedDimension[],
+  images: PlacedImage[],
+  imageElements: Map<string, HTMLImageElement>,
   fixturesById: Map<string, FixtureDef>,
   options: RenderOptions = {},
 ): string {
   const gridSizeMm = options.gridSizeMm ?? DEFAULT_GRID_SIZE_MM;
-  const boothW = booth.widthMm;
-  const boothD = booth.depthMm;
+  const isPolygon = getBoothShape(booth) === 'polygon';
+  const polygon = getBoothPolygon(booth);
+  const bounds = getBoothBounds(booth);
+  const { minX, minY, maxX, maxY, widthMm: boothW, depthMm: boothD } = bounds;
 
   const scale = TARGET_PX / Math.max(boothW, boothD);
   const contentW = boothW * scale;
@@ -54,23 +76,21 @@ export function createBoothDrawingDataURL(
     bgLayer.add(new Konva.Rect({ x: 0, y: 0, width: stageW, height: stageH, fill: '#ffffff' }));
     stage.add(bgLayer);
 
-    // 도면 레이어 (mm 좌표, 여백만큼 offset + scale)
+    // 도면 레이어 (mm 좌표). 바운딩 박스 minX/minY 오프셋 보정 + 여백.
     const layer = new Konva.Layer({
-      x: MARGIN_PX,
-      y: MARGIN_PX,
+      x: MARGIN_PX - minX * scale,
+      y: MARGIN_PX - minY * scale,
       scaleX: scale,
       scaleY: scale,
       listening: false,
     });
     stage.add(layer);
 
-    // 바닥
+    // 바닥 (폴리곤)
     layer.add(
-      new Konva.Rect({
-        x: 0,
-        y: 0,
-        width: boothW,
-        height: boothD,
+      new Konva.Line({
+        points: flattenPolygon(polygon),
+        closed: true,
         fill: CANVAS_COLORS.floorFill,
         stroke: '#cbd5e1',
         strokeWidth: 1,
@@ -78,46 +98,74 @@ export function createBoothDrawingDataURL(
       }),
     );
 
-    // 그리드
-    for (let x = 0; x <= boothW + 0.5; x += gridSizeMm) {
-      const xi = Math.min(x, boothW);
-      layer.add(
+    // 그리드 (부스 폴리곤 내부로 클립)
+    const gridGroup = new Konva.Group({
+      clipFunc: (ctx) => {
+        ctx.beginPath();
+        ctx.moveTo(polygon[0].xMm, polygon[0].yMm);
+        for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].xMm, polygon[i].yMm);
+        ctx.closePath();
+      },
+    });
+    const startX = Math.ceil(minX / gridSizeMm) * gridSizeMm;
+    const startY = Math.ceil(minY / gridSizeMm) * gridSizeMm;
+    for (let x = startX; x <= maxX + 0.5; x += gridSizeMm) {
+      gridGroup.add(
         new Konva.Line({
-          points: [xi, 0, xi, boothD],
+          points: [x, minY, x, maxY],
           stroke: CANVAS_COLORS.grid,
           strokeWidth: GRID_STROKE_PX,
           strokeScaleEnabled: false,
         }),
       );
     }
-    for (let y = 0; y <= boothD + 0.5; y += gridSizeMm) {
-      const yi = Math.min(y, boothD);
-      layer.add(
+    for (let y = startY; y <= maxY + 0.5; y += gridSizeMm) {
+      gridGroup.add(
         new Konva.Line({
-          points: [0, yi, boothW, yi],
+          points: [minX, y, maxX, y],
           stroke: CANVAS_COLORS.grid,
           strokeWidth: GRID_STROKE_PX,
           strokeScaleEnabled: false,
         }),
       );
     }
+    layer.add(gridGroup);
 
-    // 벽체 (닫힌 변만)
-    const edges = getWallEdges(booth.openSide);
-    const addWall = (points: number[]) =>
+    // 벽체: polygon 은 전체 외곽, rectangle 은 오픈면 기준 닫힌 변
+    if (isPolygon) {
       layer.add(
         new Konva.Line({
-          points,
+          points: flattenPolygon(polygon),
+          closed: true,
           stroke: CANVAS_COLORS.wall,
           strokeWidth: WALL_STROKE_PX,
           strokeScaleEnabled: false,
-          lineCap: 'square',
+          lineJoin: 'round',
         }),
       );
-    if (edges.top) addWall([0, 0, boothW, 0]);
-    if (edges.right) addWall([boothW, 0, boothW, boothD]);
-    if (edges.bottom) addWall([0, boothD, boothW, boothD]);
-    if (edges.left) addWall([0, 0, 0, boothD]);
+    } else {
+      const edges = getWallEdges(booth.openSide);
+      const addWall = (points: number[]) =>
+        layer.add(
+          new Konva.Line({
+            points,
+            stroke: CANVAS_COLORS.wall,
+            strokeWidth: WALL_STROKE_PX,
+            strokeScaleEnabled: false,
+            lineCap: 'square',
+          }),
+        );
+      if (edges.top) addWall([minX, minY, maxX, minY]);
+      if (edges.right) addWall([maxX, minY, maxX, maxY]);
+      if (edges.bottom) addWall([minX, maxY, maxX, maxY]);
+      if (edges.left) addWall([minX, minY, minX, maxY]);
+    }
+
+    // 이미지 (집기 아래)
+    for (const img of images) {
+      const node = buildImageNode(img, imageElements);
+      if (node) layer.add(node);
+    }
 
     // 집기
     for (const p of placed) {
@@ -126,12 +174,22 @@ export function createBoothDrawingDataURL(
       layer.add(buildFixtureGroup(p, def, scale));
     }
 
-    // 치수 라벨
+    // 텍스트
+    for (const t of texts) {
+      layer.add(buildTextLabel(t));
+    }
+
+    // 치수선
+    for (const d of dimensions) {
+      layer.add(buildDimensionGroup(d, scale));
+    }
+
+    // 치수 라벨 (바운딩 박스 기준)
     const labelFont = 24 / scale;
     layer.add(
       new Konva.Text({
-        x: 0,
-        y: boothD + 26 / scale,
+        x: minX,
+        y: maxY + 26 / scale,
         width: boothW,
         align: 'center',
         text: `${boothW} mm`,
@@ -141,8 +199,8 @@ export function createBoothDrawingDataURL(
     );
     layer.add(
       new Konva.Text({
-        x: -26 / scale,
-        y: boothD,
+        x: minX - 26 / scale,
+        y: maxY,
         width: boothD,
         align: 'center',
         rotation: -90,
@@ -158,6 +216,106 @@ export function createBoothDrawingDataURL(
     stage.destroy();
     container.remove();
   }
+}
+
+/** 이미지 하나를 그리는 Konva.Image — 평면도/벽면 공용 (미리 로드된 요소 사용) */
+export function buildImageNode(
+  img: PlacedImage,
+  imageElements: Map<string, HTMLImageElement>,
+): Konva.Image | null {
+  const el = imageElements.get(img.srcDataUrl);
+  if (!el) return null;
+  return new Konva.Image({
+    image: el,
+    x: img.xMm,
+    y: img.yMm,
+    width: img.widthMm,
+    height: img.heightMm,
+    rotation: img.rotationDeg,
+    opacity: img.opacity,
+  });
+}
+
+/** 텍스트 하나를 그리는 Konva.Label (배경 Tag + Text) — 평면도/벽면 공용 */
+export function buildTextLabel(t: PlacedText): Konva.Label {
+  const pad = Math.max(t.fontSizeMm * 0.15, 20);
+  const label = new Konva.Label({ x: t.xMm, y: t.yMm, rotation: t.rotationDeg });
+  label.add(new Konva.Tag({ fill: t.backgroundColor || undefined, cornerRadius: pad * 0.4 }));
+  label.add(
+    new Konva.Text({
+      text: t.text || ' ',
+      fontSize: t.fontSizeMm,
+      fontFamily: TEXT_FONT_FAMILY,
+      fontStyle: t.bold ? 'bold' : 'normal',
+      fill: t.color,
+      align: t.align,
+      padding: pad,
+    }),
+  );
+  return label;
+}
+
+/** 치수선 하나(선+화살표+라벨)를 그리는 Konva.Group — 평면도/벽면 공용 */
+export function buildDimensionGroup(d: PlacedDimension, scale: number): Konva.Group {
+  const group = new Konva.Group();
+  group.add(
+    new Konva.Arrow({
+      points: [d.startXMm, d.startYMm, d.endXMm, d.endYMm],
+      stroke: d.color,
+      fill: d.color,
+      strokeWidth: d.lineWidthPx,
+      strokeScaleEnabled: false,
+      pointerAtBeginning: d.showArrows,
+      pointerAtEnding: d.showArrows,
+      pointerLength: 22 / scale,
+      pointerWidth: 16 / scale,
+    }),
+  );
+
+  // 라벨: 왼→오른쪽으로 읽히도록 정규화
+  let ax = d.startXMm, ay = d.startYMm, bx = d.endXMm, by = d.endYMm;
+  let ang = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI;
+  if (ang > 90 || ang < -90) {
+    [ax, bx] = [bx, ax];
+    [ay, by] = [by, ay];
+    ang = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI;
+  }
+  const length = Math.hypot(bx - ax, by - ay);
+  if (length >= 1) {
+    const fontMm = 15 / scale;
+    group.add(
+      new Konva.Text({
+        text: dimensionDisplayLabel(d),
+        x: ax,
+        y: ay,
+        rotation: ang,
+        width: length,
+        align: 'center',
+        offsetY: fontMm * 1.4,
+        fontSize: fontMm,
+        fontFamily: DIMENSION_FONT_FAMILY,
+        fill: d.textColor,
+      }),
+    );
+  }
+  return group;
+}
+
+/** placeholder(반투명 + 대각선 + 점선 테두리) — 실제 형태가 없는 경우 */
+function addPlaceholder(group: Konva.Group, color: string, w: number, d: number): void {
+  group.add(new Konva.Rect({ width: w, height: d, fill: color, opacity: 0.3 }));
+  group.add(new Konva.Line({ points: [0, 0, w, d], stroke: color, strokeWidth: 1, strokeScaleEnabled: false }));
+  group.add(new Konva.Line({ points: [w, 0, 0, d], stroke: color, strokeWidth: 1, strokeScaleEnabled: false }));
+  group.add(
+    new Konva.Rect({
+      width: w,
+      height: d,
+      stroke: color,
+      dash: [10, 6],
+      strokeWidth: 1.5,
+      strokeScaleEnabled: false,
+    }),
+  );
 }
 
 /** 배치 집기 하나를 그리는 Konva.Group (형태별) + 이름 라벨 */
@@ -195,21 +353,24 @@ function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number): Ko
         }),
       );
       break;
+    case 'customPath':
+      if (def.svgPath) {
+        group.add(
+          new Konva.Path({
+            data: def.svgPath,
+            scaleX: w / CUSTOM_PATH_VIEW,
+            scaleY: d / CUSTOM_PATH_VIEW,
+            fill: def.color,
+            ...common,
+          }),
+        );
+      } else {
+        addPlaceholder(group, def.color, w, d);
+      }
+      break;
     default:
-      // semicircle / customPath: placeholder
-      group.add(new Konva.Rect({ width: w, height: d, fill: def.color, opacity: 0.3 }));
-      group.add(new Konva.Line({ points: [0, 0, w, d], stroke: def.color, strokeWidth: 1, strokeScaleEnabled: false }));
-      group.add(new Konva.Line({ points: [w, 0, 0, d], stroke: def.color, strokeWidth: 1, strokeScaleEnabled: false }));
-      group.add(
-        new Konva.Rect({
-          width: w,
-          height: d,
-          stroke: def.color,
-          dash: [10, 6],
-          strokeWidth: 1.5,
-          strokeScaleEnabled: false,
-        }),
-      );
+      // semicircle (및 path 없는 customPath): placeholder
+      addPlaceholder(group, def.color, w, d);
       break;
   }
 

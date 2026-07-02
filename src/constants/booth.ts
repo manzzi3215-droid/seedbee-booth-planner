@@ -1,4 +1,4 @@
-import type { OpenSide, FloorType, BoothConfig } from '../types';
+import type { OpenSide, FloorType, BoothConfig, BoothShape, PointMm } from '../types';
 
 /**
  * 행사장 생성 폼에서 사용하는 선택지 상수.
@@ -9,6 +9,20 @@ export const OPEN_SIDE_OPTIONS: { value: OpenSide; label: string }[] = [
   { value: 1, label: '1면' },
   { value: 2, label: '2면' },
   { value: 3, label: '3면' },
+];
+
+export const BOOTH_SHAPE_OPTIONS: { value: BoothShape; label: string }[] = [
+  { value: 'rectangle', label: '사각형' },
+  { value: 'polygon', label: '다각형' },
+];
+
+/** 다각형 부스 기본 예시 (사선으로 깎인 형태) */
+export const DEFAULT_POLYGON_POINTS: PointMm[] = [
+  { xMm: 0, yMm: 0 },
+  { xMm: 5000, yMm: 0 },
+  { xMm: 5000, yMm: 3000 },
+  { xMm: 1000, yMm: 3000 },
+  { xMm: 0, yMm: 2000 },
 ];
 
 export const FLOOR_TYPE_OPTIONS: { value: FloorType; label: string }[] = [

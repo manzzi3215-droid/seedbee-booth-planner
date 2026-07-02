@@ -19,18 +19,28 @@ export type OpenSide = 1 | 2 | 3;
 /** 바닥 종류 (직접입력 시 customFloor 사용) */
 export type FloorType = 'pytex' | 'decotile' | 'basic' | 'custom';
 
+/** 부스 바닥 형태. 없으면(구버전) rectangle 로 취급 */
+export type BoothShape = 'rectangle' | 'polygon';
+
 /**
  * 행사장(부스) 기본 정보.
- * 3단계 "행사장 생성"에서 실제로 채워지고 저장됩니다.
- * 지금(2단계)은 폼 UI 및 타입 골격 용도로만 사용합니다.
+ *
+ * widthMm/depthMm 는 부스의 바운딩 박스(가로/세로) 크기입니다.
+ *  - rectangle: 부스 그 자체 크기
+ *  - polygon: polygonPoints 의 바운딩 박스 크기 (치수 라벨/요약용)
  */
 export interface BoothConfig {
-  widthMm: number; // 부스 가로(mm)
-  depthMm: number; // 부스 세로(mm)
+  widthMm: number; // 부스 가로(mm) — bounding box
+  depthMm: number; // 부스 세로(mm) — bounding box
   heightMm: number; // 부스 높이(mm)
-  openSide: OpenSide; // 오픈면
+  openSide: OpenSide; // 오픈면 (rectangle 전용)
   floorType: FloorType; // 바닥 종류
   customFloorName?: string; // floorType === 'custom' 일 때 사용
+
+  // --- 바닥 형태 (없으면 rectangle) ---
+  boothShape?: BoothShape;
+  /** boothShape === 'polygon' 일 때 꼭짓점(mm). 시계/반시계 순서 */
+  polygonPoints?: PointMm[];
 }
 
 /**
@@ -69,7 +79,13 @@ export interface FixtureDef {
 
   // --- shape 별 파라미터 (해당 shape 일 때만 사용) ---
   cornerRadiusMm?: number; // roundedRectangle
-  pathPoints?: PointMm[]; // customPath / semicircle 등 곡선 정의
+  pathPoints?: PointMm[]; // (예약) points 기반 곡선 정의
+  /**
+   * customPath 용 SVG path 데이터.
+   * 좌표계는 100×100 단위 박스(0~100) 기준으로 작성하며, 렌더링 시
+   * widthMm/depthMm 바운딩 박스에 맞춰 (width/100, depth/100) 로 스케일됩니다.
+   */
+  svgPath?: string;
 }
 
 /**
@@ -84,14 +100,91 @@ export interface PlacedFixture {
   rotationDeg: number; // 회전 각도(도)
 }
 
+/** 텍스트 정렬 */
+export type TextAlign = 'left' | 'center' | 'right';
+
+/**
+ * 캔버스 자유 텍스트 (예: "입구", "카운터", "이벤트존").
+ * 위치/회전은 mm·도, 글자 크기도 mm(도면 배율과 함께 확대/축소)로 관리합니다.
+ */
+export interface PlacedText {
+  id: string;
+  text: string;
+  xMm: number;
+  yMm: number;
+  rotationDeg: number;
+  fontSizeMm: number;
+  color: string;
+  backgroundColor?: string; // 없으면 투명
+  bold: boolean;
+  align: TextAlign;
+  memo?: string;
+}
+
+/**
+ * 치수선 (예: "10500 mm"). 각도는 시작/끝점에서 자동 계산합니다.
+ * label 이 비어 있으면 두 점 사이 거리로 "0000 mm" 형태를 자동 표시합니다.
+ */
+export interface PlacedDimension {
+  id: string;
+  startXMm: number;
+  startYMm: number;
+  endXMm: number;
+  endYMm: number;
+  label?: string; // 비면 자동 길이 표시
+  color: string; // 선 색상
+  textColor: string;
+  lineWidthPx: number; // 화면 고정 두께(px)
+  showArrows: boolean;
+  memo?: string;
+}
+
+/**
+ * 배치된 이미지 (포스터/현수막/TV 화면/로고 등).
+ * 위치/크기는 mm, 회전은 deg.
+ *
+ * ⚠️ srcDataUrl 은 초기 버전에서 이미지를 dataURL(base64)로 인라인 저장합니다.
+ * localStorage 용량이 커질 수 있으므로 추후 Firebase Storage(외부 URL) 전환을 권장합니다.
+ */
+export interface PlacedImage {
+  id: string;
+  name: string;
+  srcDataUrl: string;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+  rotationDeg: number;
+  opacity: number; // 0~1
+  memo?: string;
+}
+
+/** 벽면 구분 */
+export type WallSide = 'frontWall' | 'leftWall' | 'rightWall' | 'backWall';
+
+/** 한 벽면에 배치된 요소(텍스트/치수선/이미지). 좌표는 벽 로컬 mm. */
+export interface WallItemGroup {
+  texts: PlacedText[];
+  dimensions: PlacedDimension[];
+  images: PlacedImage[];
+}
+
+/** 벽면별 요소 모음 */
+export type WallItems = Record<WallSide, WallItemGroup>;
+
 /**
  * Layout = 하나의 배치안(버전). 예: v1, v2, "체험존 강조안"
- * placedFixtures 는 저장 시점의 캔버스 배치 스냅샷입니다.
+ * placedFixtures / texts / dimensions 는 평면도 스냅샷,
+ * wallItems 는 벽면별 요소입니다. 모두 하위 호환을 위해 선택 필드입니다.
  */
 export interface Layout {
   id: string;
   name: string;
   placedFixtures: PlacedFixture[];
+  texts?: PlacedText[];
+  dimensions?: PlacedDimension[];
+  planImages?: PlacedImage[];
+  wallItems?: WallItems;
   createdAt: number;
   updatedAt: number;
 }

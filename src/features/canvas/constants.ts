@@ -23,6 +23,10 @@ export const WALL_STROKE_PX = 7;
 export const GRID_STROKE_PX = 1;
 export const DIM_LABEL_PX = 13;
 export const DIM_LINE_PX = 1;
+export const GUIDE_STROKE_PX = 1;
+
+/** 스마트 스냅 임계 거리(mm) — 이 거리 이내면 자동 정렬 */
+export const SNAP_THRESHOLD_MM = 50;
 
 export const CANVAS_COLORS = {
   background: '#eef1f5',
@@ -32,6 +36,7 @@ export const CANVAS_COLORS = {
   wall: '#6b7280', // 두꺼운 회색 벽체
   dimLine: '#94a3b8',
   dimText: '#475569',
+  guide: '#f43f5e', // 스냅 가이드라인 (rose)
 } as const;
 
 /**
