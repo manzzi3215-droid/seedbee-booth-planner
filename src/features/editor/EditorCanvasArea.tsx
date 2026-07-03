@@ -69,6 +69,9 @@ export default function EditorCanvasArea() {
     selectedSvgElementId,
     viewRotationDeg,
     canEdit,
+    shapeEditMode,
+    setShapeEditMode,
+    updateBoothShape,
     viewMode,
     setViewMode,
     wallItems,
@@ -255,6 +258,9 @@ export default function EditorCanvasArea() {
               highlightedSvgElementId={selectedSvgElementId}
               viewRotationDeg={viewRotationDeg}
               interactive={canEdit}
+              shapeEditMode={shapeEditMode}
+              onBoothShapeChange={updateBoothShape}
+              onExitShapeEdit={() => setShapeEditMode(false)}
               gridSizeMm={gridSizeMm}
               onSelect={select}
               onMove={move}

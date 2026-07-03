@@ -70,3 +70,30 @@ export function pointInPolygon(x: number, y: number, polygon: PointMm[]): boolea
 export function flattenPolygon(polygon: PointMm[]): number[] {
   return polygon.flatMap((p) => [p.xMm, p.yMm]);
 }
+
+/** 폴리곤 넓이(mm², shoelace) */
+export function polygonAreaMm2(pts: PointMm[]): number {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    a += pts[i].xMm * pts[j].yMm - pts[j].xMm * pts[i].yMm;
+  }
+  return Math.abs(a) / 2;
+}
+
+/** 두 점 사이 거리(mm) */
+export function edgeLengthMm(a: PointMm, b: PointMm): number {
+  return Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm);
+}
+
+/** 꼭짓점 내부 각도(도). prev-cur-next */
+export function cornerAngleDeg(prev: PointMm, cur: PointMm, next: PointMm): number {
+  const v1x = prev.xMm - cur.xMm;
+  const v1y = prev.yMm - cur.yMm;
+  const v2x = next.xMm - cur.xMm;
+  const v2y = next.yMm - cur.yMm;
+  const dot = v1x * v2x + v1y * v2y;
+  const m = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y) || 1;
+  const ang = (Math.acos(Math.max(-1, Math.min(1, dot / m))) * 180) / Math.PI;
+  return Math.round(ang);
+}

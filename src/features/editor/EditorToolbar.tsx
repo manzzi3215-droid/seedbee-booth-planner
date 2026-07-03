@@ -37,6 +37,9 @@ import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import RotateLeftRoundedIcon from '@mui/icons-material/RotateLeftRounded';
 import RotateRightRoundedIcon from '@mui/icons-material/RotateRightRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
+import PolylineRoundedIcon from '@mui/icons-material/PolylineRounded';
+import { getBoothPolygon, polygonAreaMm2 } from '../canvas/boothGeometry';
+import { isFixtureOutOfBounds } from '../canvas/fixtureGeometry';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
@@ -100,7 +103,18 @@ export default function EditorToolbar() {
     canEdit,
     viewRotationDeg,
     setViewRotationDeg,
+    shapeEditMode,
+    setShapeEditMode,
   } = useEditor();
+
+  // 부스 넓이(m²) + 외곽 밖 집기 경고 (실시간)
+  const boothAreaM2 = project ? polygonAreaMm2(getBoothPolygon(project.boothConfig)) / 1_000_000 : 0;
+  const oobCount = project
+    ? placed.filter((p) => {
+        const def = fixturesById.get(p.fixtureDefId);
+        return def ? isFixtureOutOfBounds(p, def, getBoothPolygon(project.boothConfig)) : false;
+      }).length
+    : 0;
 
   const [rotStr, setRotStr] = useState('');
   const rotateViewBy = (delta: number) =>
@@ -524,6 +538,28 @@ export default function EditorToolbar() {
                 setRotStr('');
               }}
             />
+          )}
+
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+          {/* 부스 외곽 편집 (CAD 스타일) */}
+          <Tooltip title={shapeEditMode ? '부스 편집 종료' : '부스 외곽을 꼭짓점/벽 드래그로 편집'}>
+            <span>
+              <Button
+                variant={shapeEditMode ? 'contained' : 'outlined'}
+                color={shapeEditMode ? 'warning' : 'primary'}
+                size="small"
+                startIcon={<PolylineRoundedIcon />}
+                onClick={() => setShapeEditMode(!shapeEditMode)}
+                disabled={!canEdit}
+              >
+                {shapeEditMode ? '편집 종료' : '부스 편집'}
+              </Button>
+            </span>
+          </Tooltip>
+          <Chip size="small" variant="outlined" label={`${boothAreaM2.toFixed(2)}㎡`} />
+          {shapeEditMode && oobCount > 0 && (
+            <Chip size="small" color="warning" label={`부스 밖 집기 ${oobCount}개`} />
           )}
         </>
       )}

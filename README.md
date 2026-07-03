@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.5 - Advanced Color System**
+> **v0.8.6 - Smart Booth Shape Editor**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -188,6 +188,16 @@ src/
 | 아이소메트릭 3D 미리보기 | ✅ |
 
 ### Changelog
+
+**v0.8.6 — Smart Booth Shape Editor (CAD 스타일)**
+- **부스 외곽 편집 모드:** 툴바 **[부스 편집]** 토글 → 편집 모드에서만 꼭짓점/Edge 핸들 표시(평소 숨김).
+  - **꼭짓점 드래그**(그리드 스냅) · **Edge 중앙 [+]** 로 꼭짓점 추가 · 꼭짓점 선택 후 **Delete**(최소 3개 유지).
+  - **Edge 드래그**로 벽 자체를 이동(양쪽 꼭짓점 함께 이동, CAD Offset 느낌) · **Edge hover 시 길이(mm)** 표시 · 선택 꼭짓점 **각도(°)** 표시.
+  - **넓이(㎡) 실시간** 칩, **부스 밖 집기 경고**(자동 삭제 없음, 좌표 불변).
+  - **보기 회전(0/45/90/…)** 상태에서도 편집 가능(Konva `getRelativePointerPosition` 역변환).
+- **데이터:** 기존 `polygonPoints` 구조 재사용 — rectangle 부스는 편집 시 자동으로 polygon 으로 승격(마이그레이션 없음, 기존 프로젝트 호환).
+- **자동 반영:** 외곽 변경이 **3D · 벽면 · PNG · PDF** 에 그대로 반영(모두 `getBoothPolygon` 기준). 편집은 프로젝트에 디바운스 저장(자동/클라우드 저장 유지).
+- 2차 후보(미구현): Wall Offset 전용 UI · Shape Templates(사다리꼴/L/U…) · Shape Lock · Shape 전용 Undo/Redo · 45/90° 각도 스냅.
 
 **v0.8.5 — Advanced Color System**
 - **고급 색상 선택기(집기 색상):** 브랜드 컬러 → 기본 팔레트 → 최근 사용 → HEX 입력 → Color Picker → 투명도 순으로 구성.

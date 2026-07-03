@@ -23,7 +23,8 @@ import type {
 } from '../../types';
 import SvgHighlightOverlay from '../svg/SvgRenderer';
 import { useContainerSize } from './useContainerSize';
-import { computeFit, zoomAtPoint, pxToMm, type Viewport } from './coords';
+import { computeFit, zoomAtPoint, pxToMm, snapMmToGrid, type Viewport } from './coords';
+import ShapeEditor from './ShapeEditor';
 import FixtureNode from './FixtureNode';
 import TextNode from './TextNode';
 import DimensionNode from './DimensionNode';
@@ -33,7 +34,6 @@ import { useImageTransformer } from './useImageTransformer';
 import {
   getBoothShape,
   getBoothPolygon,
-  getBoothBounds,
   flattenPolygon,
   type BoothBounds,
 } from './boothGeometry';
@@ -73,6 +73,12 @@ interface BoothCanvasProps {
   viewRotationDeg?: number;
   /** 편집 가능 여부(false 면 드래그/선택 비활성 — 읽기전용/회전 상태) */
   interactive?: boolean;
+  /** 부스 외곽 편집 모드 (v0.8.6) */
+  shapeEditMode?: boolean;
+  /** 외곽 폴리곤(mm) 변경 커밋 */
+  onBoothShapeChange?: (points: PointMm[]) => void;
+  /** 외곽 편집 종료(ESC) */
+  onExitShapeEdit?: () => void;
   onSelect: (id: string | null) => void;
   onMove: (id: string, xMm: number, yMm: number, snapToGrid?: boolean) => void;
   onSelectText: (id: string | null) => void;
@@ -112,6 +118,9 @@ export default function BoothCanvas({
   gridSizeMm = DEFAULT_GRID_SIZE_MM,
   viewRotationDeg = 0,
   interactive = true,
+  shapeEditMode = false,
+  onBoothShapeChange,
+  onExitShapeEdit,
   onSelect,
   onMove,
   onSelectText,
@@ -130,9 +139,31 @@ export default function BoothCanvas({
   // 이미지 또는 배경 중 선택된 것에 Transformer 부착
   const { transformerRef, register } = useImageTransformer(selectedImageId ?? selectedBackgroundId);
 
-  const isPolygon = getBoothShape(booth) === 'polygon';
-  const polygon = getBoothPolygon(booth);
-  const bounds = getBoothBounds(booth);
+  // --- 부스 외곽 편집 상태 (v0.8.6) ---
+  const shapeLayerRef = useRef<Konva.Layer>(null);
+  const [editPoints, setEditPoints] = useState<PointMm[] | null>(null);
+  const editPointsRef = useRef<PointMm[] | null>(null);
+  const [selectedVertex, setSelectedVertex] = useState<number | null>(null);
+  const [hoverEdge, setHoverEdge] = useState<number | null>(null);
+  const dragRef = useRef<{ type: 'vertex' | 'edge'; index: number; last: { x: number; y: number } } | null>(null);
+
+  // 편집 모드 진입 시 현재 폴리곤 복제, 종료 시 정리
+  useEffect(() => {
+    if (shapeEditMode) {
+      setEditPoints(getBoothPolygon(booth).map((p) => ({ ...p })));
+    } else {
+      setEditPoints(null);
+      setSelectedVertex(null);
+      setHoverEdge(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapeEditMode]);
+  editPointsRef.current = editPoints;
+
+  const activePolygon = shapeEditMode && editPoints ? editPoints : getBoothPolygon(booth);
+  const polygon = activePolygon;
+  const bounds = boundsFromPoints(activePolygon);
+  const isPolygon = getBoothShape(booth) === 'polygon' || (shapeEditMode && !!editPoints);
   const edges = getWallEdges(booth.openSide);
 
   // 스냅 가이드라인은 전용 레이어에 명령형으로 그린다(드래그 중 re-render 방지).
@@ -240,9 +271,98 @@ export default function BoothCanvas({
   // 빈 공간(Stage 자체) 클릭 시 선택 해제
   const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target === e.target.getStage()) {
-      onSelect(null);
+      if (shapeEditMode) setSelectedVertex(null);
+      else onSelect(null);
     }
   };
+
+  // --- 부스 외곽 편집: 꼭짓점/Edge 드래그 (layer.getRelativePointerPosition 으로 회전까지 반영) ---
+  const localPointer = () => shapeLayerRef.current?.getRelativePointerPosition() ?? null;
+
+  const handleVertexDown = (index: number, e: Konva.KonvaEventObject<MouseEvent>) => {
+    e.cancelBubble = true;
+    dragRef.current = { type: 'vertex', index, last: { x: 0, y: 0 } };
+    setSelectedVertex(index);
+  };
+  const handleEdgeDown = (index: number, e: Konva.KonvaEventObject<MouseEvent>) => {
+    e.cancelBubble = true;
+    const p = localPointer();
+    dragRef.current = { type: 'edge', index, last: p ?? { x: 0, y: 0 } };
+    setSelectedVertex(null);
+  };
+  const handleAddVertex = (edgeIndex: number, e: Konva.KonvaEventObject<MouseEvent>) => {
+    e.cancelBubble = true;
+    const pts = editPointsRef.current;
+    if (!pts) return;
+    const a = pts[edgeIndex];
+    const b = pts[(edgeIndex + 1) % pts.length];
+    const mid: PointMm = {
+      xMm: snapMmToGrid((a.xMm + b.xMm) / 2, gridSizeMm),
+      yMm: snapMmToGrid((a.yMm + b.yMm) / 2, gridSizeMm),
+    };
+    const next = [...pts];
+    next.splice(edgeIndex + 1, 0, mid);
+    setEditPoints(next);
+    onBoothShapeChange?.(next);
+  };
+
+  const handleShapeMouseMove = () => {
+    const drag = dragRef.current;
+    if (!shapeEditMode || !drag) return;
+    const local = localPointer();
+    if (!local) return;
+    if (drag.type === 'vertex') {
+      const nx = snapMmToGrid(local.x, gridSizeMm);
+      const ny = snapMmToGrid(local.y, gridSizeMm);
+      setEditPoints((prev) => (prev ? prev.map((p, i) => (i === drag.index ? { xMm: nx, yMm: ny } : p)) : prev));
+    } else {
+      const dx = local.x - drag.last.x;
+      const dy = local.y - drag.last.y;
+      drag.last = { x: local.x, y: local.y };
+      setEditPoints((prev) => {
+        if (!prev) return prev;
+        const j = (drag.index + 1) % prev.length;
+        return prev.map((p, i) => (i === drag.index || i === j ? { xMm: p.xMm + dx, yMm: p.yMm + dy } : p));
+      });
+    }
+  };
+
+  const handleShapeMouseUp = () => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    dragRef.current = null;
+    let pts = editPointsRef.current ?? [];
+    if (drag.type === 'edge') {
+      const j = (drag.index + 1) % pts.length;
+      pts = pts.map((p, i) =>
+        i === drag.index || i === j
+          ? { xMm: snapMmToGrid(p.xMm, gridSizeMm), yMm: snapMmToGrid(p.yMm, gridSizeMm) }
+          : p,
+      );
+      setEditPoints(pts);
+    }
+    onBoothShapeChange?.(pts);
+  };
+
+  // 편집 모드 키보드: Delete(선택 꼭짓점 삭제, 최소 3개), ESC(종료)
+  useEffect(() => {
+    if (!shapeEditMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onExitShapeEdit?.();
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedVertex != null) {
+        const pts = editPointsRef.current;
+        if (pts && pts.length > 3) {
+          const next = pts.filter((_, i) => i !== selectedVertex);
+          setEditPoints(next);
+          setSelectedVertex(null);
+          onBoothShapeChange?.(next);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [shapeEditMode, selectedVertex, onExitShapeEdit, onBoothShapeChange]);
 
   const ready =
     size.width > 0 && size.height > 0 && bounds.widthMm > 0 && bounds.depthMm > 0;
@@ -270,6 +390,8 @@ export default function BoothCanvas({
           y={viewport.y}
           onWheel={handleWheel}
           onMouseDown={handleStageMouseDown}
+          onMouseMove={handleShapeMouseMove}
+          onMouseUp={handleShapeMouseUp}
         >
           {/* 배경 레이어: 바닥/그리드/벽체/치수 (이벤트 비수신) */}
           <Layer listening={false} {...layerRot}>
@@ -292,8 +414,8 @@ export default function BoothCanvas({
             <Dimensions bounds={bounds} scale={viewport.scale} />
           </Layer>
 
-          {/* 집기/텍스트/이미지/배경 레이어: 드래그/선택 상호작용 (회전/읽기전용 시 비활성) */}
-          <Layer listening={interactive} {...layerRot}>
+          {/* 집기/텍스트/이미지/배경 레이어: 드래그/선택 상호작용 (회전/읽기전용/외곽편집 시 비활성) */}
+          <Layer listening={interactive && !shapeEditMode} {...layerRot}>
             {/* SVG 배경 (맨 아래). 잠금 시 비상호작용 */}
             {backgrounds.map((bg) =>
               bg.locked ? (
@@ -393,6 +515,23 @@ export default function BoothCanvas({
               />
             </Layer>
           )}
+
+          {/* 부스 외곽 편집 오버레이 (v0.8.6) */}
+          {shapeEditMode && editPoints && (
+            <Layer ref={shapeLayerRef} {...layerRot}>
+              <ShapeEditor
+                points={editPoints}
+                scale={viewport.scale}
+                selectedVertex={selectedVertex}
+                hoverEdge={hoverEdge}
+                onVertexDown={handleVertexDown}
+                onEdgeDown={handleEdgeDown}
+                onAddVertex={handleAddVertex}
+                onEdgeEnter={setHoverEdge}
+                onEdgeLeave={() => setHoverEdge(null)}
+              />
+            </Layer>
+          )}
         </Stage>
       )}
 
@@ -432,6 +571,17 @@ export default function BoothCanvas({
       </Typography>
     </Box>
   );
+}
+
+/** 폴리곤 점들의 바운딩 박스 (편집 중 실시간 폴리곤 대응) */
+function boundsFromPoints(pts: PointMm[]): BoothBounds {
+  const xs = pts.map((p) => p.xMm);
+  const ys = pts.map((p) => p.yMm);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs);
+  const maxY = Math.max(...ys);
+  return { minX, minY, maxX, maxY, widthMm: maxX - minX, depthMm: maxY - minY };
 }
 
 /** 보기 회전(deg)을 반영한 화면 맞춤용 바운딩 박스(부스 중심 기준 회전한 AABB) */

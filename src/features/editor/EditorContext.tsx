@@ -15,6 +15,7 @@ import type {
   PlacedFixture,
   PlacedImage,
   PlacedText,
+  PointMm,
   Project,
   SvgDocument,
   WallItems,
@@ -91,6 +92,12 @@ interface EditorContextValue {
 
   /** 사용할 벽면 ON/OFF 변경 (프로젝트에 저장) — v0.7.3 */
   setWallEnabled: (side: WallSide, enabled: boolean) => Promise<void>;
+
+  // 부스 외곽 편집 (CAD 스타일) — v0.8.6
+  shapeEditMode: boolean;
+  setShapeEditMode: (v: boolean) => void;
+  /** 부스 외곽 폴리곤(mm) 갱신 → boothShape=polygon + bbox 저장(디바운스 저장) */
+  updateBoothShape: (points: PointMm[]) => void;
 
   // 배치안(Layout)
   layouts: Layout[];
@@ -282,6 +289,9 @@ export function EditorProvider({
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
   // 평면도 보기 회전(deg) — 보기 전용 변환. 실제 좌표는 바꾸지 않음. (UI 상태, 저장 안 함)
   const [viewRotationDeg, setViewRotationDeg] = useState(0);
+  // 부스 외곽 편집 모드 (CAD 스타일 Shape Editor) — v0.8.6
+  const [shapeEditMode, setShapeEditMode] = useState(false);
+  const shapeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFixtureNames, setShowFixtureNames] = useState(true);
 
   const [layouts, setLayouts] = useState<Layout[]>([]);
@@ -381,6 +391,31 @@ export function EditorProvider({
       // 현재 보고 있는 벽면을 끄면 평면도로 전환 (출력/캔버스 일관성)
       if (!enabled && viewMode === side) setViewMode('plan');
       await storage.saveProject(updated);
+    };
+
+    // 부스 외곽 폴리곤 갱신 (드래그 중 자주 호출) → 상태 즉시, 저장은 디바운스
+    const updateBoothShape = (points: PointMm[]) => {
+      if (!project || points.length < 3) return;
+      const xs = points.map((p) => p.xMm);
+      const ys = points.map((p) => p.yMm);
+      const widthMm = Math.max(...xs) - Math.min(...xs);
+      const depthMm = Math.max(...ys) - Math.min(...ys);
+      const updated: Project = {
+        ...project,
+        boothConfig: {
+          ...project.boothConfig,
+          boothShape: 'polygon',
+          polygonPoints: points.map((p) => ({ xMm: Math.round(p.xMm), yMm: Math.round(p.yMm) })),
+          widthMm: Math.round(widthMm),
+          depthMm: Math.round(depthMm),
+        },
+        updatedAt: Date.now(),
+      };
+      setProject(updated);
+      if (shapeSaveTimer.current) clearTimeout(shapeSaveTimer.current);
+      shapeSaveTimer.current = setTimeout(() => {
+        void storage.saveProject(updated);
+      }, 800);
     };
 
     // ---------- 집기 (plan) ----------
@@ -849,6 +884,9 @@ export function EditorProvider({
       setViewRotationDeg,
       canEdit: !readOnly, // v0.8.4: 회전 상태와 무관하게 편집 가능
       setWallEnabled,
+      shapeEditMode,
+      setShapeEditMode,
+      updateBoothShape,
       layouts,
       currentLayoutId,
       dirty,
@@ -966,6 +1004,7 @@ export function EditorProvider({
     projectId,
     readOnly,
     viewRotationDeg,
+    shapeEditMode,
   ]);
 
   // ---------- 자동 저장 (5초 debounce) ----------
