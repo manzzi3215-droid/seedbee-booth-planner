@@ -78,6 +78,8 @@ export default function EditorToolbar() {
     layouts,
     currentLayoutId,
     dirty,
+    saveStatus,
+    isCloud,
     saveCurrent,
     saveAs,
     loadLayout,
@@ -432,11 +434,19 @@ export default function EditorToolbar() {
         </Menu>
       </Box>
 
-      {dirty && (
-        <Typography variant="caption" color="warning.main" sx={{ fontWeight: 700 }}>
-          ● 저장 안 됨
-        </Typography>
-      )}
+      {(() => {
+        let text: string | null = null;
+        let color = 'text.secondary';
+        if (saveStatus === 'saving') { text = '저장 중…'; color = 'info.main'; }
+        else if (saveStatus === 'error') { text = '저장 실패'; color = 'error.main'; }
+        else if (dirty) { text = '저장 안 됨'; color = 'warning.main'; }
+        else if (saveStatus === 'saved') { text = isCloud ? '클라우드 저장됨' : '저장됨'; color = 'success.main'; }
+        return text ? (
+          <Typography variant="caption" sx={{ fontWeight: 700, color, whiteSpace: 'nowrap' }}>
+            ● {text}
+          </Typography>
+        ) : null;
+      })()}
 
       <Box sx={{ flex: 1 }} />
 

@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# 환경 변수(Firebase 자격 증명 등) — .env.example 만 커밋
+.env
+.env.*
+!.env.example
+
 # Firebase 배포 캐시
 .firebase
 

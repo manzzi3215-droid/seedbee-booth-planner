@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -19,7 +20,7 @@ import type {
   WallItems,
   WallSide,
 } from '../../types';
-import { storage } from '../../storage';
+import { storage, isCloudStorage } from '../../storage';
 import { generateId } from '../../utils/id';
 import { useFixtures } from '../fixtures/useFixtures';
 import { snapMmToGrid } from '../canvas/coords';
@@ -45,6 +46,12 @@ import {
 } from '../wall/constants';
 
 type ItemType = 'fixture' | 'text' | 'dimension' | 'image';
+
+/** 저장 상태 (수동/자동 저장 표시용) */
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+/** 자동 저장 debounce (ms) */
+const AUTOSAVE_MS = 5000;
 
 /**
  * 통합 선택 상태.
@@ -78,6 +85,10 @@ interface EditorContextValue {
   layouts: Layout[];
   currentLayoutId: string | null;
   dirty: boolean;
+  /** 저장 상태(수동/자동) */
+  saveStatus: SaveStatus;
+  /** Firestore(클라우드) 저장소 사용 중 여부 */
+  isCloud: boolean;
   saveCurrent: () => Promise<void>;
   saveAs: (name: string) => Promise<void>;
   loadLayout: (layoutId: string) => void;
@@ -251,6 +262,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
   const [layouts, setLayouts] = useState<Layout[]>([]);
   const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
   useEffect(() => {
     let active = true;
@@ -715,15 +727,27 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
     const saveCurrent = async () => {
       const now = Date.now();
-      if (currentLayout) {
-        await persistLayout({ ...currentLayout, ...snapshot(), updatedAt: now });
-      } else {
-        await persistLayout({ id: generateId(), name: suggestLayoutName(), ...snapshot(), createdAt: now, updatedAt: now });
+      setSaveStatus('saving');
+      try {
+        if (currentLayout) {
+          await persistLayout({ ...currentLayout, ...snapshot(), updatedAt: now });
+        } else {
+          await persistLayout({ id: generateId(), name: suggestLayoutName(), ...snapshot(), createdAt: now, updatedAt: now });
+        }
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('error');
       }
     };
     const saveAs = async (name: string) => {
       const now = Date.now();
-      await persistLayout({ id: generateId(), name: name.trim() || suggestLayoutName(), ...snapshot(), createdAt: now, updatedAt: now });
+      setSaveStatus('saving');
+      try {
+        await persistLayout({ id: generateId(), name: name.trim() || suggestLayoutName(), ...snapshot(), createdAt: now, updatedAt: now });
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('error');
+      }
     };
     // 배치안 데이터를 편집기 상태에 적용 (null 이면 빈 캔버스)
     const applyLayout = (layout: Layout | null) => {
@@ -800,6 +824,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       layouts,
       currentLayoutId,
       dirty,
+      saveStatus,
+      isCloud: isCloudStorage,
       saveCurrent,
       saveAs,
       loadLayout,
@@ -908,7 +934,32 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     gridSizeMm,
     layouts,
     currentLayoutId,
+    saveStatus,
     projectId,
+  ]);
+
+  // ---------- 자동 저장 (5초 debounce) ----------
+  // 편집 내용이 바뀔 때마다 타이머를 재설정하고, 5초간 변경이 없으면 저장합니다.
+  const saveCurrentRef = useRef(value.saveCurrent);
+  saveCurrentRef.current = value.saveCurrent;
+  useEffect(() => {
+    if (!value.dirty) return;
+    const t = setTimeout(() => {
+      void saveCurrentRef.current();
+    }, AUTOSAVE_MS);
+    return () => clearTimeout(t);
+    // 편집 내용/선택 배치안이 바뀌면 debounce 타이머 재설정
+  }, [
+    value.dirty,
+    placed,
+    texts,
+    dimensions,
+    planImages,
+    planBackgrounds,
+    localFixtures,
+    svgDocuments,
+    wallItems,
+    currentLayoutId,
   ]);
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;

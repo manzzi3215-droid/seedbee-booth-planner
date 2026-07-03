@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.7.3 - UI & Fixture Library Management**
+> **v0.8.0 - Firestore Cloud Project Storage**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -189,6 +189,16 @@ src/
 
 ### Changelog
 
+**v0.8.0 — Firestore Cloud Project Storage**
+- **클라우드 저장(Firestore):** 저장소를 LocalStorage → **Firestore 기본 + LocalStorage 캐시/백업**으로 확장.
+  집에서 저장한 프로젝트를 다른 기기에서 이어 작업 가능(불러올 때 최신본 조회, 실시간 공동편집·snapshot 리스너 미사용).
+- **익명 로그인:** 앱 실행 시 Firebase Anonymous Auth 자동 로그인 → `owner`(uid)로 내 프로젝트만 조회/저장.
+- **자동 저장:** 기존 `저장` 버튼 유지 + **5초 debounce Auto Save**, 상태 표시(`저장 중… / 저장됨 / 저장 실패`).
+- **최근 프로젝트:** 홈에서 최근 프로젝트 자동 로드 → `이어서 작업하기`로 바로 열기.
+- **마이그레이션:** 최초 실행 시 LocalStorage 프로젝트/집기를 Firestore 로 **1회 업로드**(계정 플래그로 중복 방지).
+- **환경 변수 기반 설정(자격 증명 비커밋):** `VITE_FIREBASE_*` 미설정 시 기존처럼 **LocalStorage 전용**으로 동작(하위 호환).
+  이미지는 이번 단계에서도 dataURL 유지(Firebase Storage 미도입).
+
 **v0.7.3 — UI & Fixture Library Management**
 - **UI 가시성 개선:** 툴바 버튼을 그룹/메뉴로 정리(`요소 추가 ▾`, `내보내기 ▾`), 주요 버튼(저장·3D 미리보기)
   강조, 좌측 라이브러리 카드 가독성 개선(선택 하이라이트·개수 표시), 데스크톱 우선
@@ -311,6 +321,81 @@ boothPath?: {
 2. 앵커 추가/이동/삭제(직선만)
 3. 베지어 핸들 편집(곡선)
 4. edge 길이/둘레/면적 + 벽면 전개 + PNG/PDF/3D 반영
+
+---
+
+## 클라우드 저장 (Firestore) 설정 — v0.8.0
+
+`VITE_FIREBASE_*` 환경 변수를 설정하면 **Firestore 가 기본 저장소**가 되고 LocalStorage 는
+캐시/백업/오프라인 폴백으로 동작합니다. **미설정 시 기존처럼 LocalStorage 전용**으로 동작합니다.
+
+### 1) 필요한 환경 변수 (`.env` 또는 `.env.local`)
+
+`.env.example` 을 복사해 값을 채우세요. 값은 **Firebase Console → ⚙ 프로젝트 설정 →
+"내 앱"의 웹 앱(</>) → SDK 설정 및 구성**의 `firebaseConfig` 에서 얻습니다.
+(웹 앱이 없으면 "앱 추가 → 웹" 으로 생성)
+
+| 환경 변수 | firebaseConfig 키 | 필수 |
+|---|---|---|
+| `VITE_FIREBASE_API_KEY` | `apiKey` | ✅ |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `authDomain` (예: `your-app.firebaseapp.com`) | ✅ |
+| `VITE_FIREBASE_PROJECT_ID` | `projectId` | ✅ |
+| `VITE_FIREBASE_APP_ID` | `appId` | ✅ |
+| `VITE_FIREBASE_STORAGE_BUCKET` | `storageBucket` | 선택(이번 단계 미사용) |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | `messagingSenderId` | 선택 |
+
+> 4개 필수 값 중 하나라도 비면 LocalStorage 전용으로 동작합니다.
+> `.env*` 는 `.gitignore` 로 커밋되지 않습니다(`.env.example` 만 커밋).
+
+### 2) Firebase Console 준비
+
+1. **Authentication → Sign-in method → 익명(Anonymous)** 사용 설정
+2. **Firestore Database → 데이터베이스 만들기**
+3. **Firestore 보안 규칙**(권장): 소유자만 접근
+
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{db}/documents {
+       match /projects/{id} {
+         allow read, write: if request.auth != null
+           && request.resource.data.owner == request.auth.uid;
+         allow read, delete: if request.auth != null
+           && resource.data.owner == request.auth.uid;
+       }
+       match /libraries/{uid} {
+         allow read, write: if request.auth != null && request.auth.uid == uid;
+       }
+       match /users/{uid} {
+         allow read, write: if request.auth != null && request.auth.uid == uid;
+       }
+     }
+   }
+   ```
+4. **Authentication → Settings → 승인된 도메인**에 배포 도메인(및 localhost) 추가
+
+### 3) Firestore Collection 구조
+
+```
+projects/{projectId}
+  owner            : string (uid)
+  name             : string
+  createdAt        : number
+  updatedAt        : number
+  currentLayoutId  : string | null
+  data             : Project   // boothConfig · layouts[](placedFixtures/texts/dimensions/
+                               //   images/backgrounds/wallItems/localFixtures/svgDocuments) · usedWalls
+
+libraries/{uid}
+  fixtures         : FixtureDef[]   // 전역 집기 라이브러리(사용자 단위)
+  updatedAt        : number
+
+users/{uid}
+  migrationCompleted : boolean       // LocalStorage → Firestore 1회 마이그레이션 완료 표시
+```
+
+> ⚠️ 이미지는 dataURL(base64)로 `data.layouts[].images` 등에 인라인 저장됩니다. 대용량 이미지가
+> 많으면 Firestore 문서 1 MiB 한도에 걸릴 수 있어, 추후 **Firebase Storage(외부 URL)** 전환을 권장합니다.
 
 ---
 
