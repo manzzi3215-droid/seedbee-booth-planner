@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.0 - Firestore Cloud Project Storage**
+> **v0.8.1 - Google Sign-in for Cross-device Sync**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -189,6 +189,13 @@ src/
 
 ### Changelog
 
+**v0.8.1 — Google Sign-in for Cross-device Sync**
+- **Google 로그인 추가(익명 유지):** 헤더에 로그인 상태 표시 + `[Google로 로그인]`/`[로그아웃]`.
+  - 익명 사용자가 Google 로그인 시 **계정 연결(link)** → uid 유지(기존 프로젝트/집기 그대로 소유).
+  - 다른 기기에서 같은 Google 계정으로 로그인하면(이미 링크됨) 그 계정으로 로그인 + 이 기기의 로컬 작업을 해당 uid 로 **이전** → **어느 기기서든 동일 projects/libraries**.
+  - 로그인 전(익명)에도 기존처럼 동작, Firebase 미설정 시 LocalStorage 전용(`로컬 저장` 표시).
+  - 저장/불러오기는 항상 **현재 로그인 uid(owner)** 기준. 자동저장/최근 프로젝트/마이그레이션 유지.
+
 **v0.8.0 — Firestore Cloud Project Storage**
 - **클라우드 저장(Firestore):** 저장소를 LocalStorage → **Firestore 기본 + LocalStorage 캐시/백업**으로 확장.
   집에서 저장한 프로젝트를 다른 기기에서 이어 작업 가능(불러올 때 최신본 조회, 실시간 공동편집·snapshot 리스너 미사용).
@@ -350,6 +357,7 @@ boothPath?: {
 ### 2) Firebase Console 준비
 
 1. **Authentication → Sign-in method → 익명(Anonymous)** 사용 설정
+   - 그리고 **Google** 제공업체도 사용 설정(v0.8.1 크로스 디바이스 로그인) — 지원 이메일 지정
 2. **Firestore Database → 데이터베이스 만들기**
 3. **Firestore 보안 규칙**(권장): 소유자만 접근
 

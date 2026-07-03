@@ -59,10 +59,16 @@ export class FirestoreStorageProvider implements StorageProvider {
   private cache = new LocalStorageProvider();
   private migrated = false;
 
+  /** 현재 로그인 사용자 기준(익명 또는 Google)의 db + uid */
+  private async ctx(): Promise<{ db: import('firebase/firestore').Firestore; uid: string }> {
+    const { db, auth, uid } = await getFirebase();
+    return { db, uid: auth.currentUser?.uid ?? uid };
+  }
+
   // ---------- Project ----------
   async getProjects(): Promise<Project[]> {
     try {
-      const { db, uid } = await getFirebase();
+      const { db, uid } = await this.ctx();
       await this.migrateIfNeeded();
       const snap = await getDocs(query(collection(db, 'projects'), where('owner', '==', uid)));
       const projects = snap.docs
@@ -93,7 +99,7 @@ export class FirestoreStorageProvider implements StorageProvider {
 
   async saveProject(project: Project): Promise<void> {
     await this.cache.saveProject(project); // 즉시 캐시 (속도/오프라인)
-    const { db, uid } = await getFirebase();
+    const { db, uid } = await this.ctx();
     await setDoc(doc(db, 'projects', project.id), toProjectDoc(project, uid));
   }
 
@@ -105,13 +111,13 @@ export class FirestoreStorageProvider implements StorageProvider {
 
   // ---------- Fixture 라이브러리 (uid 단위) ----------
   private async readCloudFixtures(): Promise<FixtureDef[]> {
-    const { db, uid } = await getFirebase();
+    const { db, uid } = await this.ctx();
     const d = await getDoc(doc(db, 'libraries', uid));
     return d.exists() ? ((d.data().fixtures ?? []) as FixtureDef[]) : [];
   }
 
   private async writeCloudFixtures(fixtures: FixtureDef[]): Promise<void> {
-    const { db, uid } = await getFirebase();
+    const { db, uid } = await this.ctx();
     await setDoc(doc(db, 'libraries', uid), { fixtures, updatedAt: Date.now() });
   }
 
@@ -177,7 +183,7 @@ export class FirestoreStorageProvider implements StorageProvider {
       this.migrated = true;
       return;
     }
-    const { db, uid } = await getFirebase();
+    const { db, uid } = await this.ctx();
 
     // 이미 마이그레이션한 계정인지 확인 (다른 기기 최초 실행 방지)
     const userRef = doc(db, 'users', uid);

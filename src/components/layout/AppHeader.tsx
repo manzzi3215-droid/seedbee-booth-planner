@@ -6,6 +6,7 @@ import Chip from '@mui/material/Chip';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import { Link as RouterLink } from 'react-router-dom';
 import { APP_VERSION } from '../../constants/app';
+import AuthButton from './AuthButton';
 
 /**
  * 앱 상단 헤더.
@@ -48,6 +49,8 @@ export default function AppHeader() {
           variant="outlined"
           sx={{ ml: 1.5, height: 22, fontSize: 11, color: 'text.secondary' }}
         />
+        <Box sx={{ flex: 1 }} />
+        <AuthButton />
       </Toolbar>
     </AppBar>
   );
