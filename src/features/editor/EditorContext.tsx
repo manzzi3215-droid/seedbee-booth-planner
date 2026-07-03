@@ -83,7 +83,10 @@ interface EditorContextValue {
   /** 평면도 보기 회전(deg, 보기 전용) */
   viewRotationDeg: number;
   setViewRotationDeg: (deg: number) => void;
-  /** 보기 회전 0° 이고 읽기전용 아님 → 편집 가능 */
+  /**
+   * 편집 가능 여부. 읽기전용만 아니면 true — 보기 회전 각도와 무관하게 편집 가능(v0.8.4).
+   * (회전은 Stage 레이어의 view transform 이며, Konva 가 pointer→local 좌표를 자동 역변환)
+   */
   canEdit: boolean;
 
   /** 사용할 벽면 ON/OFF 변경 (프로젝트에 저장) — v0.7.3 */
@@ -844,7 +847,7 @@ export function EditorProvider({
       readOnly,
       viewRotationDeg,
       setViewRotationDeg,
-      canEdit: !readOnly && viewRotationDeg === 0,
+      canEdit: !readOnly, // v0.8.4: 회전 상태와 무관하게 편집 가능
       setWallEnabled,
       layouts,
       currentLayoutId,

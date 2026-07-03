@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.3 - Share Links & Plan View Rotation**
+> **v0.8.4 - Editable View Rotation**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -188,6 +188,13 @@ src/
 | 아이소메트릭 3D 미리보기 | ✅ |
 
 ### Changelog
+
+**v0.8.4 — Editable View Rotation**
+- **회전 상태에서도 편집 가능:** 보기 회전(90/180/270/자유 각도) 중에도 드래그·선택·스마트 스냅·복사·삭제·요소 추가가
+  일반 상태와 동일하게 동작. (v0.8.3에서는 회전 시 편집 잠금 → 제한 제거)
+- 회전은 여전히 **View Transform**(Konva 레이어 회전)이며, Konva 가 pointer→layout 좌표를 자동 역변환하므로
+  드래그 결과 mm 좌표가 정확합니다. **실제 저장되는 mm 좌표는 회전과 무관하게 불변**(회전값은 데이터에 저장 안 됨).
+- 읽기 전용(공유 view 링크)에서는 여전히 편집 잠금. PNG/PDF는 현재 화면(회전) 기준 출력 유지.
 
 **v0.8.3 — Share Links & Plan View Rotation**
 - **공유 링크:** 프로젝트별 `shareId`/`shareEnabled`/`sharePermission('view'|'edit')`. 공유 Dialog에 **이메일 공유 / 링크 공유** 탭 —
