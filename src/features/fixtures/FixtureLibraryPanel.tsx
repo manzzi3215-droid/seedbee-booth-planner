@@ -38,6 +38,7 @@ function ColorSwatch({ color }: { color: string }) {
 function FixtureCard({
   fixture,
   selected,
+  canEdit,
   onToggleSelect,
   onPlace,
   onEdit,
@@ -45,6 +46,7 @@ function FixtureCard({
 }: {
   fixture: FixtureDef;
   selected: boolean;
+  canEdit: boolean;
   onToggleSelect: () => void;
   onPlace: () => void;
   onEdit: () => void;
@@ -107,6 +109,7 @@ function FixtureCard({
           variant="contained"
           startIcon={<AddLocationAltRoundedIcon sx={{ fontSize: 16 }} />}
           onClick={onPlace}
+          disabled={!canEdit}
           sx={{ py: 0.25, px: 1, minWidth: 0 }}
         >
           배치
@@ -121,7 +124,7 @@ function FixtureCard({
  * 라이브러리 CRUD, [배치](캔버스에 추가), 다중 선택/일괄 삭제를 제공합니다.
  */
 export default function FixtureLibraryPanel() {
-  const { fixtures, fixturesLoading, saveFixture, deleteFixture, place } = useEditor();
+  const { fixtures, fixturesLoading, saveFixture, deleteFixture, place, canEdit } = useEditor();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<FixtureDef | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -238,6 +241,7 @@ export default function FixtureLibraryPanel() {
               key={f.id}
               fixture={f}
               selected={selectedIds.has(f.id)}
+              canEdit={canEdit}
               onToggleSelect={() => toggleOne(f.id)}
               onPlace={() => place(f)}
               onEdit={() => openEdit(f)}

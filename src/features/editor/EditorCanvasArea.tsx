@@ -67,6 +67,8 @@ export default function EditorCanvasArea() {
     updatePlanBackground,
     selectedSvgDocument,
     selectedSvgElementId,
+    viewRotationDeg,
+    canEdit,
     viewMode,
     setViewMode,
     wallItems,
@@ -251,6 +253,8 @@ export default function EditorCanvasArea() {
               selectedBackgroundId={selectedBackgroundId}
               selectedSvgDoc={selectedSvgDocument}
               highlightedSvgElementId={selectedSvgElementId}
+              viewRotationDeg={viewRotationDeg}
+              interactive={canEdit}
               gridSizeMm={gridSizeMm}
               onSelect={select}
               onMove={move}

@@ -12,6 +12,7 @@ import { getFirebase } from './firebase/app';
 
 // 편집기는 무거운 React Konva 를 사용하므로 지연 로딩(코드 분할)
 const EditorRoute = lazy(() => import('./pages/EditorRoute'));
+const ShareRoute = lazy(() => import('./pages/ShareRoute'));
 
 function FullScreenLoader() {
   return (
@@ -72,6 +73,14 @@ export default function App() {
           element={
             <Suspense fallback={<FullScreenLoader />}>
               <EditorRoute />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/share/:shareId"
+          element={
+            <Suspense fallback={<FullScreenLoader />}>
+              <ShareRoute />
             </Suspense>
           }
         />

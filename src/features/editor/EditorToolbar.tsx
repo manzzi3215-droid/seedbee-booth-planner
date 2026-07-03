@@ -10,6 +10,7 @@ import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import Chip from '@mui/material/Chip';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Snackbar from '@mui/material/Snackbar';
@@ -33,6 +34,9 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
+import RotateLeftRoundedIcon from '@mui/icons-material/RotateLeftRounded';
+import RotateRightRoundedIcon from '@mui/icons-material/RotateRightRounded';
+import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
@@ -92,7 +96,19 @@ export default function EditorToolbar() {
     addImage,
     viewMode,
     wallItems,
+    readOnly,
+    canEdit,
+    viewRotationDeg,
+    setViewRotationDeg,
   } = useEditor();
+
+  const [rotStr, setRotStr] = useState('');
+  const rotateViewBy = (delta: number) =>
+    setViewRotationDeg((((viewRotationDeg + delta) % 360) + 360) % 360);
+  const applyRotInput = () => {
+    const v = Number(rotStr);
+    if (!Number.isNaN(v)) setViewRotationDeg(((Math.round(v) % 360) + 360) % 360);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const svgInputRef = useRef<HTMLInputElement>(null);
@@ -455,7 +471,7 @@ export default function EditorToolbar() {
         size="small"
         startIcon={<SaveRoundedIcon />}
         onClick={handleSave}
-        disabled={saving}
+        disabled={saving || readOnly}
       >
         저장
       </Button>
@@ -464,10 +480,62 @@ export default function EditorToolbar() {
         size="small"
         startIcon={<SaveAsRoundedIcon />}
         onClick={openSaveAs}
-        disabled={saving}
+        disabled={saving || readOnly}
       >
         다른 이름으로 저장
       </Button>
+
+      {/* 보기 회전 (평면도 전용, 보기 전용 변환) */}
+      {viewMode === 'plan' && (
+        <>
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+          <Tooltip title="좌회전 90°">
+            <IconButton size="small" onClick={() => rotateViewBy(-90)}>
+              <RotateLeftRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="우회전 90°">
+            <IconButton size="small" onClick={() => rotateViewBy(90)}>
+              <RotateRightRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <TextField
+            size="small"
+            type="number"
+            placeholder="각도"
+            value={rotStr}
+            onChange={(e) => setRotStr(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyRotInput();
+            }}
+            onBlur={applyRotInput}
+            sx={{ width: 76 }}
+            slotProps={{ input: { endAdornment: <Typography variant="caption">°</Typography> } }}
+          />
+          {viewRotationDeg !== 0 && (
+            <Chip
+              size="small"
+              color="warning"
+              variant="outlined"
+              label={`보기 회전 ${viewRotationDeg}°`}
+              onDelete={() => {
+                setViewRotationDeg(0);
+                setRotStr('');
+              }}
+            />
+          )}
+        </>
+      )}
+
+      {readOnly && (
+        <Chip
+          size="small"
+          color="info"
+          icon={<VisibilityRoundedIcon />}
+          label="읽기 전용으로 열람 중"
+          sx={{ fontWeight: 700 }}
+        />
+      )}
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
@@ -478,6 +546,7 @@ export default function EditorToolbar() {
         startIcon={<AddRoundedIcon />}
         endIcon={<ExpandMoreRoundedIcon />}
         onClick={(e) => setAddMenuAnchor(e.currentTarget)}
+        disabled={!canEdit}
       >
         요소 추가
       </Button>

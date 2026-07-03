@@ -279,6 +279,9 @@ export interface Layout {
 /** 프로젝트 공개 범위 (v0.8.2) */
 export type ProjectVisibility = 'private' | 'shared';
 
+/** 공유 링크 권한 (v0.8.3) */
+export type SharePermission = 'view' | 'edit';
+
 /**
  * 프로젝트 = 하나의 행사(예: "메가쇼")
  * layouts 로 여러 배치안 버전을 보관합니다.
@@ -296,4 +299,12 @@ export interface Project extends BaseEntity {
   sharedWith?: string[];
   /** 공개 범위: private(나만) | shared(공유됨) */
   visibility?: ProjectVisibility;
+
+  // --- 공유 링크 (v0.8.3) ---
+  /** 공유 링크 토큰(랜덤). /share/{shareId} */
+  shareId?: string;
+  /** 공유 링크 활성 여부 */
+  shareEnabled?: boolean;
+  /** 공유 링크 권한: view(읽기전용) | edit(수정 가능) */
+  sharePermission?: SharePermission;
 }

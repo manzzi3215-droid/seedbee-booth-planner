@@ -17,6 +17,8 @@ export interface StorageProvider {
   getProject(id: string): Promise<Project | null>;
   saveProject(project: Project): Promise<void>;
   deleteProject(id: string): Promise<void>;
+  /** 공유 링크 토큰으로 프로젝트 조회 (활성화된 링크만). 없으면 null (v0.8.3) */
+  getProjectByShareId(shareId: string): Promise<Project | null>;
 
   // --- Fixture (집기 라이브러리) ---
   getFixtures(): Promise<FixtureDef[]>;

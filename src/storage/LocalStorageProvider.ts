@@ -69,6 +69,10 @@ export class LocalStorageProvider implements StorageProvider {
     );
   }
 
+  async getProjectByShareId(shareId: string): Promise<Project | null> {
+    return readProjects().find((p) => p.shareId === shareId && p.shareEnabled) ?? null;
+  }
+
   // --- Fixture ---
   // 집기는 등록 순서를 그대로 유지합니다(정렬하지 않음).
   async getFixtures(): Promise<FixtureDef[]> {

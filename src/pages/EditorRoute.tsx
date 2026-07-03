@@ -12,9 +12,15 @@ import EditorCanvasArea from '../features/editor/EditorCanvasArea';
  * 공유합니다. 무거운 React Konva 캔버스를 포함하므로 App.tsx 에서 lazy 로 불러
  * 홈/목록 진입 시에는 로드하지 않습니다.
  */
-export default function EditorRoute() {
+export default function EditorRoute({
+  readOnly = false,
+  projectIdOverride,
+}: {
+  readOnly?: boolean;
+  projectIdOverride?: string;
+} = {}) {
   return (
-    <EditorProvider>
+    <EditorProvider readOnly={readOnly} projectIdOverride={projectIdOverride}>
       <EditorHotkeys />
       <AppLayout
         leftSidebar={<FixtureLibraryPanel />}

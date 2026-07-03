@@ -69,6 +69,10 @@ interface BoothCanvasProps {
   selectedSvgDoc?: SvgDocument | null;
   highlightedSvgElementId?: string | null;
   gridSizeMm?: number;
+  /** 평면도 보기 회전(deg). 보기 전용 변환 — 실제 좌표 불변 */
+  viewRotationDeg?: number;
+  /** 편집 가능 여부(false 면 드래그/선택 비활성 — 읽기전용/회전 상태) */
+  interactive?: boolean;
   onSelect: (id: string | null) => void;
   onMove: (id: string, xMm: number, yMm: number, snapToGrid?: boolean) => void;
   onSelectText: (id: string | null) => void;
@@ -106,6 +110,8 @@ export default function BoothCanvas({
   selectedSvgDoc,
   highlightedSvgElementId,
   gridSizeMm = DEFAULT_GRID_SIZE_MM,
+  viewRotationDeg = 0,
+  interactive = true,
   onSelect,
   onMove,
   onSelectText,
@@ -196,20 +202,26 @@ export default function BoothCanvas({
     onMove(id, xMm, yMm, !shift);
   };
 
-  const fit = () =>
-    setViewport(
-      computeFit(size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY),
-    );
+  // 보기 회전 중심(부스 중심, mm) + 레이어 회전 변환
+  const centerX = bounds.minX + bounds.widthMm / 2;
+  const centerY = bounds.minY + bounds.depthMm / 2;
+  const layerRot =
+    viewRotationDeg % 360 !== 0
+      ? { rotation: viewRotationDeg, offsetX: centerX, offsetY: centerY, x: centerX, y: centerY }
+      : {};
+  // 회전을 반영한 화면 맞춤 범위(회전된 바운딩 박스)
+  const fb = rotatedFitBounds(bounds, viewRotationDeg);
 
-  // 컨테이너 크기 또는 부스 바운딩 박스가 바뀌면 화면 맞춤
+  const fit = () =>
+    setViewport(computeFit(size.width, size.height, fb.widthMm, fb.depthMm, fb.minX, fb.minY));
+
+  // 컨테이너 크기 / 부스 / 회전이 바뀌면 화면 맞춤
   useEffect(() => {
     if (size.width > 0 && size.height > 0) {
-      setViewport(
-        computeFit(size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY),
-      );
+      setViewport(computeFit(size.width, size.height, fb.widthMm, fb.depthMm, fb.minX, fb.minY));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY]);
+  }, [size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY, viewRotationDeg]);
 
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
@@ -260,7 +272,7 @@ export default function BoothCanvas({
           onMouseDown={handleStageMouseDown}
         >
           {/* 배경 레이어: 바닥/그리드/벽체/치수 (이벤트 비수신) */}
-          <Layer listening={false}>
+          <Layer listening={false} {...layerRot}>
             {/* 바닥 (폴리곤) */}
             <Line
               points={flattenPolygon(polygon)}
@@ -280,8 +292,8 @@ export default function BoothCanvas({
             <Dimensions bounds={bounds} scale={viewport.scale} />
           </Layer>
 
-          {/* 집기/텍스트/이미지/배경 레이어: 드래그/선택 상호작용 */}
-          <Layer>
+          {/* 집기/텍스트/이미지/배경 레이어: 드래그/선택 상호작용 (회전/읽기전용 시 비활성) */}
+          <Layer listening={interactive} {...layerRot}>
             {/* SVG 배경 (맨 아래). 잠금 시 비상호작용 */}
             {backgrounds.map((bg) =>
               bg.locked ? (
@@ -369,11 +381,11 @@ export default function BoothCanvas({
           </Layer>
 
           {/* 스냅 가이드라인 레이어 (명령형으로 그림, 드래그 종료 시 비움) */}
-          <Layer ref={guideLayerRef} listening={false} />
+          <Layer ref={guideLayerRef} listening={false} {...layerRot} />
 
           {/* SVG 구조 검사 하이라이트 (읽기 전용, 상호작용 없음) */}
           {selectedSvgDoc && (
-            <Layer listening={false}>
+            <Layer listening={false} {...layerRot}>
               <SvgHighlightOverlay
                 doc={selectedSvgDoc}
                 highlightedElementId={highlightedSvgElementId ?? null}
@@ -420,6 +432,32 @@ export default function BoothCanvas({
       </Typography>
     </Box>
   );
+}
+
+/** 보기 회전(deg)을 반영한 화면 맞춤용 바운딩 박스(부스 중심 기준 회전한 AABB) */
+function rotatedFitBounds(
+  bounds: BoothBounds,
+  deg: number,
+): { minX: number; minY: number; widthMm: number; depthMm: number } {
+  if (deg % 360 === 0) {
+    return { minX: bounds.minX, minY: bounds.minY, widthMm: bounds.widthMm, depthMm: bounds.depthMm };
+  }
+  const cx = bounds.minX + bounds.widthMm / 2;
+  const cy = bounds.minY + bounds.depthMm / 2;
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const corners = [
+    [bounds.minX, bounds.minY],
+    [bounds.maxX, bounds.minY],
+    [bounds.maxX, bounds.maxY],
+    [bounds.minX, bounds.maxY],
+  ];
+  const xs = corners.map(([x, y]) => cx + (x - cx) * cos - (y - cy) * sin);
+  const ys = corners.map(([x, y]) => cy + (x - cx) * sin + (y - cy) * cos);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return { minX, minY, widthMm: Math.max(...xs) - minX, depthMm: Math.max(...ys) - minY };
 }
 
 /** 폴리곤 클립 경로 그리기 */

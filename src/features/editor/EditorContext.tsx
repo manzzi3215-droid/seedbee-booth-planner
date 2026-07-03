@@ -78,6 +78,14 @@ interface EditorContextValue {
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
 
+  /** 읽기 전용 모드(공유 링크 view 등) */
+  readOnly: boolean;
+  /** 평면도 보기 회전(deg, 보기 전용) */
+  viewRotationDeg: number;
+  setViewRotationDeg: (deg: number) => void;
+  /** 보기 회전 0° 이고 읽기전용 아님 → 편집 가능 */
+  canEdit: boolean;
+
   /** 사용할 벽면 ON/OFF 변경 (프로젝트에 저장) — v0.7.3 */
   setWallEnabled: (side: WallSide, enabled: boolean) => Promise<void>;
 
@@ -238,8 +246,19 @@ function rotateDimensionBy(d: PlacedDimension, deg: number): PlacedDimension {
   return { ...d, startXMm: s.x, startYMm: s.y, endXMm: e.x, endYMm: e.y };
 }
 
-export function EditorProvider({ children }: { children: ReactNode }) {
-  const { projectId } = useParams();
+export function EditorProvider({
+  children,
+  readOnly = false,
+  projectIdOverride,
+}: {
+  children: ReactNode;
+  /** 읽기 전용(공유 링크 view 권한 등): 저장/자동저장/편집 비활성 */
+  readOnly?: boolean;
+  /** 공유 링크 라우트 등에서 URL 파라미터 대신 프로젝트 id 지정 */
+  projectIdOverride?: string;
+}) {
+  const params = useParams();
+  const projectId = projectIdOverride ?? params.projectId;
 
   const [project, setProject] = useState<Project | null>(null);
   const [projectLoading, setProjectLoading] = useState(true);
@@ -258,6 +277,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [selectedSvgElementId, setSelectedSvgElementId] = useState<string | null>(null);
   const [gridSizeMm] = useState(DEFAULT_GRID_SIZE_MM);
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
+  // 평면도 보기 회전(deg) — 보기 전용 변환. 실제 좌표는 바꾸지 않음. (UI 상태, 저장 안 함)
+  const [viewRotationDeg, setViewRotationDeg] = useState(0);
   const [showFixtureNames, setShowFixtureNames] = useState(true);
 
   const [layouts, setLayouts] = useState<Layout[]>([]);
@@ -820,6 +841,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       projectLoading,
       viewMode,
       setViewMode,
+      readOnly,
+      viewRotationDeg,
+      setViewRotationDeg,
+      canEdit: !readOnly && viewRotationDeg === 0,
       setWallEnabled,
       layouts,
       currentLayoutId,
@@ -936,6 +961,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     currentLayoutId,
     saveStatus,
     projectId,
+    readOnly,
+    viewRotationDeg,
   ]);
 
   // ---------- 자동 저장 (5초 debounce) ----------
@@ -943,7 +970,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const saveCurrentRef = useRef(value.saveCurrent);
   saveCurrentRef.current = value.saveCurrent;
   useEffect(() => {
-    if (!value.dirty) return;
+    if (readOnly || !value.dirty) return; // 읽기 전용이면 자동 저장 안 함
     const t = setTimeout(() => {
       void saveCurrentRef.current();
     }, AUTOSAVE_MS);
@@ -960,6 +987,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     svgDocuments,
     wallItems,
     currentLayoutId,
+    readOnly,
   ]);
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;

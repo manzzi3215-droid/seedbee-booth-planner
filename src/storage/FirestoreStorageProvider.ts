@@ -8,7 +8,7 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore';
-import type { Project, FixtureDef, Layout, ProjectVisibility } from '../types';
+import type { Project, FixtureDef, Layout, ProjectVisibility, SharePermission } from '../types';
 import type { StorageProvider } from './StorageProvider';
 import { LocalStorageProvider } from './LocalStorageProvider';
 import { getFirebase } from '../firebase/app';
@@ -38,6 +38,9 @@ interface ProjectDoc {
   owner: string;
   sharedWith: string[];
   visibility: ProjectVisibility;
+  shareId: string | null;
+  shareEnabled: boolean;
+  sharePermission: SharePermission;
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -55,11 +58,17 @@ function toProjectDoc(project: Project, ownerFallback: string): ProjectDoc {
   const owner = project.owner ?? ownerFallback;
   const sharedWith = normalizeEmails(project.sharedWith ?? []);
   const visibility: ProjectVisibility = project.visibility ?? (sharedWith.length ? 'shared' : 'private');
-  const data: Project = { ...project, owner, sharedWith, visibility };
+  const shareId = project.shareId ?? null;
+  const shareEnabled = project.shareEnabled ?? false;
+  const sharePermission: SharePermission = project.sharePermission ?? 'view';
+  const data: Project = { ...project, owner, sharedWith, visibility, shareId: shareId ?? undefined, shareEnabled, sharePermission };
   return {
     owner,
     sharedWith,
     visibility,
+    shareId,
+    shareEnabled,
+    sharePermission,
     name: project.name,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
@@ -68,7 +77,7 @@ function toProjectDoc(project: Project, ownerFallback: string): ProjectDoc {
   };
 }
 
-/** Firestore 문서 → Project (최상위 owner/sharedWith/visibility 를 채워 넣음, 하위 호환) */
+/** Firestore 문서 → Project (최상위 owner/sharedWith/visibility/share* 를 채워 넣음, 하위 호환) */
 function hydrateProject(raw: ProjectDoc): Project {
   const p = raw.data;
   return {
@@ -76,6 +85,9 @@ function hydrateProject(raw: ProjectDoc): Project {
     owner: p.owner ?? raw.owner,
     sharedWith: p.sharedWith ?? raw.sharedWith ?? [],
     visibility: p.visibility ?? raw.visibility ?? getVisibility(p),
+    shareId: p.shareId ?? raw.shareId ?? undefined,
+    shareEnabled: p.shareEnabled ?? raw.shareEnabled ?? false,
+    sharePermission: p.sharePermission ?? raw.sharePermission ?? 'view',
   };
 }
 
@@ -146,12 +158,41 @@ export class FirestoreStorageProvider implements StorageProvider {
     await this.cache.saveProject(project); // 즉시 캐시 (속도/오프라인)
     const { db, uid } = await this.ctx();
     await setDoc(doc(db, 'projects', project.id), toProjectDoc(project, uid));
+    // 공유 링크 조회용 shares/{shareId} 문서 동기화 (인덱스 없이 getDoc 으로 해석 가능)
+    if (project.shareId) {
+      try {
+        if (project.shareEnabled) {
+          await setDoc(doc(db, 'shares', project.shareId), { projectId: project.id, updatedAt: Date.now() });
+        } else {
+          await deleteDoc(doc(db, 'shares', project.shareId));
+        }
+      } catch {
+        /* 공유 링크 동기화 실패는 저장 자체를 막지 않음 */
+      }
+    }
   }
 
   async deleteProject(id: string): Promise<void> {
     await this.cache.deleteProject(id);
     const { db } = await getFirebase();
     await deleteDoc(doc(db, 'projects', id));
+  }
+
+  async getProjectByShareId(shareId: string): Promise<Project | null> {
+    try {
+      const { db } = await getFirebase();
+      const shareSnap = await getDoc(doc(db, 'shares', shareId));
+      if (!shareSnap.exists()) return this.cache.getProjectByShareId(shareId);
+      const projectId = shareSnap.data().projectId as string;
+      const pd = await getDoc(doc(db, 'projects', projectId));
+      if (!pd.exists()) return null;
+      const p = hydrateProject(pd.data() as ProjectDoc);
+      if (!p.shareEnabled) return null; // 링크 비활성화됨
+      await this.cache.saveProject(p);
+      return p;
+    } catch {
+      return this.cache.getProjectByShareId(shareId);
+    }
   }
 
   // ---------- Fixture 라이브러리 (uid 단위) ----------
