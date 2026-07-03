@@ -18,6 +18,8 @@ export interface ExportInput {
   backgrounds: PlacedImage[];
   showFixtureNames: boolean;
   fixturesById: Map<string, FixtureDef>;
+  /** 평면도 보기 회전(deg). 현재 화면 기준 출력용 (v0.8.3) */
+  viewRotationDeg?: number;
 }
 
 function formatDate(ms: number): string {
@@ -28,10 +30,10 @@ function formatDate(ms: number): string {
   });
 }
 
-/** 1. PNG 저장 — 부스 전체 도면 */
+/** 1. PNG 저장 — 부스 전체 도면 (보기 회전 반영 = 현재 화면 기준) */
 export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
   const imageEls = await preloadImages([...input.backgrounds, ...input.images].map((i) => i.srcDataUrl));
-  const url = createBoothDrawingDataURL(
+  const base = createBoothDrawingDataURL(
     input.project.boothConfig,
     input.placed,
     input.texts,
@@ -42,6 +44,7 @@ export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
     input.fixturesById,
     input.showFixtureNames,
   );
+  const url = await rotateDataUrl(base, input.viewRotationDeg ?? 0);
   downloadDataURL(url, `${buildBaseName(input.project.name, input.layoutName)}_layout.png`);
 }
 
@@ -52,6 +55,27 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = reject;
     img.src = src;
   });
+}
+
+/** 이미지 dataURL 을 deg 만큼 회전한 새 dataURL 로 (현재 화면 기준 출력). 0°면 원본 반환 */
+async function rotateDataUrl(url: string, deg: number): Promise<string> {
+  if (deg % 360 === 0) return url;
+  const img = await loadImage(url);
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  const bw = Math.ceil(img.width * cos + img.height * sin);
+  const bh = Math.ceil(img.width * sin + img.height * cos);
+  const canvas = document.createElement('canvas');
+  canvas.width = bw;
+  canvas.height = bh;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, bw, bh);
+  ctx.translate(bw / 2, bh / 2);
+  ctx.rotate(rad);
+  ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  return canvas.toDataURL('image/png');
 }
 
 /**
@@ -117,7 +141,10 @@ async function buildReportDataURL(input: ExportInput): Promise<string> {
 
   const imageEls = await preloadImages([...input.backgrounds, ...input.images].map((i) => i.srcDataUrl));
   const boothImg = await loadImage(
-    createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2 }),
+    await rotateDataUrl(
+      createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2 }),
+      input.viewRotationDeg ?? 0,
+    ),
   );
   // 박스 안에 비율 유지하여 맞춤
   const boxRatio = drawBoxW / drawBoxH;

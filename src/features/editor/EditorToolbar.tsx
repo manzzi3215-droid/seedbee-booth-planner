@@ -145,6 +145,7 @@ export default function EditorToolbar() {
       backgrounds: planBackgrounds,
       showFixtureNames,
       fixturesById,
+      viewRotationDeg,
     };
   };
 

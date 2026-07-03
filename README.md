@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.2 - Project Sharing for Team Access**
+> **v0.8.3 - Share Links & Plan View Rotation**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -189,6 +189,15 @@ src/
 
 ### Changelog
 
+**v0.8.3 — Share Links & Plan View Rotation**
+- **공유 링크:** 프로젝트별 `shareId`/`shareEnabled`/`sharePermission('view'|'edit')`. 공유 Dialog에 **이메일 공유 / 링크 공유** 탭 —
+  링크 생성/복사/비활성화 + 권한(보기만/수정 가능). `/share/:shareId` 라우트: Google 로그인 후 권한에 따라 편집/읽기전용 진입,
+  유효하지 않은 링크 안내. (링크 해석은 인덱스 없이 `shares/{shareId}` 문서로)
+- **읽기 전용 모드:** view 권한/보기 회전 시 저장·자동저장·드래그·집기 배치·요소 추가 비활성 + **"읽기 전용으로 열람 중"** 표시.
+- **평면도 보기 회전:** 툴바에 좌/우 90° · 자유 각도 입력 · 초기화. **보기 전용 변환**(Stage 레이어 회전) — **실제 좌표(mm)는 불변**.
+  회전 시 편집 잠금(0°에서만 편집), `보기 회전 N°` Chip 표시. 집기명/치수선/텍스트/이미지/SVG 배경 모두 함께 회전.
+  PNG/PDF는 **현재 화면(회전) 기준**으로 출력. 벽면/3D는 영향 없음.
+
 **v0.8.2 — Project Sharing for Team Access**
 - **프로젝트 공유:** owner uid 유지 + `sharedWith: string[]`(이메일) + `visibility: 'private' | 'shared'`.
   - 프로젝트 목록에서 **[공유]** → 이메일 추가/삭제, 공유 사용자 목록, 상태 표시(비공개/공유됨).
@@ -374,17 +383,25 @@ boothPath?: {
    service cloud.firestore {
      match /databases/{db}/documents {
        match /projects/{id} {
-         // 소유자 또는 sharedWith(이메일)에 포함된 사용자만 읽기/편집
+         // 소유자 · sharedWith(이메일) · 활성 공유링크(shareEnabled) 는 읽기 가능
          allow read: if request.auth != null
            && (resource.data.owner == request.auth.uid
-               || request.auth.token.email in resource.data.get('sharedWith', []));
+               || request.auth.token.email in resource.data.get('sharedWith', [])
+               || resource.data.get('shareEnabled', false) == true);
          allow create: if request.auth != null
            && request.resource.data.owner == request.auth.uid;
+         // 소유자 · sharedWith · (edit 권한 공유링크) 는 수정 가능
          allow update: if request.auth != null
            && (resource.data.owner == request.auth.uid
-               || request.auth.token.email in resource.data.get('sharedWith', []));
+               || request.auth.token.email in resource.data.get('sharedWith', [])
+               || (resource.data.get('shareEnabled', false) == true
+                   && resource.data.get('sharePermission', 'view') == 'edit'));
          allow delete: if request.auth != null
            && resource.data.owner == request.auth.uid;
+       }
+       // 공유 링크 해석용(shareId → projectId). 로그인 사용자면 조회 가능
+       match /shares/{shareId} {
+         allow read, write: if request.auth != null;
        }
        match /libraries/{uid} {
          allow read, write: if request.auth != null && request.auth.uid == uid;
@@ -395,8 +412,8 @@ boothPath?: {
      }
    }
    ```
-   > `resource.data.get('sharedWith', [])` 로 `sharedWith` 없는 구버전 문서도 안전하게 처리합니다.
-   > 공유 대상은 프로젝트 삭제는 불가(소유자만), 읽기·편집은 가능합니다.
+   > `.get(field, default)` 로 구버전 문서(필드 누락)도 안전하게 처리합니다.
+   > 삭제는 소유자만, 공유 대상/링크(edit)는 읽기·편집 가능. 링크(view)는 읽기만 가능합니다.
 4. **Authentication → Settings → 승인된 도메인**에 배포 도메인(및 localhost) 추가
 
 ### 3) Firestore Collection 구조
