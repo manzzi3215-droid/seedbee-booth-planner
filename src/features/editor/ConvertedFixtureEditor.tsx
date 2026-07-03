@@ -14,6 +14,7 @@ import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import type { FixtureDef, FixtureShape } from '../../types';
 import { useEditor } from './EditorContext';
 import { SHAPE_OPTIONS } from '../fixtures/shapes';
+import ColorPicker from '../colors/ColorPicker';
 
 /**
  * SVG 변환 집기(배치안 로컬 정의) 편집기.
@@ -132,32 +133,32 @@ export default function ConvertedFixtureEditor({ def }: { def: FixtureDef }) {
         />
       </Stack>
 
-      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-        <TextField
-          label="높이"
-          type="number"
-          size="small"
-          value={hStr}
-          placeholder="선택"
-          onChange={(e) => {
-            setHStr(e.target.value);
-            applyNum(e.target.value, 'heightMm');
-          }}
-          slotProps={{ input: { endAdornment: mm } }}
-          sx={{ flex: 1 }}
+      <TextField
+        label="높이"
+        type="number"
+        size="small"
+        value={hStr}
+        placeholder="선택"
+        onChange={(e) => {
+          setHStr(e.target.value);
+          applyNum(e.target.value, 'heightMm');
+        }}
+        slotProps={{ input: { endAdornment: mm } }}
+        fullWidth
+        sx={{ mb: 1 }}
+      />
+
+      {/* 색상 (고급 색상 선택기) */}
+      <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1, mb: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
+          색상
+        </Typography>
+        <ColorPicker
+          color={def.color}
+          opacity={def.opacity ?? 1}
+          onChange={(c, o) => updateLocalFixture(def.id, { color: c, opacity: o })}
         />
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <Typography variant="caption" color="text.secondary">
-            색상
-          </Typography>
-          <input
-            type="color"
-            value={def.color}
-            onChange={(e) => updateLocalFixture(def.id, { color: e.target.value })}
-            style={{ width: 34, height: 30, border: 'none', background: 'none', cursor: 'pointer' }}
-          />
-        </Stack>
-      </Stack>
+      </Box>
 
       <TextField
         label="메모"

@@ -45,6 +45,8 @@ export interface IsoBox {
   footprint: V3[]; // z=0 4점
   heightMm: number;
   color: string;
+  /** 채움 투명도 0~1 (v0.8.5) */
+  opacity: number;
   name: string;
 }
 
@@ -121,6 +123,7 @@ export function buildIsoScene(
       footprint: getFixtureCorners(p, def).map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
       heightMm: resolveFixtureHeight(def.heightMm, booth.heightMm),
       color: def.color,
+      opacity: def.opacity ?? 1,
       name: def.name,
     });
   }

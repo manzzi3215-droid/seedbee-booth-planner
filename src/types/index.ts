@@ -82,6 +82,8 @@ export interface FixtureDef {
   depthMm: number; // 바운딩 박스 세로
   heightMm?: number; // 실물 높이(선택)
   color: string;
+  /** 채움 투명도 0~1 (v0.8.5). 누락 시 1(불투명)로 취급 — 하위 호환 */
+  opacity?: number;
   memo?: string;
 
   // --- shape 별 파라미터 (해당 shape 일 때만 사용) ---

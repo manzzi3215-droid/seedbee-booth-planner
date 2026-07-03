@@ -19,6 +19,8 @@ import {
   CUSTOM_PATH_PRESETS,
   CUSTOM_PATH_VIEW,
 } from './shapes';
+import ColorPicker from '../colors/ColorPicker';
+import { fillColor, addRecentColor } from '../colors/palette';
 
 interface FixtureFormDialogProps {
   open: boolean;
@@ -70,6 +72,7 @@ export default function FixtureFormDialog({
   const [heightMm, setHeightMm] = useState('');
   const [shape, setShape] = useState<FixtureShape>('rectangle');
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [opacity, setOpacity] = useState(1);
   const [memo, setMemo] = useState('');
   const [cornerRadiusMm, setCornerRadiusMm] = useState('');
   const [svgPath, setSvgPath] = useState('');
@@ -86,6 +89,7 @@ export default function FixtureFormDialog({
     setHeightMm(fixture?.heightMm != null ? String(fixture.heightMm) : '');
     setShape(fixture?.shape ?? 'rectangle');
     setColor(fixture?.color ?? DEFAULT_COLOR);
+    setOpacity(fixture?.opacity ?? 1); // 하위 호환: 없으면 1
     setMemo(fixture?.memo ?? '');
     setCornerRadiusMm(
       fixture?.cornerRadiusMm != null ? String(fixture.cornerRadiusMm) : '',
@@ -150,6 +154,7 @@ export default function FixtureFormDialog({
         depthMm: d.value,
         heightMm: h.value,
         color,
+        opacity,
         memo: memo.trim() || undefined,
         cornerRadiusMm: shape === 'roundedRectangle' ? corner : undefined,
         svgPath: shape === 'customPath' ? svgPath.trim() : undefined,
@@ -165,6 +170,7 @@ export default function FixtureFormDialog({
     if (!res.ok || !res.result) return;
     setSaving(true);
     try {
+      addRecentColor(res.result.color); // 사용한 색상을 최근 목록에 기록
       await onSubmit(res.result);
       onClose();
     } finally {
@@ -223,34 +229,34 @@ export default function FixtureFormDialog({
             />
           </Stack>
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              select
-              label="형태"
-              value={shape}
-              onChange={(e) => setShape(e.target.value as FixtureShape)}
-              fullWidth
-            >
-              {SHAPE_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </MenuItem>
-              ))}
-            </TextField>
+          <TextField
+            select
+            label="형태"
+            value={shape}
+            onChange={(e) => setShape(e.target.value as FixtureShape)}
+            fullWidth
+          >
+            {SHAPE_OPTIONS.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </MenuItem>
+            ))}
+          </TextField>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 160 }}>
-              <TextField
-                type="color"
-                label="색상"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                sx={{ width: 90 }}
-              />
-              <Typography variant="body2" color="text.secondary">
-                {color.toUpperCase()}
-              </Typography>
-            </Box>
-          </Stack>
+          {/* 색상 (고급 색상 선택기) */}
+          <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+              색상
+            </Typography>
+            <ColorPicker
+              color={color}
+              opacity={opacity}
+              onChange={(c, o) => {
+                setColor(c);
+                setOpacity(o);
+              }}
+            />
+          </Box>
 
           {shape === 'roundedRectangle' && (
             <TextField
@@ -310,7 +316,7 @@ export default function FixtureFormDialog({
                 >
                   {svgPath.trim() && (
                     <svg viewBox={`0 0 ${CUSTOM_PATH_VIEW} ${CUSTOM_PATH_VIEW}`} width="100%" height="100%">
-                      <path d={svgPath} fill={color} stroke="rgba(0,0,0,0.35)" strokeWidth={1} />
+                      <path d={svgPath} fill={fillColor(color, opacity)} stroke="rgba(0,0,0,0.35)" strokeWidth={1} />
                     </svg>
                   )}
                 </Box>

@@ -380,12 +380,12 @@ export function renderIsoSceneToDataURL(
               const nlen = Math.hypot(nx, ny) || 1;
               const dot = Math.max(-1, Math.min(1, (nx / nlen) * Lx + (ny / nlen) * Ly));
               const face = [a, bb, { ...bb, z: box.heightMm }, { ...a, z: box.heightMm }];
-              polygon(face, shade(box.color, 0.72 + 0.18 * dot), 'rgba(0,0,0,0.28)');
+              polygon(face, shade(box.color, 0.72 + 0.18 * dot), 'rgba(0,0,0,0.28)', box.opacity);
             }
           }
         }
         // 윗면
-        polygon(top, shade(box.color, vp.top ? 1.0 : 1.1), 'rgba(0,0,0,0.28)');
+        polygon(top, shade(box.color, vp.top ? 1.0 : 1.1), 'rgba(0,0,0,0.28)', box.opacity);
       },
     });
     if (options.showNames) {

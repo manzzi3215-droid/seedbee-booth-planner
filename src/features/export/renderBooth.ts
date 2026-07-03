@@ -23,6 +23,7 @@ import {
   flattenPolygon,
 } from '../canvas/boothGeometry';
 import { CUSTOM_PATH_VIEW } from '../fixtures/shapes';
+import { fillColor } from '../colors/palette';
 
 /**
  * export 전용 부스 도면 렌더러.
@@ -333,17 +334,18 @@ function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number, sho
   const d = def.depthMm;
   const outline = 'rgba(0,0,0,0.35)';
   const common = { stroke: outline, strokeWidth: 1, strokeScaleEnabled: false };
+  const fill = fillColor(def.color, def.opacity); // opacity 반영
 
   switch (def.shape) {
     case 'rectangle':
-      group.add(new Konva.Rect({ width: w, height: d, fill: def.color, ...common }));
+      group.add(new Konva.Rect({ width: w, height: d, fill, ...common }));
       break;
     case 'roundedRectangle':
       group.add(
         new Konva.Rect({
           width: w,
           height: d,
-          fill: def.color,
+          fill,
           cornerRadius: def.cornerRadiusMm ?? 0,
           ...common,
         }),
@@ -356,7 +358,7 @@ function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number, sho
           y: d / 2,
           radiusX: w / 2,
           radiusY: d / 2,
-          fill: def.color,
+          fill,
           ...common,
         }),
       );
@@ -368,17 +370,17 @@ function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number, sho
             data: def.svgPath,
             scaleX: w / CUSTOM_PATH_VIEW,
             scaleY: d / CUSTOM_PATH_VIEW,
-            fill: def.color,
+            fill,
             ...common,
           }),
         );
       } else {
-        addPlaceholder(group, def.color, w, d);
+        addPlaceholder(group, fill, w, d);
       }
       break;
     default:
       // semicircle (및 path 없는 customPath): placeholder
-      addPlaceholder(group, def.color, w, d);
+      addPlaceholder(group, fill, w, d);
       break;
   }
 

@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.4 - Editable View Rotation**
+> **v0.8.5 - Advanced Color System**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -188,6 +188,14 @@ src/
 | 아이소메트릭 3D 미리보기 | ✅ |
 
 ### Changelog
+
+**v0.8.5 — Advanced Color System**
+- **고급 색상 선택기(집기 색상):** 브랜드 컬러 → 기본 팔레트 → 최근 사용 → HEX 입력 → Color Picker → 투명도 순으로 구성.
+  - HEX 직접 입력(자동 대문자·# 자동 추가·3자리→6자리), 잘못된 값은 "올바른 HEX 형식이 아닙니다" 안내.
+  - 브라우저 기본 `<input type=color>` 와 HEX 항상 동기화, **투명도(0~100%)** 슬라이더 → 채움을 `rgba` 로 적용.
+  - **최근 사용 색상 10개**(LocalStorage, 칩 클릭 즉시 적용), 기본/브랜드(Seedbee Blue·Green·Islo Mint 등, 확장 가능) 팔레트.
+- **데이터:** `FixtureDef.opacity` 추가(누락 시 1 로 취급 → 기존 프로젝트 자동 호환, 마이그레이션 불필요).
+- **반영 범위:** 색상·투명도가 **평면도 · 3D 아이소메트릭 · PNG/PDF** 에 동일하게 적용. Firestore/공유/자동저장 영향 없음.
 
 **v0.8.4 — Editable View Rotation**
 - **회전 상태에서도 편집 가능:** 보기 회전(90/180/270/자유 각도) 중에도 드래그·선택·스마트 스냅·복사·삭제·요소 추가가

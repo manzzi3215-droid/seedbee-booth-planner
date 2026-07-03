@@ -3,6 +3,7 @@ import type Konva from 'konva';
 import type { FixtureDef, PlacedFixture, PointMm } from '../../types';
 import { isFixtureOutOfBounds } from './fixtureGeometry';
 import { CUSTOM_PATH_VIEW } from '../fixtures/shapes';
+import { fillColor } from '../colors/palette';
 
 const SELECT_COLOR = '#2563eb';
 const WARN_COLOR = '#dc2626';
@@ -32,7 +33,8 @@ function ShapePlaceholder({ w, d, color }: { w: number; d: number; color: string
 
 /** 형태별 도형 렌더링 (mm 좌표) */
 function ShapeBody({ def }: { def: FixtureDef }) {
-  const { shape, widthMm: w, depthMm: d, color, cornerRadiusMm } = def;
+  const { shape, widthMm: w, depthMm: d, cornerRadiusMm } = def;
+  const color = fillColor(def.color, def.opacity); // opacity 반영(rgba)
 
   switch (shape) {
     case 'rectangle':
