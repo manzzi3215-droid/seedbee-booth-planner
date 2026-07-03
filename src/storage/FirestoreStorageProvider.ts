@@ -8,11 +8,11 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore';
-import type { Project, FixtureDef, Layout } from '../types';
+import type { Project, FixtureDef, Layout, ProjectVisibility } from '../types';
 import type { StorageProvider } from './StorageProvider';
 import { LocalStorageProvider } from './LocalStorageProvider';
 import { getFirebase } from '../firebase/app';
-import { getProjectLastModified } from '../utils/project';
+import { getProjectLastModified, getVisibility, normalizeEmails } from '../utils/project';
 
 /**
  * FirestoreStorageProvider
@@ -23,15 +23,21 @@ import { getProjectLastModified } from '../utils/project';
  *  - 최초 실행 시 LocalStorage 데이터를 Firestore 로 1회 마이그레이션(중복 방지)
  *
  * Firestore 구조
- *   projects/{projectId}  = { owner, name, createdAt, updatedAt, currentLayoutId, data: Project }
+ *   projects/{projectId}  = { owner, sharedWith[], visibility, name, createdAt, updatedAt,
+ *                             currentLayoutId, data: Project }
  *   libraries/{uid}       = { fixtures: FixtureDef[], updatedAt }   (전역 집기 라이브러리)
  *   users/{uid}           = { migrationCompleted: true }
+ *
+ * owner/sharedWith/visibility 는 쿼리·보안규칙을 위해 문서 최상위에 두고, data(Project) 안에도
+ * 함께 저장합니다. (읽을 때는 최상위 값을 기준으로 Project 에 채워 넣습니다.)
  */
 
 const MIGRATION_KEY = 'blp:cloudMigrated';
 
 interface ProjectDoc {
   owner: string;
+  sharedWith: string[];
+  visibility: ProjectVisibility;
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -44,14 +50,32 @@ function latestLayoutId(project: Project): string | null {
   return project.layouts.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a)).id;
 }
 
-function toProjectDoc(project: Project, owner: string): ProjectDoc {
+/** Project → Firestore 문서. owner 는 기존 소유자 유지(project.owner) 우선, 없으면 ownerFallback. */
+function toProjectDoc(project: Project, ownerFallback: string): ProjectDoc {
+  const owner = project.owner ?? ownerFallback;
+  const sharedWith = normalizeEmails(project.sharedWith ?? []);
+  const visibility: ProjectVisibility = project.visibility ?? (sharedWith.length ? 'shared' : 'private');
+  const data: Project = { ...project, owner, sharedWith, visibility };
   return {
     owner,
+    sharedWith,
+    visibility,
     name: project.name,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     currentLayoutId: latestLayoutId(project),
-    data: project,
+    data,
+  };
+}
+
+/** Firestore 문서 → Project (최상위 owner/sharedWith/visibility 를 채워 넣음, 하위 호환) */
+function hydrateProject(raw: ProjectDoc): Project {
+  const p = raw.data;
+  return {
+    ...p,
+    owner: p.owner ?? raw.owner,
+    sharedWith: p.sharedWith ?? raw.sharedWith ?? [],
+    visibility: p.visibility ?? raw.visibility ?? getVisibility(p),
   };
 }
 
@@ -59,21 +83,42 @@ export class FirestoreStorageProvider implements StorageProvider {
   private cache = new LocalStorageProvider();
   private migrated = false;
 
-  /** 현재 로그인 사용자 기준(익명 또는 Google)의 db + uid */
-  private async ctx(): Promise<{ db: import('firebase/firestore').Firestore; uid: string }> {
+  /** 현재 로그인 사용자 기준(익명 또는 Google)의 db + uid + email */
+  private async ctx(): Promise<{ db: import('firebase/firestore').Firestore; uid: string; email: string | null }> {
     const { db, auth, uid } = await getFirebase();
-    return { db, uid: auth.currentUser?.uid ?? uid };
+    return {
+      db,
+      uid: auth.currentUser?.uid ?? uid,
+      email: auth.currentUser?.email?.toLowerCase() ?? null,
+    };
   }
 
   // ---------- Project ----------
   async getProjects(): Promise<Project[]> {
     try {
-      const { db, uid } = await this.ctx();
+      const { db, uid, email } = await this.ctx();
       await this.migrateIfNeeded();
-      const snap = await getDocs(query(collection(db, 'projects'), where('owner', '==', uid)));
-      const projects = snap.docs
-        .map((d) => (d.data() as ProjectDoc).data)
-        .filter((p): p is Project => Boolean(p));
+
+      // 1) 내가 owner 인 프로젝트
+      const byId = new Map<string, Project>();
+      const ownerSnap = await getDocs(query(collection(db, 'projects'), where('owner', '==', uid)));
+      for (const d of ownerSnap.docs) byId.set(d.id, hydrateProject(d.data() as ProjectDoc));
+
+      // 2) 내 이메일이 sharedWith 에 포함된(공유받은) 프로젝트 (규칙 미설정 시 실패해도 무시)
+      if (email) {
+        try {
+          const sharedSnap = await getDocs(
+            query(collection(db, 'projects'), where('sharedWith', 'array-contains', email)),
+          );
+          for (const d of sharedSnap.docs) {
+            if (!byId.has(d.id)) byId.set(d.id, hydrateProject(d.data() as ProjectDoc));
+          }
+        } catch {
+          /* 공유 규칙 미적용 등 — 내 프로젝트는 정상 표시 */
+        }
+      }
+
+      const projects = [...byId.values()];
       for (const p of projects) await this.cache.saveProject(p);
       return projects.sort((a, b) => getProjectLastModified(b) - getProjectLastModified(a));
     } catch {
@@ -87,7 +132,7 @@ export class FirestoreStorageProvider implements StorageProvider {
       await this.migrateIfNeeded();
       const d = await getDoc(doc(db, 'projects', id));
       if (d.exists()) {
-        const p = (d.data() as ProjectDoc).data;
+        const p = hydrateProject(d.data() as ProjectDoc);
         await this.cache.saveProject(p);
         return p;
       }

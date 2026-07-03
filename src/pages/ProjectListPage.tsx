@@ -11,12 +11,17 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import ShareRoundedIcon from '@mui/icons-material/ShareRounded';
+import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
+import Tooltip from '@mui/material/Tooltip';
 import { useNavigate } from 'react-router-dom';
 import LayersRoundedIcon from '@mui/icons-material/LayersRounded';
 import type { Project } from '../types';
 import { storage } from '../storage';
 import { getBoothSizeLabel, getFloorLabel } from '../constants/booth';
-import { getProjectLastModified } from '../utils/project';
+import { getProjectLastModified, getSharedWith, getVisibility } from '../utils/project';
+import { useAuthUser } from '../firebase/useAuthUser';
+import ShareProjectDialog from '../features/projects/ShareProjectDialog';
 
 /** epoch millis 를 YYYY.MM.DD 로 */
 function formatDate(ms: number): string {
@@ -33,8 +38,10 @@ function formatDate(ms: number): string {
  */
 export default function ProjectListPage() {
   const navigate = useNavigate();
+  const { user } = useAuthUser();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shareTarget, setShareTarget] = useState<Project | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -131,6 +138,17 @@ export default function ProjectListPage() {
                     icon={<LayersRoundedIcon />}
                     label={`배치안 ${p.layouts.length}개`}
                   />
+                  {getVisibility(p) === 'shared' ? (
+                    <Chip
+                      size="small"
+                      color="success"
+                      variant="outlined"
+                      icon={<GroupRoundedIcon />}
+                      label={`공유됨 · ${getSharedWith(p).length}명`}
+                    />
+                  ) : (
+                    <Chip size="small" variant="outlined" label="비공개" />
+                  )}
                   <Typography variant="caption" color="text.secondary">
                     수정 {formatDate(getProjectLastModified(p))}
                   </Typography>
@@ -140,22 +158,36 @@ export default function ProjectListPage() {
               <Button
                 variant="outlined"
                 size="small"
+                startIcon={<ShareRoundedIcon />}
+                onClick={() => setShareTarget(p)}
+              >
+                공유
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
                 startIcon={<EditRoundedIcon />}
                 onClick={() => navigate(`/projects/${p.id}/editor`)}
               >
                 편집하기
               </Button>
-              <IconButton
-                aria-label="삭제"
-                color="error"
-                onClick={() => handleDelete(p)}
-              >
-                <DeleteOutlineRoundedIcon />
-              </IconButton>
+              <Tooltip title="삭제">
+                <IconButton aria-label="삭제" color="error" onClick={() => handleDelete(p)}>
+                  <DeleteOutlineRoundedIcon />
+                </IconButton>
+              </Tooltip>
             </Paper>
           ))}
         </Stack>
       )}
+
+      <ShareProjectDialog
+        open={shareTarget !== null}
+        project={shareTarget}
+        currentEmail={user?.email ?? null}
+        onClose={() => setShareTarget(null)}
+        onSaved={load}
+      />
     </Box>
   );
 }

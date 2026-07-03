@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.1 - Google Sign-in for Cross-device Sync**
+> **v0.8.2 - Project Sharing for Team Access**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -189,6 +189,14 @@ src/
 
 ### Changelog
 
+**v0.8.2 — Project Sharing for Team Access**
+- **프로젝트 공유:** owner uid 유지 + `sharedWith: string[]`(이메일) + `visibility: 'private' | 'shared'`.
+  - 프로젝트 목록에서 **[공유]** → 이메일 추가/삭제, 공유 사용자 목록, 상태 표시(비공개/공유됨).
+  - **목록 조회:** 내가 owner 인 프로젝트 **또는** 내 Google 이메일이 `sharedWith` 에 포함된 프로젝트를 함께 표시.
+  - **권한:** 공유 대상은 **읽기+편집** 가능(저장 시 원래 owner 유지). 읽기전용/에디터 구분은 TODO.
+  - **하위 호환:** `sharedWith` 없으면 `[]`, `visibility` 없으면 `private`.
+  - ⚠️ 실제 공유 접근을 위해 **Firestore 보안 규칙 업데이트 필요**(아래 "클라우드 저장 설정" 참고).
+
 **v0.8.1 — Google Sign-in for Cross-device Sync**
 - **Google 로그인 추가(익명 유지):** 헤더에 로그인 상태 표시 + `[Google로 로그인]`/`[로그아웃]`.
   - 익명 사용자가 Google 로그인 시 **계정 연결(link)** → uid 유지(기존 프로젝트/집기 그대로 소유).
@@ -359,16 +367,23 @@ boothPath?: {
 1. **Authentication → Sign-in method → 익명(Anonymous)** 사용 설정
    - 그리고 **Google** 제공업체도 사용 설정(v0.8.1 크로스 디바이스 로그인) — 지원 이메일 지정
 2. **Firestore Database → 데이터베이스 만들기**
-3. **Firestore 보안 규칙**(권장): 소유자만 접근
+3. **Firestore 보안 규칙**: 소유자 + 공유 대상(v0.8.2) 접근 허용
 
    ```
    rules_version = '2';
    service cloud.firestore {
      match /databases/{db}/documents {
        match /projects/{id} {
-         allow read, write: if request.auth != null
+         // 소유자 또는 sharedWith(이메일)에 포함된 사용자만 읽기/편집
+         allow read: if request.auth != null
+           && (resource.data.owner == request.auth.uid
+               || request.auth.token.email in resource.data.get('sharedWith', []));
+         allow create: if request.auth != null
            && request.resource.data.owner == request.auth.uid;
-         allow read, delete: if request.auth != null
+         allow update: if request.auth != null
+           && (resource.data.owner == request.auth.uid
+               || request.auth.token.email in resource.data.get('sharedWith', []));
+         allow delete: if request.auth != null
            && resource.data.owner == request.auth.uid;
        }
        match /libraries/{uid} {
@@ -380,6 +395,8 @@ boothPath?: {
      }
    }
    ```
+   > `resource.data.get('sharedWith', [])` 로 `sharedWith` 없는 구버전 문서도 안전하게 처리합니다.
+   > 공유 대상은 프로젝트 삭제는 불가(소유자만), 읽기·편집은 가능합니다.
 4. **Authentication → Settings → 승인된 도메인**에 배포 도메인(및 localhost) 추가
 
 ### 3) Firestore Collection 구조

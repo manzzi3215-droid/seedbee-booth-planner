@@ -276,6 +276,9 @@ export interface Layout {
   updatedAt: number;
 }
 
+/** 프로젝트 공개 범위 (v0.8.2) */
+export type ProjectVisibility = 'private' | 'shared';
+
 /**
  * 프로젝트 = 하나의 행사(예: "메가쇼")
  * layouts 로 여러 배치안 버전을 보관합니다.
@@ -285,4 +288,12 @@ export interface Project extends BaseEntity {
   name: string;
   boothConfig: BoothConfig;
   layouts: Layout[];
+
+  // --- 공유 (v0.8.2). 누락 시 owner 전용/비공개로 취급(하위 호환) ---
+  /** Firestore 소유자 uid (읽을 때 채워짐) */
+  owner?: string;
+  /** 공유 대상 이메일(소문자). 이 이메일 사용자는 읽기+편집 가능 */
+  sharedWith?: string[];
+  /** 공개 범위: private(나만) | shared(공유됨) */
+  visibility?: ProjectVisibility;
 }
