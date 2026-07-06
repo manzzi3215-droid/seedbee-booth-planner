@@ -236,6 +236,24 @@ function FixtureInfoPanel() {
         </Button>
       </Stack>
 
+      {/* 빠른 회전 각도 (Rotate Gizmo) — v0.9.0 */}
+      <Stack direction="row" spacing={0.5} sx={{ mb: 1, flexWrap: 'wrap', gap: 0.5 }}>
+        {[0, 45, 90, 135, 180].map((deg) => (
+          <Button
+            key={deg}
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setSelectedRotation(deg);
+              setRotStr(String(deg));
+            }}
+            sx={{ minWidth: 0, px: 1, py: 0.25 }}
+          >
+            {deg}°
+          </Button>
+        ))}
+      </Stack>
+
       <Divider sx={{ my: 1.5 }} />
 
       <Stack spacing={1}>

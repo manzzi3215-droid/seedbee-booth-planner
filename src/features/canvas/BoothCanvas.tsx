@@ -65,6 +65,8 @@ interface BoothCanvasProps {
   /** 디자인 에셋 (텍스처 참조) */
   designAssets?: DesignAsset[];
   selectedFixtureId: string | null;
+  /** 다중 선택된 집기 id (v0.9.0) — 있으면 이 목록으로 하이라이트 */
+  selectedFixtureIds?: string[];
   selectedTextId: string | null;
   selectedDimensionId: string | null;
   selectedImageId: string | null;
@@ -83,7 +85,7 @@ interface BoothCanvasProps {
   onBoothShapeChange?: (points: PointMm[]) => void;
   /** 외곽 편집 종료(ESC) */
   onExitShapeEdit?: () => void;
-  onSelect: (id: string | null) => void;
+  onSelect: (id: string | null, additive?: boolean) => void;
   onMove: (id: string, xMm: number, yMm: number, snapToGrid?: boolean) => void;
   onSelectText: (id: string | null) => void;
   onMoveText: (id: string, xMm: number, yMm: number) => void;
@@ -114,6 +116,7 @@ export default function BoothCanvas({
   showFixtureNames,
   designAssets,
   selectedFixtureId,
+  selectedFixtureIds,
   selectedTextId,
   selectedDimensionId,
   selectedImageId,
@@ -482,7 +485,7 @@ export default function BoothCanvas({
                   key={p.id}
                   placed={p}
                   def={def}
-                  selected={p.id === selectedFixtureId}
+                  selected={selectedFixtureIds?.includes(p.id) ?? p.id === selectedFixtureId}
                   boothPolygon={polygon}
                   scale={viewport.scale}
                   showName={showFixtureNames}

@@ -111,7 +111,8 @@ interface FixtureNodeProps {
   /** 디자인 텍스처(2D) — 평면도 면 매핑 + 로드된 이미지 */
   designMapping?: FaceMapping | null;
   designImage?: HTMLImageElement;
-  onSelect: (id: string) => void;
+  /** additive=true 면 다중 선택 토글 (Ctrl/Shift/Cmd) — v0.9.0 */
+  onSelect: (id: string, additive: boolean) => void;
   /** 드래그 중 위치 보정(스마트 스냅). 보정된 좌표(mm) 반환 */
   onDragMove: (id: string, xMm: number, yMm: number, shiftKey: boolean) => { xMm: number; yMm: number };
   /** 드래그 종료. shiftKey(스마트 스냅) 여부 전달 */
@@ -201,15 +202,19 @@ export default function FixtureNode({
     onDragEnd(placed.id, node.x(), node.y(), e.evt.shiftKey);
   };
 
+  // Ctrl/Cmd/Shift 클릭 = 다중 선택 토글
+  const isAdditive = (evt: MouseEvent | TouchEvent) =>
+    'ctrlKey' in evt ? evt.ctrlKey || evt.metaKey || evt.shiftKey : false;
+
   return (
     <Group
       x={placed.xMm}
       y={placed.yMm}
       rotation={placed.rotationDeg}
       draggable
-      onMouseDown={() => onSelect(placed.id)}
-      onTouchStart={() => onSelect(placed.id)}
-      onDragStart={() => onSelect(placed.id)}
+      onMouseDown={(e) => onSelect(placed.id, isAdditive(e.evt))}
+      onTouchStart={() => onSelect(placed.id, false)}
+      onDragStart={() => onSelect(placed.id, false)}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
     >

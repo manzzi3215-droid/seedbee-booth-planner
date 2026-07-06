@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.9 - Print Production Workspace**
+> **v0.9.0 - Professional CAD Productivity**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -187,10 +187,28 @@ src/
 | 이미지/포스터 삽입 | ✅ |
 | 아이소메트릭 3D 미리보기 | ✅ |
 | 디자인 매핑(집기 텍스처) | ✅ |
-| Presentation Mode(고객 시안 검토) | ✅ |
 | Print Production Workspace(출력물 제작) | ✅ |
+| Undo/Redo · 다중선택 · 정렬/분배/미러/배열 | ✅ |
 
 ### Changelog
+
+**v0.9.0 — Professional CAD Productivity (설계 속도 극대화)**
+- **Presentation Mode 제거:** 툴바 버튼·오버레이·PDF·`?present=1` 라우팅·관련 코드 삭제(기존 기능 영향 없음).
+- **Undo / Redo:** `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y`, 최대 200 History. **액션 단위**(배열 복사·미러·정렬 각각 1회 Undo).
+  편집 상태 스냅샷을 debounce 기록, 자동/클라우드 저장과 독립(충돌 없음). 부스 외곽(Shape) 편집도 포함.
+- **다중 선택:** Ctrl/Cmd/Shift + 클릭으로 집기 다중 선택 토글. 선택 시 캔버스 상단 **Floating Multi‑Action Toolbar** 표시.
+- **정렬(Align):** Left · Right · Top · Bottom · 가로중앙 · 세로중앙 (회전 반영 AABB 기준).
+- **분배(Distribute):** 가로 · 세로 균등 간격.
+- **배열 복사(Array):** Linear(수량·가로/세로 간격) · Circular(수량·전체 각도, 그룹 중심 회전).
+- **미러(Mirror):** 좌우 · 상하 반사 + 미러 복사(그룹 중심 기준 배치 반사).
+- **빠른 복제/삭제:** 다중 선택 Duplicate(`Ctrl+D`) · Delete.
+- **Rotate 프리셋:** 집기 속성에서 0/45/90/135/180° 즉시 회전 + 직접 입력.
+- **성능:** History 200개 상한, 스냅샷 참조 동일성 비교로 경량화.
+- **유지:** Design Mapping · Print Production · Cloud/Auto Save · Shape Editor · View Rotation · 3D Preview ·
+  Wall View · Share Links · SVG Import · Image Background · Advanced Color 모두 정상.
+- 다음 단계(이번 버전 미포함, 로드맵): Smart Measure · Figma급 Smart Guide · Offset Tool · SketchUp Component/Instance ·
+  Layer Panel · Outliner · Marquee 영역 선택 · Snap(교차점/가이드) 확장 · Rotate Gizmo 핸들. 위 도구들이
+  안정적으로 얹히도록 다중선택·히스토리·액션 파이프라인을 기반으로 구축했습니다.
 
 **v0.8.9 — Print Production Workspace (출력물 제작)**
 - **툴바 [출력물 제작]:** 편집 화면이 아니라 실제 출력업체 전달용 PDF 를 만드는 작업 공간.

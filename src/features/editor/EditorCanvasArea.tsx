@@ -16,15 +16,15 @@ import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import KeyboardRoundedIcon from '@mui/icons-material/KeyboardRounded';
 import ViewSidebarRoundedIcon from '@mui/icons-material/ViewSidebarRounded';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { WallSide } from '../../types';
 import { useEditor } from './EditorContext';
 import BoothCanvas from '../canvas/BoothCanvas';
 import EditorToolbar from './EditorToolbar';
 import WallCanvas from '../wall/WallCanvas';
-import PresentationMode from '../presentation/PresentationMode';
 import PrintWorkspace from '../print/PrintWorkspace';
+import MultiActionToolbar from '../tools/MultiActionToolbar';
 import { getBoothSizeLabel, getFloorLabel, hasBoothHeight } from '../../constants/booth';
 import {
   VIEW_MODE_OPTIONS,
@@ -52,6 +52,7 @@ export default function EditorCanvasArea() {
     designAssets,
     fixturesById,
     selectedFixtureId,
+    selectedFixtureIds,
     selectedTextId,
     selectedDimensionId,
     selectedImageId,
@@ -90,15 +91,7 @@ export default function EditorCanvasArea() {
   } = useEditor();
 
   const [wallMenuAnchor, setWallMenuAnchor] = useState<null | HTMLElement>(null);
-  const [presentationOpen, setPresentationOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
-
-  // 공유 Presentation 링크(?present=1)로 진입 시 프로젝트 로드 후 자동 열기
-  useEffect(() => {
-    if (!project) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('present') === '1') setPresentationOpen(true);
-  }, [project]);
 
   if (projectLoading) {
     return (
@@ -204,10 +197,7 @@ export default function EditorCanvasArea() {
             <Typography variant="caption">벽면에 텍스트·치수선·이미지 추가 · Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동</Typography>
           </Stack>
 
-          <EditorToolbar
-            onOpenPresentation={() => setPresentationOpen(true)}
-            onOpenPrint={() => setPrintOpen(true)}
-          />
+          <EditorToolbar onOpenPrint={() => setPrintOpen(true)} />
 
           <Box sx={{ flex: 1, minHeight: 320 }}>
             <WallCanvas
@@ -253,12 +243,10 @@ export default function EditorCanvasArea() {
             </Typography>
           </Stack>
 
-          <EditorToolbar
-            onOpenPresentation={() => setPresentationOpen(true)}
-            onOpenPrint={() => setPrintOpen(true)}
-          />
+          <EditorToolbar onOpenPrint={() => setPrintOpen(true)} />
 
-          <Box sx={{ flex: 1, minHeight: 320 }}>
+          <Box sx={{ flex: 1, minHeight: 320, position: 'relative' }}>
+            <MultiActionToolbar />
             <BoothCanvas
               booth={boothConfig}
               placed={placed}
@@ -270,6 +258,7 @@ export default function EditorCanvasArea() {
               showFixtureNames={showFixtureNames}
               designAssets={designAssets}
               selectedFixtureId={selectedFixtureId}
+              selectedFixtureIds={selectedFixtureIds}
               selectedTextId={selectedTextId}
               selectedDimensionId={selectedDimensionId}
               selectedImageId={selectedImageId}
@@ -297,7 +286,6 @@ export default function EditorCanvasArea() {
         </>
       )}
     </Box>
-    <PresentationMode open={presentationOpen} onClose={() => setPresentationOpen(false)} />
     <PrintWorkspace
       open={printOpen}
       onClose={() => setPrintOpen(false)}

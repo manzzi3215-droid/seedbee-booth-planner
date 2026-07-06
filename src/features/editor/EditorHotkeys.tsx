@@ -18,10 +18,16 @@ const NUDGE_MM_SHIFT = 500;
 export default function EditorHotkeys() {
   const {
     selectedItem,
+    selectedFixtureIds,
     deleteSelected,
+    deleteFixtures,
+    duplicateFixtures,
     rotateSelected,
     copySelected,
     nudgeSelected,
+    undo,
+    redo,
+    canEdit,
   } = useEditor();
 
   useEffect(() => {
@@ -32,8 +38,23 @@ export default function EditorHotkeys() {
       return tag === 'INPUT' || tag === 'TEXTAREA' || node.isContentEditable;
     };
 
+    const multi = selectedFixtureIds.length > 1;
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
+
+      // Undo/Redo (선택 없어도 동작). 읽기전용에서는 비활성.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (canEdit) (e.shiftKey ? redo : undo)();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        if (canEdit) redo();
+        return;
+      }
+
       if (!selectedItem) return;
 
       const step = e.shiftKey ? NUDGE_MM_SHIFT : NUDGE_MM;
@@ -42,7 +63,8 @@ export default function EditorHotkeys() {
         case 'Delete':
         case 'Backspace':
           e.preventDefault();
-          deleteSelected();
+          if (multi) deleteFixtures();
+          else deleteSelected();
           break;
         case 'r':
         case 'R':
@@ -53,7 +75,8 @@ export default function EditorHotkeys() {
         case 'D':
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            copySelected();
+            if (multi) duplicateFixtures();
+            else copySelected();
           }
           break;
         case 'ArrowUp':
@@ -77,7 +100,7 @@ export default function EditorHotkeys() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedItem, deleteSelected, rotateSelected, copySelected, nudgeSelected]);
+  }, [selectedItem, selectedFixtureIds, deleteSelected, deleteFixtures, duplicateFixtures, rotateSelected, copySelected, nudgeSelected, undo, redo, canEdit]);
 
   return null;
 }

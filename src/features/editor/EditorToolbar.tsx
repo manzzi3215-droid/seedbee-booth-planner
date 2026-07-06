@@ -30,8 +30,9 @@ import StraightenRoundedIcon from '@mui/icons-material/StraightenRounded';
 import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import WallpaperRoundedIcon from '@mui/icons-material/WallpaperRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
-import SlideshowRoundedIcon from '@mui/icons-material/SlideshowRounded';
 import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
+import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
+import RedoRoundedIcon from '@mui/icons-material/RedoRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
@@ -70,9 +71,8 @@ import { hasBoothHeight } from '../../constants/booth';
  *  - [다른 이름으로 저장]: 새 배치안으로 저장
  */
 export default function EditorToolbar({
-  onOpenPresentation,
   onOpenPrint,
-}: { onOpenPresentation?: () => void; onOpenPrint?: () => void } = {}) {
+}: { onOpenPrint?: () => void } = {}) {
   const {
     project,
     placed,
@@ -111,6 +111,10 @@ export default function EditorToolbar({
     setViewRotationDeg,
     shapeEditMode,
     setShapeEditMode,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useEditor();
 
   // 부스 넓이(m²) + 외곽 밖 집기 경고 (실시간)
@@ -507,6 +511,23 @@ export default function EditorToolbar({
         다른 이름으로 저장
       </Button>
 
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <Tooltip title="실행 취소 (Ctrl+Z)">
+        <span>
+          <IconButton size="small" onClick={undo} disabled={!canUndo || readOnly} aria-label="실행 취소">
+            <UndoRoundedIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="다시 실행 (Ctrl+Shift+Z / Ctrl+Y)">
+        <span>
+          <IconButton size="small" onClick={redo} disabled={!canRedo || readOnly} aria-label="다시 실행">
+            <RedoRoundedIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+
       {/* 보기 회전 (평면도 전용, 보기 전용 변환) */}
       {viewMode === 'plan' && (
         <>
@@ -707,21 +728,6 @@ export default function EditorToolbar({
             disabled={!project || !hasBoothHeight(project.boothConfig)}
           >
             3D 미리보기
-          </Button>
-        </span>
-      </Tooltip>
-
-      <Tooltip title="Presentation Mode — 고객 시안 검토(편집 UI 숨김)">
-        <span>
-          <Button
-            variant="contained"
-            size="small"
-            color="primary"
-            startIcon={<SlideshowRoundedIcon />}
-            onClick={() => onOpenPresentation?.()}
-            disabled={!project}
-          >
-            Presentation
           </Button>
         </span>
       </Tooltip>

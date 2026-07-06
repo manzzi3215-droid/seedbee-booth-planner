@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
+  BoothConfig,
   DesignAsset,
   DesignMapping,
   FixtureDef,
@@ -28,6 +29,7 @@ import { generateId } from '../../utils/id';
 import { useFixtures } from '../fixtures/useFixtures';
 import { snapMmToGrid } from '../canvas/coords';
 import { DEFAULT_GRID_SIZE_MM } from '../canvas/constants';
+import { computeFixtureAABB } from '../canvas/fixtureGeometry';
 import { convertSvgElement } from '../svg/SvgConverter';
 import {
   DEFAULT_TEXT_CONTENT,
@@ -65,6 +67,20 @@ export type SelectedItem =
   | { scope: 'plan'; type: ItemType | 'background' | 'svg'; id: string }
   | { scope: 'wall'; wall: WallSide; type: 'text' | 'dimension' | 'image'; id: string }
   | null;
+
+/** Undo/Redo 스냅샷 (배치안 편집 상태 전체 + 부스 외곽) — v0.9.0 */
+interface HistorySnap {
+  placed: PlacedFixture[];
+  texts: PlacedText[];
+  dimensions: PlacedDimension[];
+  planImages: PlacedImage[];
+  planBackgrounds: PlacedImage[];
+  localFixtures: FixtureDef[];
+  designAssets: DesignAsset[];
+  svgDocuments: SvgDocument[];
+  wallItems: WallItems;
+  boothConfig: BoothConfig | null;
+}
 
 /** 이미지 추가 시 필요한 최소 정보 (파일 로드 후 툴바에서 계산) */
 export interface NewImageInput {
@@ -170,7 +186,7 @@ interface EditorContextValue {
 
   // 집기 액션 (plan 전용)
   place: (def: FixtureDef) => void;
-  select: (id: string | null) => void;
+  select: (id: string | null, additive?: boolean) => void;
   move: (id: string, xMm: number, yMm: number, snapToGrid?: boolean) => void;
   setSelectedPosition: (xMm: number, yMm: number) => void;
   setSelectedRotation: (deg: number) => void;
@@ -227,6 +243,45 @@ interface EditorContextValue {
   copySelected: () => void;
   deleteSelected: () => void;
   nudgeSelected: (dxMm: number, dyMm: number) => void;
+
+  // ---------- CAD 생산성 도구 (v0.9.0) ----------
+  /** Undo/Redo */
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+
+  /** 다중 선택된 집기 id 목록 (plan 스코프) */
+  selectedFixtureIds: string[];
+  /** 집기 선택 (additive=true 면 다중 선택 토글) */
+  selectFixture: (id: string | null, additive?: boolean) => void;
+  /** 다중 선택 정렬 */
+  alignFixtures: (mode: AlignMode) => void;
+  /** 다중 선택 균등 분배 */
+  distributeFixtures: (axis: 'h' | 'v') => void;
+  /** 선택 미러 (copy=true 면 복제) */
+  mirrorFixtures: (axis: 'h' | 'v', copy: boolean) => void;
+  /** 배열 복사 (Linear/Circular) */
+  arrayFixtures: (opts: ArrayOptions) => void;
+  /** 다중 선택 복제 */
+  duplicateFixtures: () => void;
+  /** 다중 선택 삭제 */
+  deleteFixtures: () => void;
+}
+
+/** 정렬 모드 */
+export type AlignMode = 'left' | 'right' | 'top' | 'bottom' | 'centerH' | 'centerV';
+
+/** 배열 복사 옵션 */
+export interface ArrayOptions {
+  kind: 'linear' | 'circular';
+  count: number;
+  // linear
+  spacingXMm?: number;
+  spacingYMm?: number;
+  // circular
+  radiusMm?: number;
+  totalAngleDeg?: number;
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null);
@@ -256,6 +311,32 @@ function cloneWallItems(w: WallItems): WallItems {
     };
   }
   return out;
+}
+
+/** 점 (x,y) 를 중심 (cx,cy) 기준 deg 만큼 회전 (v0.9.0 배열 복사) */
+function rotatePointDeg(x: number, y: number, cx: number, cy: number, deg: number): { x: number; y: number } {
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = x - cx;
+  const dy = y - cy;
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+}
+
+/** 히스토리 스냅샷 동일성 — 불변 업데이트 전제, 참조 동일성으로 빠르게 비교 (v0.9.0) */
+function sameHistorySnap(a: HistorySnap, b: HistorySnap): boolean {
+  return (
+    a.placed === b.placed &&
+    a.texts === b.texts &&
+    a.dimensions === b.dimensions &&
+    a.planImages === b.planImages &&
+    a.planBackgrounds === b.planBackgrounds &&
+    a.localFixtures === b.localFixtures &&
+    a.designAssets === b.designAssets &&
+    a.svgDocuments === b.svgDocuments &&
+    a.wallItems === b.wallItems &&
+    a.boothConfig === b.boothConfig
+  );
 }
 
 // 치수선 중심 기준 회전
@@ -301,6 +382,7 @@ export function EditorProvider({
   const [svgDocuments, setSvgDocuments] = useState<SvgDocument[]>([]);
   const [wallItems, setWallItems] = useState<WallItems>(emptyWallItems());
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
+  const [selectedFixtureIds, setSelectedFixtureIds] = useState<string[]>([]); // 다중 선택 (v0.9.0)
   const [selectedSvgElementId, setSelectedSvgElementId] = useState<string | null>(null);
   const [gridSizeMm] = useState(DEFAULT_GRID_SIZE_MM);
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
@@ -343,11 +425,87 @@ export function EditorProvider({
       setSelectedItem(null);
       setSelectedSvgElementId(null);
       setProjectLoading(false);
+      histResetPending.current = true; // 새 프로젝트 로드 시 히스토리 초기화
     })();
     return () => {
       active = false;
     };
   }, [projectId]);
+
+  // ---------- Undo/Redo 히스토리 (v0.9.0) ----------
+  // 편집 상태 스냅샷을 debounce 로 기록(액션 단위). Cloud/Auto Save 와 독립(별도 effect).
+  const MAX_HISTORY = 200;
+  const histPast = useRef<HistorySnap[]>([]);
+  const histFuture = useRef<HistorySnap[]>([]);
+  const histBaseline = useRef<HistorySnap | null>(null);
+  const histApplying = useRef(false); // undo/redo 적용 중(기록 스킵)
+  const histResetPending = useRef(false); // 프로젝트 로드 직후 baseline 재설정
+  const [histVersion, setHistVersion] = useState(0);
+
+  const captureSnapshot = (): HistorySnap => ({
+    placed,
+    texts,
+    dimensions,
+    planImages,
+    planBackgrounds,
+    localFixtures,
+    designAssets,
+    svgDocuments,
+    wallItems,
+    boothConfig: project?.boothConfig ?? null,
+  });
+
+  const applySnapshot = (s: HistorySnap) => {
+    histApplying.current = true;
+    setPlaced(s.placed);
+    setTexts(s.texts);
+    setDimensions(s.dimensions);
+    setPlanImages(s.planImages);
+    setPlanBackgrounds(s.planBackgrounds);
+    setLocalFixtures(s.localFixtures);
+    setDesignAssets(s.designAssets);
+    setSvgDocuments(s.svgDocuments);
+    setWallItems(s.wallItems);
+    if (s.boothConfig) setProject((p) => (p ? { ...p, boothConfig: s.boothConfig! } : p));
+  };
+
+  // 편집 상태가 바뀌면(설정 후 350ms 안정) 스냅샷 기록. 참조 동일성으로 변경 감지.
+  useEffect(() => {
+    if (histResetPending.current) {
+      histResetPending.current = false;
+      histApplying.current = false;
+      histBaseline.current = captureSnapshot();
+      histPast.current = [];
+      histFuture.current = [];
+      setHistVersion((v) => v + 1);
+      return;
+    }
+    if (histApplying.current) {
+      histApplying.current = false;
+      histBaseline.current = captureSnapshot();
+      setHistVersion((v) => v + 1);
+      return;
+    }
+    const t = setTimeout(() => {
+      const base = histBaseline.current;
+      const snap = captureSnapshot();
+      if (base && sameHistorySnap(base, snap)) return;
+      if (base) {
+        histPast.current.push(base);
+        if (histPast.current.length > MAX_HISTORY) histPast.current.shift();
+      }
+      histFuture.current = [];
+      histBaseline.current = snap;
+      setHistVersion((v) => v + 1);
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placed, texts, dimensions, planImages, planBackgrounds, localFixtures, designAssets, svgDocuments, wallItems, project?.boothConfig]);
+
+  // 다중 선택은 집기 선택 시에만 유효 — 다른 타입/해제 시 정리 (v0.9.0)
+  useEffect(() => {
+    if (!selectedItem || selectedItem.type !== 'fixture') setSelectedFixtureIds([]);
+  }, [selectedItem]);
 
   // 전역 라이브러리 + 배치안-로컬(SVG 변환) 집기 정의를 함께 조회
   const fixturesById = useMemo(
@@ -393,6 +551,7 @@ export function EditorProvider({
     selectedSvgId ? svgDocuments.find((d) => d.id === selectedSvgId) ?? null : null;
 
   const value = useMemo<EditorContextValue>(() => {
+    void histVersion; // canUndo/canRedo 를 히스토리 변경 시 갱신하기 위한 재계산 트리거
     const boothW = project?.boothConfig.widthMm ?? 0;
     const boothD = project?.boothConfig.depthMm ?? 0;
     const boothH = project?.boothConfig.heightMm ?? 0;
@@ -444,8 +603,20 @@ export function EditorProvider({
       setPlaced((prev) => [...prev, { id, fixtureDefId: def.id, xMm: x, yMm: y, rotationDeg: 0 }]);
       setSelectedItem({ scope: 'plan', type: 'fixture', id });
     };
-    const select = (id: string | null) =>
-      setSelectedItem(id ? { scope: 'plan', type: 'fixture', id } : null);
+    // 집기 선택 (additive=true 면 다중 선택 토글) — v0.9.0
+    const select = (id: string | null, additive = false) => {
+      if (id == null) {
+        setSelectedItem(null);
+        setSelectedFixtureIds([]);
+        return;
+      }
+      if (additive) {
+        setSelectedFixtureIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+      } else {
+        setSelectedFixtureIds((prev) => (prev.length > 1 && prev.includes(id) ? prev : [id]));
+      }
+      setSelectedItem({ scope: 'plan', type: 'fixture', id });
+    };
     const move = (id: string, xMm: number, yMm: number, snapToGrid = true) => {
       const nx = snapToGrid ? snapMmToGrid(xMm, gridSizeMm) : xMm;
       const ny = snapToGrid ? snapMmToGrid(yMm, gridSizeMm) : yMm;
@@ -807,6 +978,195 @@ export function EditorProvider({
       else if (it.type === 'background') mutateSelBackground((b) => ({ ...b, xMm: b.xMm + dxMm, yMm: b.yMm + dyMm }));
     };
 
+    // ---------- Undo / Redo (v0.9.0) ----------
+    const undo = () => {
+      if (histPast.current.length === 0) return;
+      const target = histPast.current.pop()!;
+      if (histBaseline.current) histFuture.current.push(histBaseline.current);
+      applySnapshot(target);
+      histBaseline.current = target;
+      setSelectedItem(null);
+      setHistVersion((v) => v + 1);
+    };
+    const redo = () => {
+      if (histFuture.current.length === 0) return;
+      const target = histFuture.current.pop()!;
+      if (histBaseline.current) histPast.current.push(histBaseline.current);
+      applySnapshot(target);
+      histBaseline.current = target;
+      setSelectedItem(null);
+      setHistVersion((v) => v + 1);
+    };
+    const canUndo = histPast.current.length > 0;
+    const canRedo = histFuture.current.length > 0;
+
+    // ---------- 다중 선택 + 정렬/분배/미러/배열 (v0.9.0) ----------
+    /** 현재 선택된 집기(+def+AABB) 목록 */
+    const selectedBoxes = () =>
+      placed
+        .filter((p) => selectedFixtureIds.includes(p.id))
+        .map((p) => {
+          const def = fixturesById.get(p.fixtureDefId);
+          return def ? { p, def, aabb: computeFixtureAABB(p, def) } : null;
+        })
+        .filter((b): b is { p: PlacedFixture; def: FixtureDef; aabb: ReturnType<typeof computeFixtureAABB> } => b != null);
+
+    const applyDelta = (deltas: Map<string, { dx: number; dy: number }>) => {
+      setPlaced((prev) =>
+        prev.map((p) => {
+          const d = deltas.get(p.id);
+          return d ? { ...p, xMm: p.xMm + d.dx, yMm: p.yMm + d.dy } : p;
+        }),
+      );
+    };
+
+    const alignFixtures = (mode: AlignMode) => {
+      const boxes = selectedBoxes();
+      if (boxes.length < 2) return;
+      const gMinX = Math.min(...boxes.map((b) => b.aabb.minX));
+      const gMaxX = Math.max(...boxes.map((b) => b.aabb.maxX));
+      const gMinY = Math.min(...boxes.map((b) => b.aabb.minY));
+      const gMaxY = Math.max(...boxes.map((b) => b.aabb.maxY));
+      const gcx = (gMinX + gMaxX) / 2;
+      const gcy = (gMinY + gMaxY) / 2;
+      const deltas = new Map<string, { dx: number; dy: number }>();
+      for (const b of boxes) {
+        let dx = 0;
+        let dy = 0;
+        const cx = (b.aabb.minX + b.aabb.maxX) / 2;
+        const cy = (b.aabb.minY + b.aabb.maxY) / 2;
+        switch (mode) {
+          case 'left': dx = gMinX - b.aabb.minX; break;
+          case 'right': dx = gMaxX - b.aabb.maxX; break;
+          case 'centerH': dx = gcx - cx; break;
+          case 'top': dy = gMinY - b.aabb.minY; break;
+          case 'bottom': dy = gMaxY - b.aabb.maxY; break;
+          case 'centerV': dy = gcy - cy; break;
+        }
+        deltas.set(b.p.id, { dx, dy });
+      }
+      applyDelta(deltas);
+    };
+
+    const distributeFixtures = (axis: 'h' | 'v') => {
+      const boxes = selectedBoxes();
+      if (boxes.length < 3) return;
+      const centerOf = (b: (typeof boxes)[number]) =>
+        axis === 'h' ? (b.aabb.minX + b.aabb.maxX) / 2 : (b.aabb.minY + b.aabb.maxY) / 2;
+      const sorted = [...boxes].sort((a, b) => centerOf(a) - centerOf(b));
+      const first = centerOf(sorted[0]);
+      const last = centerOf(sorted[sorted.length - 1]);
+      const step = (last - first) / (sorted.length - 1);
+      const deltas = new Map<string, { dx: number; dy: number }>();
+      sorted.forEach((b, i) => {
+        if (i === 0 || i === sorted.length - 1) return;
+        const target = first + step * i;
+        const cur = centerOf(b);
+        deltas.set(b.p.id, axis === 'h' ? { dx: target - cur, dy: 0 } : { dx: 0, dy: target - cur });
+      });
+      applyDelta(deltas);
+    };
+
+    const mirrorFixtures = (axis: 'h' | 'v', copy: boolean) => {
+      const boxes = selectedBoxes();
+      if (boxes.length === 0) return;
+      const gMinX = Math.min(...boxes.map((b) => b.aabb.minX));
+      const gMaxX = Math.max(...boxes.map((b) => b.aabb.maxX));
+      const gMinY = Math.min(...boxes.map((b) => b.aabb.minY));
+      const gMaxY = Math.max(...boxes.map((b) => b.aabb.maxY));
+      const gcx = (gMinX + gMaxX) / 2;
+      const gcy = (gMinY + gMaxY) / 2;
+      // 배치(arrangement) 미러: 각 집기 바운딩 박스를 그룹 중심 기준 반사. 방향은 유지.
+      const mirrored = boxes.map((b) => {
+        const w = b.aabb.maxX - b.aabb.minX;
+        const h = b.aabb.maxY - b.aabb.minY;
+        let newMinX = b.aabb.minX;
+        let newMinY = b.aabb.minY;
+        if (axis === 'h') newMinX = 2 * gcx - b.aabb.maxX;
+        else newMinY = 2 * gcy - b.aabb.maxY;
+        const dx = newMinX - b.aabb.minX;
+        const dy = newMinY - b.aabb.minY;
+        void w; void h;
+        return { b, dx, dy };
+      });
+      if (copy) {
+        const newOnes: PlacedFixture[] = mirrored.map((m) => ({
+          ...m.b.p,
+          id: generateId(),
+          xMm: m.b.p.xMm + m.dx,
+          yMm: m.b.p.yMm + m.dy,
+        }));
+        setPlaced((prev) => [...prev, ...newOnes]);
+        setSelectedFixtureIds(newOnes.map((n) => n.id));
+        setSelectedItem({ scope: 'plan', type: 'fixture', id: newOnes[0].id });
+      } else {
+        const deltas = new Map(mirrored.map((m) => [m.b.p.id, { dx: m.dx, dy: m.dy }] as const));
+        applyDelta(deltas);
+      }
+    };
+
+    const arrayFixtures = (opts: ArrayOptions) => {
+      const boxes = selectedBoxes();
+      if (boxes.length === 0 || opts.count < 2) return;
+      const newOnes: PlacedFixture[] = [];
+      if (opts.kind === 'linear') {
+        const sx = opts.spacingXMm ?? 0;
+        const sy = opts.spacingYMm ?? 0;
+        for (const b of boxes) {
+          for (let i = 1; i < opts.count; i++) {
+            newOnes.push({ ...b.p, id: generateId(), xMm: b.p.xMm + sx * i, yMm: b.p.yMm + sy * i });
+          }
+        }
+      } else {
+        // circular: 그룹 중심을 회전 중심으로, count 개를 totalAngle 에 균등 배치(원본 포함)
+        const gcx = boxes.reduce((s, b) => s + (b.aabb.minX + b.aabb.maxX) / 2, 0) / boxes.length;
+        const gcy = boxes.reduce((s, b) => s + (b.aabb.minY + b.aabb.maxY) / 2, 0) / boxes.length;
+        const total = opts.totalAngleDeg ?? 360;
+        const step = total / opts.count;
+        for (const b of boxes) {
+          for (let i = 1; i < opts.count; i++) {
+            const phi = step * i;
+            const tl = rotatePointDeg(b.p.xMm, b.p.yMm, gcx, gcy, phi);
+            newOnes.push({
+              ...b.p,
+              id: generateId(),
+              xMm: tl.x,
+              yMm: tl.y,
+              rotationDeg: ((b.p.rotationDeg + phi) % 360 + 360) % 360,
+            });
+          }
+        }
+      }
+      if (newOnes.length === 0) return;
+      setPlaced((prev) => [...prev, ...newOnes]);
+    };
+
+    const duplicateFixtures = () => {
+      const ids = selectedFixtureIds;
+      if (ids.length === 0) return;
+      const newOnes: PlacedFixture[] = [];
+      setPlaced((prev) => {
+        const map = new Map(prev.map((p) => [p.id, p] as const));
+        for (const id of ids) {
+          const src = map.get(id);
+          if (src) newOnes.push({ ...src, id: generateId(), xMm: src.xMm + gridSizeMm, yMm: src.yMm + gridSizeMm });
+        }
+        return [...prev, ...newOnes];
+      });
+      if (newOnes.length > 0) {
+        setSelectedFixtureIds(newOnes.map((n) => n.id));
+        setSelectedItem({ scope: 'plan', type: 'fixture', id: newOnes[0].id });
+      }
+    };
+
+    const deleteFixtures = () => {
+      const ids = selectedFixtureIds;
+      if (ids.length === 0) return;
+      setPlaced((prev) => prev.filter((p) => !ids.includes(p.id)));
+      setSelectedFixtureIds([]);
+      setSelectedItem(null);
+    };
+
     // ---------- 배치안 저장/불러오기 ----------
     const currentLayout = layouts.find((l) => l.id === currentLayoutId) ?? null;
 
@@ -1033,6 +1393,19 @@ export function EditorProvider({
       copySelected,
       deleteSelected,
       nudgeSelected,
+      // CAD 생산성 도구 (v0.9.0)
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+      selectedFixtureIds,
+      selectFixture: select,
+      alignFixtures,
+      distributeFixtures,
+      mirrorFixtures,
+      arrayFixtures,
+      duplicateFixtures,
+      deleteFixtures,
     };
   }, [
     project,
@@ -1074,6 +1447,8 @@ export function EditorProvider({
     readOnly,
     viewRotationDeg,
     shapeEditMode,
+    histVersion,
+    selectedFixtureIds,
   ]);
 
   // ---------- 자동 저장 (5초 debounce) ----------
