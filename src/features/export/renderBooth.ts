@@ -7,9 +7,12 @@ import type {
   PlacedDimension,
   PlacedFixture,
   PlacedImage,
+  PlacedProduct,
   PlacedText,
+  Product,
 } from '../../types';
 import { planFaceMapping, assetById, computeFitRect } from '../design/mapping';
+import { productById as findProduct, productImageUrl, productSize, DEFAULT_PRODUCT_COLOR } from '../products/productModel';
 import { TEXT_FONT_FAMILY } from '../texts/constants';
 import { dimensionDisplayLabel, DIMENSION_FONT_FAMILY } from '../dimensions/constants';
 import {
@@ -47,6 +50,9 @@ interface RenderOptions {
   showGrid?: boolean;
   /** 치수(부스 치수 라벨 + 사용자 치수선) 표시 (기본 true). Presentation 모드에서 false (v0.8.8) */
   showDimensions?: boolean;
+  /** 배치 제품 (v0.9.3 Merchandising) */
+  placedProducts?: PlacedProduct[];
+  products?: Product[];
 }
 
 export function createBoothDrawingDataURL(
@@ -197,6 +203,16 @@ export function createBoothDrawingDataURL(
       const asset = dm ? assetById(designAssets, dm.assetId) : null;
       const designImage = asset ? imageElements.get(asset.url) : undefined;
       layer.add(buildFixtureGroup(p, def, scale, showFixtureNames, dm, designImage));
+    }
+
+    // 제품 (Product Layer, 집기 위) — v0.9.3
+    const productsList = options.products ?? [];
+    for (const pp of options.placedProducts ?? []) {
+      const prod = findProduct(productsList, pp.productId);
+      if (!prod) continue;
+      const url = productImageUrl(prod, pp.facing);
+      const img = url ? imageElements.get(url) : undefined;
+      layer.add(buildProductGroup(pp, prod, scale, img));
     }
 
     // 텍스트
@@ -436,6 +452,48 @@ function buildFixtureGroup(
     );
   }
 
+  return group;
+}
+
+/** 배치 제품 그룹 (Product Layer export, v0.9.3) */
+function buildProductGroup(pp: PlacedProduct, prod: Product, scale: number, img?: HTMLImageElement): Konva.Group {
+  const { w, d } = productSize(prod, pp);
+  const group = new Konva.Group({ x: pp.xMm, y: pp.yMm, rotation: pp.rotationDeg });
+  if (img) {
+    group.add(new Konva.Image({ image: img, width: w, height: d }));
+  } else {
+    group.add(
+      new Konva.Rect({
+        width: w,
+        height: d,
+        fill: prod.displayColor || DEFAULT_PRODUCT_COLOR,
+        cornerRadius: Math.min(w, d) * 0.08,
+        stroke: 'rgba(0,0,0,0.3)',
+        strokeWidth: 1,
+        strokeScaleEnabled: false,
+      }),
+    );
+  }
+  if (w * scale >= 30 && prod.name) {
+    group.add(
+      new Konva.Text({
+        width: w,
+        height: d,
+        align: 'center',
+        verticalAlign: 'middle',
+        wrap: 'none',
+        ellipsis: true,
+        text: prod.name,
+        fontSize: 11 / scale,
+        fill: '#111827',
+        stroke: 'rgba(255,255,255,0.85)',
+        strokeWidth: 2 / scale,
+        fillAfterStrokeEnabled: true,
+        listening: false,
+        padding: 2,
+      }),
+    );
+  }
   return group;
 }
 

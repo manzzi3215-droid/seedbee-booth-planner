@@ -31,6 +31,7 @@ import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateR
 import WallpaperRoundedIcon from '@mui/icons-material/WallpaperRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
 import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
+import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
 import RedoRoundedIcon from '@mui/icons-material/RedoRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -72,7 +73,8 @@ import { hasBoothHeight } from '../../constants/booth';
  */
 export default function EditorToolbar({
   onOpenPrint,
-}: { onOpenPrint?: () => void } = {}) {
+  onOpenMerchandising,
+}: { onOpenPrint?: () => void; onOpenMerchandising?: () => void } = {}) {
   const {
     project,
     placed,
@@ -81,6 +83,8 @@ export default function EditorToolbar({
     planImages,
     planBackgrounds,
     designAssets,
+    placedProducts,
+    products,
     fixturesById,
     showFixtureNames,
     setShowFixtureNames,
@@ -171,6 +175,8 @@ export default function EditorToolbar({
       fixturesById,
       viewRotationDeg,
       designAssets,
+      placedProducts,
+      products,
     };
   };
 
@@ -728,6 +734,21 @@ export default function EditorToolbar({
             disabled={!project || !hasBoothHeight(project.boothConfig)}
           >
             3D 미리보기
+          </Button>
+        </span>
+      </Tooltip>
+
+      <Tooltip title="진열 관리 — 통계 · Display Guide(PNG/PDF) · 설치 모드">
+        <span>
+          <Button
+            variant="outlined"
+            size="small"
+            color="primary"
+            startIcon={<StorefrontRoundedIcon />}
+            onClick={() => onOpenMerchandising?.()}
+            disabled={!project}
+          >
+            진열 관리
           </Button>
         </span>
       </Tooltip>

@@ -25,6 +25,7 @@ import BackgroundPanel from './BackgroundPanel';
 import SvgInspectorPanel from './SvgInspectorPanel';
 import ConvertedFixtureEditor from './ConvertedFixtureEditor';
 import DesignPanel from '../design/DesignPanel';
+import ProductInfoPanel from '../products/ProductPanel';
 
 /** 3D 재질 옵션 (v0.9.2) */
 const MATERIAL_OPTIONS: { value: FixtureMaterial; label: string }[] = [
@@ -70,6 +71,7 @@ export default function SelectionPanel() {
   if (selectedItem?.type === 'image') return <ImagePanel />;
   if (selectedItem?.type === 'background') return <BackgroundPanel />;
   if (selectedItem?.type === 'svg') return <SvgInspectorPanel />;
+  if (selectedItem?.type === 'product') return <ProductInfoPanel />;
   if (selectedItem?.type === 'fixture') return <FixtureInfoPanel />;
   return <EmptyPanel />;
 }

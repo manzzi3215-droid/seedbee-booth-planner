@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.2 - Professional Lighting System**
+> **v0.9.3 - Digital Merchandising System**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -190,8 +190,26 @@ src/
 | Print Production Workspace(출력물 제작) | ✅ |
 | Undo/Redo · 다중선택 · 정렬/분배/미러/배열 | ✅ |
 | 3D Lighting System(조명·그림자·재질) | ✅ |
+| Digital Merchandising(제품 진열·Display Guide) | ✅ |
 
 ### Changelog
+
+**v0.9.3 — Digital Merchandising System (제품 진열 · 현장 설치)**
+- **Product Component 모델(확장형 핵심):** `Product`(정의) / `PlacedProduct`(배치) / `ProductPackage`(세트) /
+  `ProductTemplate`(행사별) 분리. Product 에 SKU·브랜드·카테고리·치수·이미지·진열방향·간격·`meta`(ERP/재고/판매/AI 확장 지점).
+  제품 라이브러리는 **프로젝트(행사) 단위**로 Cloud/Auto Save, 배치 제품은 배치안(Layout)에 임베드 →
+  Undo/Redo · Auto/Cloud Save · Share 가 기존 파이프라인으로 자동 동작.
+- **Merchandising Mode:** 왼쪽 사이드바 **집기(Furniture) / 제품(Products)** 레이어 분리. 제품은 집기 위 Product Layer 로 렌더.
+- **제품 등록/배치:** 이미지(PNG/SVG/WEBP, 경량 dataURL) 업로드, [배치] 배치, [그리드] 자동 균등 배열(2×4/3×4 자동 계산).
+- **편집:** Facing(Front/Back/Left/Right) · 회전(0/90/180/270/자유) · 스케일(100/90/80/직접) · 제품 교체(위치 유지) · 복제 · 삭제.
+- **Collision Detection:** 제품이 겹치면 빨간 테두리. **Display Statistics:** 총 진열/종류/카테고리/브랜드 자동 집계.
+- **Display Guide(가장 중요):** 진열도(제품 포함) + 제품 목록표(수량·Facing·크기)를 한 장에 구성 → **PNG/PDF** 출력.
+  현장 작업자가 가이드만 보고 동일하게 진열 가능.
+- **Installation Mode:** 제품별 설치 체크리스트(완료 체크).
+- **모든 곳 동일 데이터:** 제품이 2D 평면도 · 3D 아이소메트릭(실제 위치/크기/방향) · PNG/PDF · Display Guide 에 동일 반영.
+- **확장 구조:** 레이어(Furniture/Products/…)와 `Product.meta` 로 향후 ERP · 재고 · 판매 · AI 자동진열 · 추천 진열 확장 대비.
+- 로드맵(이번 버전 미포함 / 구조만 선반영): 라이브러리 드래그&드롭(현재 [배치] 버튼), Shelf 자동 인식/Capacity UI,
+  Product Package/Template 저장·적용, ERP·AI 자동 진열.
 
 **v0.9.2 — Professional Lighting System (3D 렌더 품질)**
 - **Lighting Engine(확장형 조명 엔진):** `src/features/iso/lighting/LightingEngine.ts` — Ambient · Directional ·

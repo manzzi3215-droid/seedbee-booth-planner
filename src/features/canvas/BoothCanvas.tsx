@@ -18,11 +18,15 @@ import type {
   PlacedDimension,
   PlacedFixture,
   PlacedImage,
+  PlacedProduct,
   PlacedText,
   PointMm,
+  Product,
   SvgDocument,
 } from '../../types';
 import { planFaceMapping, assetById } from '../design/mapping';
+import ProductNode from '../products/ProductNode';
+import { productById as findProduct, productImageUrl } from '../products/productModel';
 import SvgHighlightOverlay from '../svg/SvgRenderer';
 import { useContainerSize } from './useContainerSize';
 import { computeFit, zoomAtPoint, pxToMm, snapMmToGrid, type Viewport } from './coords';
@@ -64,6 +68,13 @@ interface BoothCanvasProps {
   showFixtureNames: boolean;
   /** 디자인 에셋 (텍스처 참조) */
   designAssets?: DesignAsset[];
+  /** 배치 제품 (v0.9.3 Merchandising) */
+  placedProducts?: PlacedProduct[];
+  products?: Product[];
+  selectedProductId?: string | null;
+  collidedProductIds?: Set<string>;
+  onSelectProduct?: (id: string) => void;
+  onMoveProduct?: (id: string, xMm: number, yMm: number, snap?: boolean) => void;
   selectedFixtureId: string | null;
   /** 다중 선택된 집기 id (v0.9.0) — 있으면 이 목록으로 하이라이트 */
   selectedFixtureIds?: string[];
@@ -115,6 +126,12 @@ export default function BoothCanvas({
   fixturesById,
   showFixtureNames,
   designAssets,
+  placedProducts,
+  products,
+  selectedProductId,
+  collidedProductIds,
+  onSelectProduct,
+  onMoveProduct,
   selectedFixtureId,
   selectedFixtureIds,
   selectedTextId,
@@ -147,6 +164,12 @@ export default function BoothCanvas({
     ...backgrounds.map((i) => i.srcDataUrl),
     ...images.map((i) => i.srcDataUrl),
     ...(designAssets ?? []).map((a) => a.url),
+    ...(placedProducts ?? [])
+      .map((pp) => {
+        const prod = findProduct(products, pp.productId);
+        return prod ? productImageUrl(prod, pp.facing) : undefined;
+      })
+      .filter((u): u is string => !!u),
   ]);
   // 이미지 또는 배경 중 선택된 것에 Transformer 부착
   const { transformerRef, register } = useImageTransformer(selectedImageId ?? selectedBackgroundId);
@@ -516,6 +539,29 @@ export default function BoothCanvas({
                 onMove={onMoveDimension}
               />
             ))}
+            {/* 제품 레이어 (Product Layer, 집기 위) — v0.9.3 */}
+            {(placedProducts ?? []).map((pp) => {
+              const prod = findProduct(products, pp.productId);
+              if (!prod) return null;
+              const url = productImageUrl(prod, pp.facing);
+              return (
+                <ProductNode
+                  key={pp.id}
+                  placed={pp}
+                  product={prod}
+                  selected={pp.id === selectedProductId}
+                  collided={collidedProductIds?.has(pp.id) ?? false}
+                  scale={viewport.scale}
+                  image={url ? imageMap.get(url) : undefined}
+                  onSelect={(id) => onSelectProduct?.(id)}
+                  onDragMove={(id, x, y) => {
+                    onMoveProduct?.(id, x, y, false);
+                    return { xMm: x, yMm: y };
+                  }}
+                  onDragEnd={(id, x, y) => onMoveProduct?.(id, x, y, true)}
+                />
+              );
+            })}
           </Layer>
 
           {/* 스냅 가이드라인 레이어 (명령형으로 그림, 드래그 종료 시 비움) */}

@@ -1,7 +1,7 @@
 import AppLayout from '../components/layout/AppLayout';
 import { EditorProvider } from '../features/editor/EditorContext';
 import EditorHotkeys from '../features/editor/EditorHotkeys';
-import FixtureLibraryPanel from '../features/fixtures/FixtureLibraryPanel';
+import LeftSidebar from '../features/editor/LeftSidebar';
 import SelectionPanel from '../features/editor/SelectionPanel';
 import EditorCanvasArea from '../features/editor/EditorCanvasArea';
 
@@ -23,7 +23,7 @@ export default function EditorRoute({
     <EditorProvider readOnly={readOnly} projectIdOverride={projectIdOverride}>
       <EditorHotkeys />
       <AppLayout
-        leftSidebar={<FixtureLibraryPanel />}
+        leftSidebar={<LeftSidebar />}
         rightPanel={<SelectionPanel />}
         padded={false}
       >

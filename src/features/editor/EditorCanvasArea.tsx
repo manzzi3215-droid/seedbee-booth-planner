@@ -24,7 +24,10 @@ import BoothCanvas from '../canvas/BoothCanvas';
 import EditorToolbar from './EditorToolbar';
 import WallCanvas from '../wall/WallCanvas';
 import PrintWorkspace from '../print/PrintWorkspace';
+import MerchandisingWorkspace from '../products/MerchandisingWorkspace';
 import MultiActionToolbar from '../tools/MultiActionToolbar';
+import { useMemo } from 'react';
+import { detectCollisions, productById as findProduct } from '../products/productModel';
 import { getBoothSizeLabel, getFloorLabel, hasBoothHeight } from '../../constants/booth';
 import {
   VIEW_MODE_OPTIONS,
@@ -50,6 +53,11 @@ export default function EditorCanvasArea() {
     planImages,
     planBackgrounds,
     designAssets,
+    products,
+    placedProducts,
+    selectedProductId,
+    selectProduct,
+    moveProduct,
     fixturesById,
     selectedFixtureId,
     selectedFixtureIds,
@@ -92,6 +100,13 @@ export default function EditorCanvasArea() {
 
   const [wallMenuAnchor, setWallMenuAnchor] = useState<null | HTMLElement>(null);
   const [printOpen, setPrintOpen] = useState(false);
+  const [merchOpen, setMerchOpen] = useState(false);
+
+  // 제품 충돌 검출 (v0.9.3)
+  const collidedProductIds = useMemo(
+    () => detectCollisions(placedProducts, (id) => findProduct(products, id)),
+    [placedProducts, products],
+  );
 
   if (projectLoading) {
     return (
@@ -197,7 +212,7 @@ export default function EditorCanvasArea() {
             <Typography variant="caption">벽면에 텍스트·치수선·이미지 추가 · Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동</Typography>
           </Stack>
 
-          <EditorToolbar onOpenPrint={() => setPrintOpen(true)} />
+          <EditorToolbar onOpenPrint={() => setPrintOpen(true)} onOpenMerchandising={() => setMerchOpen(true)} />
 
           <Box sx={{ flex: 1, minHeight: 320 }}>
             <WallCanvas
@@ -243,7 +258,7 @@ export default function EditorCanvasArea() {
             </Typography>
           </Stack>
 
-          <EditorToolbar onOpenPrint={() => setPrintOpen(true)} />
+          <EditorToolbar onOpenPrint={() => setPrintOpen(true)} onOpenMerchandising={() => setMerchOpen(true)} />
 
           <Box sx={{ flex: 1, minHeight: 320, position: 'relative' }}>
             <MultiActionToolbar />
@@ -257,6 +272,12 @@ export default function EditorCanvasArea() {
               fixturesById={fixturesById}
               showFixtureNames={showFixtureNames}
               designAssets={designAssets}
+              placedProducts={placedProducts}
+              products={products}
+              selectedProductId={selectedProductId}
+              collidedProductIds={collidedProductIds}
+              onSelectProduct={selectProduct}
+              onMoveProduct={moveProduct}
               selectedFixtureId={selectedFixtureId}
               selectedFixtureIds={selectedFixtureIds}
               selectedTextId={selectedTextId}
@@ -291,6 +312,7 @@ export default function EditorCanvasArea() {
       onClose={() => setPrintOpen(false)}
       initialFixtureId={selectedFixtureId}
     />
+    <MerchandisingWorkspace open={merchOpen} onClose={() => setMerchOpen(false)} />
     </>
   );
 }

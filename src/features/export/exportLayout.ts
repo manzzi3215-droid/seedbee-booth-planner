@@ -1,4 +1,5 @@
-import type { DesignAsset, FixtureDef, PlacedDimension, PlacedFixture, PlacedImage, PlacedText, Project, WallSide } from '../../types';
+import type { DesignAsset, FixtureDef, PlacedDimension, PlacedFixture, PlacedImage, PlacedProduct, PlacedText, Product, Project, WallSide } from '../../types';
+import { productImageUrl } from '../products/productModel';
 import { getFloorLabel, getBoothSizeLabel } from '../../constants/booth';
 import { createBoothDrawingDataURL } from './renderBooth';
 import { createWallDrawingDataURL } from './renderWall';
@@ -22,6 +23,19 @@ export interface ExportInput {
   viewRotationDeg?: number;
   /** 디자인 에셋 (텍스처) — 집기 디자인 렌더용 (v0.8.7) */
   designAssets?: DesignAsset[];
+  /** 배치 제품 + 제품 라이브러리 (v0.9.3 Merchandising) */
+  placedProducts?: PlacedProduct[];
+  products?: Product[];
+}
+
+/** 제품 이미지 URL 목록 (preload 용) */
+export function productImageSrcs(placedProducts: PlacedProduct[], products: Product[]): string[] {
+  return placedProducts
+    .map((pp) => {
+      const prod = products.find((p) => p.id === pp.productId);
+      return prod ? productImageUrl(prod, pp.facing) : undefined;
+    })
+    .filter((u): u is string => !!u);
 }
 
 function formatDate(ms: number): string {
@@ -35,9 +49,12 @@ function formatDate(ms: number): string {
 /** 1. PNG 저장 — 부스 전체 도면 (보기 회전 반영 = 현재 화면 기준) */
 export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
   const designAssets = input.designAssets ?? [];
+  const placedProducts = input.placedProducts ?? [];
+  const products = input.products ?? [];
   const imageEls = await preloadImages([
     ...[...input.backgrounds, ...input.images].map((i) => i.srcDataUrl),
     ...designAssets.map((a) => a.url),
+    ...productImageSrcs(placedProducts, products),
   ]);
   const base = createBoothDrawingDataURL(
     input.project.boothConfig,
@@ -49,7 +66,7 @@ export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
     imageEls,
     input.fixturesById,
     input.showFixtureNames,
-    { designAssets },
+    { designAssets, placedProducts, products },
   );
   const url = await rotateDataUrl(base, input.viewRotationDeg ?? 0);
   downloadDataURL(url, `${buildBaseName(input.project.name, input.layoutName)}_layout.png`);
@@ -147,13 +164,16 @@ async function buildReportDataURL(input: ExportInput): Promise<string> {
   ctx.fillText('부스 도면', mm(drawBoxX), mm(drawBoxY - 1));
 
   const designAssets = input.designAssets ?? [];
+  const placedProducts = input.placedProducts ?? [];
+  const products = input.products ?? [];
   const imageEls = await preloadImages([
     ...[...input.backgrounds, ...input.images].map((i) => i.srcDataUrl),
     ...designAssets.map((a) => a.url),
+    ...productImageSrcs(placedProducts, products),
   ]);
   const boothImg = await loadImage(
     await rotateDataUrl(
-      createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2, designAssets }),
+      createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2, designAssets, placedProducts, products }),
       input.viewRotationDeg ?? 0,
     ),
   );

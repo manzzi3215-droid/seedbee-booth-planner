@@ -344,6 +344,85 @@ export interface SvgDocument {
   updatedAt: number;
 }
 
+/**
+ * --- Digital Merchandising System (v0.9.3) ---
+ * 부스 설계 → 제품 진열 → 출력물(Display Guide) → 현장 설치까지 연결하는 제품 컴포넌트 모델.
+ * Product(제품 정의) / PlacedProduct(배치 인스턴스) / Package(세트) / Template(행사별) 로 분리하여
+ * 2D · 3D · Print · Display Guide 어디서나 동일한 데이터를 사용합니다.
+ * 향후 ERP · 재고 · 판매 · AI 자동진열 확장을 위해 확장 필드(meta)와 레이어 구조를 둡니다.
+ */
+
+/** 제품 진열 방향 */
+export type ProductFacing = 'front' | 'back' | 'left' | 'right';
+
+/** 제품 정의 (Product Component). 프로젝트(행사) 단위 라이브러리에 저장 */
+export interface Product {
+  id: string;
+  sku?: string;
+  name: string;
+  brand?: string;
+  category?: string;
+  widthMm: number;
+  depthMm: number;
+  heightMm?: number;
+  weightG?: number;
+  /** 대표 썸네일(dataURL) */
+  thumbnailUrl?: string;
+  /** 면별 이미지(dataURL) — 없으면 thumbnail 사용 */
+  images?: Partial<Record<'front' | 'back' | 'left' | 'right' | 'top', string>>;
+  /** 진열 색(이미지 없을 때) */
+  displayColor?: string;
+  /** 기본 진열 방향 */
+  displayDirection?: ProductFacing;
+  /** 권장 페이싱(정면 노출 개수) */
+  recommendedFacing?: number;
+  /** 권장 제품 간격(mm) */
+  recommendedSpacingMm?: number;
+  /** 진열 그룹(브랜드/시리즈) */
+  displayGroup?: string;
+  memo?: string;
+  createdAt: number;
+  /** 확장 지점 — ERP/재고/판매/AI 연동용(가격, 재고, 판매순위 등) */
+  meta?: Record<string, unknown>;
+}
+
+/** 배치된 제품 인스턴스 (평면도 Product Layer) */
+export interface PlacedProduct {
+  id: string;
+  productId: string;
+  xMm: number; // 바운딩 박스 좌상단
+  yMm: number;
+  rotationDeg: number;
+  /** 스케일 배율(1=100%) */
+  scale: number;
+  /** 진열 방향(자동 회전/이미지 선택) */
+  facing: ProductFacing;
+  /** 그룹 id(그룹 이동/복사/잠금) */
+  groupId?: string;
+}
+
+/** 제품 세트(패키지) — 드래그 한 번으로 세트 전체 배치 (#13) */
+export interface ProductPackage {
+  id: string;
+  name: string;
+  items: {
+    productId: string;
+    dxMm: number;
+    dyMm: number;
+    rotationDeg: number;
+    scale: number;
+    facing: ProductFacing;
+  }[];
+}
+
+/** 행사별 진열 템플릿 (#14) */
+export interface ProductTemplate {
+  id: string;
+  name: string;
+  placedProducts: PlacedProduct[];
+  createdAt: number;
+}
+
 /** 벽면 구분 */
 export type WallSide = 'frontWall' | 'leftWall' | 'rightWall' | 'backWall';
 
@@ -380,6 +459,8 @@ export interface Layout {
   svgDocuments?: SvgDocument[];
   /** 디자인 에셋 (v0.8.7) — 이미지 참조(Storage URL). placedFixtures.design 이 assetId 로 참조 */
   designAssets?: DesignAsset[];
+  /** 배치된 제품 (v0.9.3 Merchandising) — Product Layer. products 는 project.products 참조 */
+  placedProducts?: PlacedProduct[];
   wallItems?: WallItems;
   createdAt: number;
   updatedAt: number;
@@ -400,6 +481,14 @@ export interface Project extends BaseEntity {
   name: string;
   boothConfig: BoothConfig;
   layouts: Layout[];
+
+  // --- Digital Merchandising (v0.9.3) — 행사(프로젝트) 단위 제품 라이브러리 ---
+  /** 제품 정의 라이브러리 */
+  products?: Product[];
+  /** 제품 세트(패키지) */
+  productPackages?: ProductPackage[];
+  /** 행사별 진열 템플릿 */
+  productTemplates?: ProductTemplate[];
 
   // --- 공유 (v0.8.2). 누락 시 owner 전용/비공개로 취급(하위 호환) ---
   /** Firestore 소유자 uid (읽을 때 채워짐) */

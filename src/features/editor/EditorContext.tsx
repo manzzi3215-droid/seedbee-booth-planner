@@ -17,13 +17,17 @@ import type {
   PlacedDimension,
   PlacedFixture,
   PlacedImage,
+  PlacedProduct,
   PlacedText,
   PointMm,
+  Product,
+  ProductFacing,
   Project,
   SvgDocument,
   WallItems,
   WallSide,
 } from '../../types';
+import { gridArrange as gridArrangeProducts } from '../products/productModel';
 import { storage, isCloudStorage } from '../../storage';
 import { generateId } from '../../utils/id';
 import { useFixtures } from '../fixtures/useFixtures';
@@ -64,7 +68,7 @@ const AUTOSAVE_MS = 5000;
  *  - wall 스코프: 특정 벽면의 텍스트/치수선/이미지
  */
 export type SelectedItem =
-  | { scope: 'plan'; type: ItemType | 'background' | 'svg'; id: string }
+  | { scope: 'plan'; type: ItemType | 'background' | 'svg' | 'product'; id: string }
   | { scope: 'wall'; wall: WallSide; type: 'text' | 'dimension' | 'image'; id: string }
   | null;
 
@@ -77,6 +81,7 @@ interface HistorySnap {
   planBackgrounds: PlacedImage[];
   localFixtures: FixtureDef[];
   designAssets: DesignAsset[];
+  placedProducts: PlacedProduct[];
   svgDocuments: SvgDocument[];
   wallItems: WallItems;
   boothConfig: BoothConfig | null;
@@ -158,6 +163,28 @@ interface EditorContextValue {
   replaceDesignAsset: (assetId: string, patch: Partial<DesignAsset>) => void;
   /** 에셋 삭제 → 참조하는 매핑도 제거 */
   deleteDesignAsset: (assetId: string) => void;
+
+  // ---------- Digital Merchandising (v0.9.3) ----------
+  /** 제품 라이브러리(프로젝트 단위) */
+  products: Product[];
+  addProduct: (p: Product) => void;
+  updateProduct: (id: string, patch: Partial<Product>) => void;
+  deleteProduct: (id: string) => void;
+  /** 배치된 제품 (Product Layer) */
+  placedProducts: PlacedProduct[];
+  selectedProductId: string | null;
+  selectProduct: (id: string | null) => void;
+  placeProduct: (productId: string, xMm?: number, yMm?: number) => void;
+  moveProduct: (id: string, xMm: number, yMm: number, snap?: boolean) => void;
+  updatePlacedProduct: (id: string, patch: Partial<PlacedProduct>) => void;
+  deletePlacedProduct: (id: string) => void;
+  duplicatePlacedProduct: (id: string) => void;
+  replacePlacedProduct: (id: string, newProductId: string) => void;
+  gridArrangeProduct: (
+    productId: string,
+    count: number,
+    opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing },
+  ) => void;
 
   // 평면도 배치
   placed: PlacedFixture[];
@@ -303,6 +330,8 @@ const cloneSvgDocs = (l: SvgDocument[]) =>
   l.map((d) => ({ ...d, elements: d.elements.map((e) => ({ ...e })) }));
 const cloneFixtureDefs = (l: FixtureDef[]) => l.map((f) => ({ ...f }));
 const cloneDesignAssets = (l: DesignAsset[]) => l.map((a) => ({ ...a }));
+const cloneProducts = (l: Product[]) => l.map((p) => ({ ...p, images: p.images ? { ...p.images } : undefined, meta: p.meta ? { ...p.meta } : undefined }));
+const clonePlacedProducts = (l: PlacedProduct[]) => l.map((p) => ({ ...p }));
 function cloneWallItems(w: WallItems): WallItems {
   const out = emptyWallItems();
   for (const side of WALL_SIDES) {
@@ -335,6 +364,7 @@ function sameHistorySnap(a: HistorySnap, b: HistorySnap): boolean {
     a.planBackgrounds === b.planBackgrounds &&
     a.localFixtures === b.localFixtures &&
     a.designAssets === b.designAssets &&
+    a.placedProducts === b.placedProducts &&
     a.svgDocuments === b.svgDocuments &&
     a.wallItems === b.wallItems &&
     a.boothConfig === b.boothConfig
@@ -381,6 +411,8 @@ export function EditorProvider({
   const [planBackgrounds, setPlanBackgrounds] = useState<PlacedImage[]>([]);
   const [localFixtures, setLocalFixtures] = useState<FixtureDef[]>([]);
   const [designAssets, setDesignAssets] = useState<DesignAsset[]>([]);
+  const [products, setProducts] = useState<Product[]>([]); // 제품 라이브러리(프로젝트 단위) v0.9.3
+  const [placedProducts, setPlacedProducts] = useState<PlacedProduct[]>([]); // 배치 제품(배치안) v0.9.3
   const [svgDocuments, setSvgDocuments] = useState<SvgDocument[]>([]);
   const [wallItems, setWallItems] = useState<WallItems>(emptyWallItems());
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
@@ -421,6 +453,8 @@ export function EditorProvider({
       setPlanBackgrounds(latest?.planBackgrounds ? cloneImages(latest.planBackgrounds) : []);
       setLocalFixtures(latest?.localFixtures ? cloneFixtureDefs(latest.localFixtures) : []);
       setDesignAssets(latest?.designAssets ? cloneDesignAssets(latest.designAssets) : []);
+      setProducts(found?.products ? cloneProducts(found.products) : []);
+      setPlacedProducts(latest?.placedProducts ? clonePlacedProducts(latest.placedProducts) : []);
       setSvgDocuments(latest?.svgDocuments ? cloneSvgDocs(latest.svgDocuments) : []);
       setWallItems(cloneWallItems(normalizeWallItems(latest?.wallItems)));
       setCurrentLayoutId(latest?.id ?? null);
@@ -452,6 +486,7 @@ export function EditorProvider({
     planBackgrounds,
     localFixtures,
     designAssets,
+    placedProducts,
     svgDocuments,
     wallItems,
     boothConfig: project?.boothConfig ?? null,
@@ -466,6 +501,7 @@ export function EditorProvider({
     setPlanBackgrounds(s.planBackgrounds);
     setLocalFixtures(s.localFixtures);
     setDesignAssets(s.designAssets);
+    setPlacedProducts(s.placedProducts);
     setSvgDocuments(s.svgDocuments);
     setWallItems(s.wallItems);
     if (s.boothConfig) setProject((p) => (p ? { ...p, boothConfig: s.boothConfig! } : p));
@@ -502,7 +538,7 @@ export function EditorProvider({
     }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placed, texts, dimensions, planImages, planBackgrounds, localFixtures, designAssets, svgDocuments, wallItems, project?.boothConfig]);
+  }, [placed, texts, dimensions, planImages, planBackgrounds, localFixtures, designAssets, placedProducts, svgDocuments, wallItems, project?.boothConfig]);
 
   // 다중 선택은 집기 선택 시에만 유효 — 다른 타입/해제 시 정리 (v0.9.0)
   useEffect(() => {
@@ -527,6 +563,8 @@ export function EditorProvider({
     selectedItem?.scope === 'plan' && selectedItem.type === 'background' ? selectedItem.id : null;
   const selectedSvgId =
     selectedItem?.scope === 'plan' && selectedItem.type === 'svg' ? selectedItem.id : null;
+  const selectedProductId =
+    selectedItem?.scope === 'plan' && selectedItem.type === 'product' ? selectedItem.id : null;
 
   // 선택된 텍스트/치수선/이미지 객체 (scope 무관)
   const selectedText: PlacedText | null = (() => {
@@ -830,6 +868,73 @@ export function EditorProvider({
       );
     };
 
+    // ---------- Digital Merchandising (v0.9.3) ----------
+    // 제품 라이브러리: 프로젝트 단위 저장(즉시 Cloud/Auto Save via saveProject)
+    const persistProducts = (next: Product[]) => {
+      setProducts(next);
+      setProject((p) => (p ? { ...p, products: next } : p));
+      if (project) void storage.saveProject({ ...project, products: next, updatedAt: Date.now() });
+    };
+    const addProduct = (p: Product) => persistProducts([...products, p]);
+    const updateProduct = (id: string, patch: Partial<Product>) =>
+      persistProducts(products.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    const deleteProduct = (id: string) => {
+      persistProducts(products.filter((x) => x.id !== id));
+      setPlacedProducts((prev) => prev.filter((pp) => pp.productId !== id));
+    };
+
+    // 제품 배치(배치안 단위 → Undo/Auto/Cloud/Share 자동)
+    const selectProduct = (id: string | null) =>
+      setSelectedItem(id ? { scope: 'plan', type: 'product', id } : null);
+    const placeProduct = (productId: string, xMm?: number, yMm?: number) => {
+      const prod = products.find((p) => p.id === productId);
+      if (!prod) return;
+      const px = xMm ?? snapMmToGrid(boothW / 2 - prod.widthMm / 2, gridSizeMm);
+      const py = yMm ?? snapMmToGrid(boothD / 2 - prod.depthMm / 2, gridSizeMm);
+      const id = generateId();
+      setPlacedProducts((prev) => [
+        ...prev,
+        { id, productId, xMm: px, yMm: py, rotationDeg: 0, scale: 1, facing: prod.displayDirection ?? 'front' },
+      ]);
+      setSelectedItem({ scope: 'plan', type: 'product', id });
+    };
+    const moveProduct = (id: string, xMm: number, yMm: number, snap = true) =>
+      setPlacedProducts((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, xMm: snap ? snapMmToGrid(xMm, gridSizeMm) : xMm, yMm: snap ? snapMmToGrid(yMm, gridSizeMm) : yMm } : p,
+        ),
+      );
+    const updatePlacedProduct = (id: string, patch: Partial<PlacedProduct>) =>
+      setPlacedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    const deletePlacedProduct = (id: string) => {
+      setPlacedProducts((prev) => prev.filter((p) => p.id !== id));
+      setSelectedItem(null);
+    };
+    const duplicatePlacedProduct = (id: string) => {
+      const nid = generateId();
+      setPlacedProducts((prev) => {
+        const src = prev.find((p) => p.id === id);
+        return src ? [...prev, { ...src, id: nid, xMm: src.xMm + gridSizeMm, yMm: src.yMm + gridSizeMm }] : prev;
+      });
+      setSelectedItem({ scope: 'plan', type: 'product', id: nid });
+    };
+    const replacePlacedProduct = (id: string, newProductId: string) =>
+      setPlacedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, productId: newProductId } : p)));
+    const gridArrangeProduct = (
+      productId: string,
+      count: number,
+      opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing },
+    ) => {
+      const prod = products.find((p) => p.id === productId);
+      if (!prod) return;
+      const arr = gridArrangeProducts(productId, prod, count, {
+        originXMm: snapMmToGrid(boothW * 0.2, gridSizeMm),
+        originYMm: snapMmToGrid(boothD * 0.2, gridSizeMm),
+        ...opts,
+      });
+      if (arr.length) setPlacedProducts((prev) => [...prev, ...arr]);
+    };
+
     const markElementConverted = (docId: string, elId: string) =>
       setSvgDocuments((prev) =>
         prev.map((d) =>
@@ -911,6 +1016,7 @@ export function EditorProvider({
       const it = selectedItem;
       if (!it) return;
       if (it.type === 'fixture') setPlaced((prev) => prev.map((p) => (p.id === it.id ? { ...p, rotationDeg: (p.rotationDeg + 90) % 360 } : p)));
+      else if (it.type === 'product') setPlacedProducts((prev) => prev.map((p) => (p.id === it.id ? { ...p, rotationDeg: (p.rotationDeg + 90) % 360 } : p)));
       else if (it.type === 'text') mutateSelText((t) => ({ ...t, rotationDeg: (t.rotationDeg + 90) % 360 }));
       else if (it.type === 'dimension') mutateSelDim((d) => rotateDimensionBy(d, 90));
       else if (it.type === 'image') mutateSelImage((i) => ({ ...i, rotationDeg: (i.rotationDeg + 90) % 360 }));
@@ -928,6 +1034,13 @@ export function EditorProvider({
           return [...prev, { ...src, id: newId, xMm: src.xMm + gridSizeMm, yMm: src.yMm + gridSizeMm }];
         });
         setSelectedItem({ scope: 'plan', type: 'fixture', id: newId });
+      } else if (it.type === 'product') {
+        setPlacedProducts((prev) => {
+          const src = prev.find((p) => p.id === it.id);
+          if (!src) return prev;
+          return [...prev, { ...src, id: newId, xMm: src.xMm + gridSizeMm, yMm: src.yMm + gridSizeMm }];
+        });
+        setSelectedItem({ scope: 'plan', type: 'product', id: newId });
       } else if (it.type === 'text') {
         const dup = (arr: PlacedText[]) => {
           const src = arr.find((t) => t.id === it.id);
@@ -962,6 +1075,7 @@ export function EditorProvider({
       const it = selectedItem;
       if (!it) return;
       if (it.type === 'fixture') setPlaced((prev) => prev.filter((p) => p.id !== it.id));
+      else if (it.type === 'product') setPlacedProducts((prev) => prev.filter((p) => p.id !== it.id));
       else if (it.type === 'text') {
         if (it.scope === 'plan') setTexts((prev) => prev.filter((t) => t.id !== it.id));
         else updateWall(it.wall, (g) => ({ ...g, texts: g.texts.filter((t) => t.id !== it.id) }));
@@ -984,6 +1098,7 @@ export function EditorProvider({
       const it = selectedItem;
       if (!it) return;
       if (it.type === 'fixture') setPlaced((prev) => prev.map((p) => (p.id === it.id ? { ...p, xMm: p.xMm + dxMm, yMm: p.yMm + dyMm } : p)));
+      else if (it.type === 'product') setPlacedProducts((prev) => prev.map((p) => (p.id === it.id ? { ...p, xMm: p.xMm + dxMm, yMm: p.yMm + dyMm } : p)));
       else if (it.type === 'text') mutateSelText((t) => ({ ...t, xMm: t.xMm + dxMm, yMm: t.yMm + dyMm }));
       else if (it.type === 'dimension') mutateSelDim((d) => ({ ...d, startXMm: d.startXMm + dxMm, startYMm: d.startYMm + dyMm, endXMm: d.endXMm + dxMm, endYMm: d.endYMm + dyMm }));
       else if (it.type === 'image') mutateSelImage((i) => ({ ...i, xMm: i.xMm + dxMm, yMm: i.yMm + dyMm }));
@@ -1191,8 +1306,9 @@ export function EditorProvider({
         JSON.stringify(svgDocuments) !== JSON.stringify(currentLayout.svgDocuments ?? []) ||
         JSON.stringify(localFixtures) !== JSON.stringify(currentLayout.localFixtures ?? []) ||
         JSON.stringify(designAssets) !== JSON.stringify(currentLayout.designAssets ?? []) ||
+        JSON.stringify(placedProducts) !== JSON.stringify(currentLayout.placedProducts ?? []) ||
         JSON.stringify(wallItems) !== JSON.stringify(normalizeWallItems(currentLayout.wallItems))
-      : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 || planBackgrounds.length > 0 || svgDocuments.length > 0 || designAssets.length > 0 ||
+      : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 || planBackgrounds.length > 0 || svgDocuments.length > 0 || designAssets.length > 0 || placedProducts.length > 0 ||
         WALL_SIDES.some((s) => wallItems[s].texts.length > 0 || wallItems[s].dimensions.length > 0 || wallItems[s].images.length > 0);
 
     const suggestLayoutName = () => `v${layouts.length + 1}`;
@@ -1212,6 +1328,7 @@ export function EditorProvider({
       planBackgrounds: cloneImages(planBackgrounds),
       localFixtures: cloneFixtureDefs(localFixtures),
       designAssets: cloneDesignAssets(designAssets),
+      placedProducts: clonePlacedProducts(placedProducts),
       svgDocuments: cloneSvgDocs(svgDocuments),
       wallItems: cloneWallItems(wallItems),
     });
@@ -1249,6 +1366,7 @@ export function EditorProvider({
       setPlanBackgrounds(cloneImages(layout?.planBackgrounds ?? []));
       setLocalFixtures(cloneFixtureDefs(layout?.localFixtures ?? []));
       setDesignAssets(cloneDesignAssets(layout?.designAssets ?? []));
+      setPlacedProducts(clonePlacedProducts(layout?.placedProducts ?? []));
       setSvgDocuments(cloneSvgDocs(layout?.svgDocuments ?? []));
       setWallItems(cloneWallItems(normalizeWallItems(layout?.wallItems)));
       setCurrentLayoutId(layout?.id ?? null);
@@ -1286,6 +1404,7 @@ export function EditorProvider({
               planBackgrounds: cloneImages(src.planBackgrounds ?? []),
               localFixtures: cloneFixtureDefs(src.localFixtures ?? []),
               designAssets: cloneDesignAssets(src.designAssets ?? []),
+              placedProducts: clonePlacedProducts(src.placedProducts ?? []),
               svgDocuments: cloneSvgDocs(src.svgDocuments ?? []),
               wallItems: cloneWallItems(normalizeWallItems(src.wallItems)),
             };
@@ -1347,6 +1466,21 @@ export function EditorProvider({
       updateFixtureDesign,
       replaceDesignAsset,
       deleteDesignAsset,
+      // Digital Merchandising (v0.9.3)
+      products,
+      addProduct,
+      updateProduct,
+      deleteProduct,
+      placedProducts,
+      selectedProductId,
+      selectProduct,
+      placeProduct,
+      moveProduct,
+      updatePlacedProduct,
+      deletePlacedProduct,
+      duplicatePlacedProduct,
+      replacePlacedProduct,
+      gridArrangeProduct,
       placed,
       texts,
       dimensions,
@@ -1436,6 +1570,9 @@ export function EditorProvider({
     planBackgrounds,
     localFixtures,
     designAssets,
+    products,
+    placedProducts,
+    selectedProductId,
     svgDocuments,
     wallItems,
     showFixtureNames,

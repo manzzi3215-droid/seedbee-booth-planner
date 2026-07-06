@@ -6,7 +6,9 @@ import type {
   PlacedDimension,
   PlacedFixture,
   PlacedImage,
+  PlacedProduct,
   PlacedText,
+  Product,
   WallItems,
   WallSide,
 } from '../../types';
@@ -14,6 +16,7 @@ import { getBoothPolygon, getBoothBounds } from '../canvas/boothGeometry';
 import { generateGeometry } from './geometry/GeometryGenerator';
 import { isWallEnabled } from '../wall/constants';
 import { planFaceMapping, resolveFaceMapping, assetById } from '../design/mapping';
+import { productImageUrl } from '../products/productModel';
 
 /**
  * 아이소메트릭 3D 씬 데이터 (렌더러 비의존, mm 좌표).
@@ -130,6 +133,8 @@ export function buildIsoScene(
   planImages: PlacedImage[],
   wallItems: WallItems,
   designAssets: DesignAsset[] = [],
+  placedProducts: PlacedProduct[] = [],
+  products: Product[] = [],
 ): IsoScene {
   const floorPolygon: V3[] = getBoothPolygon(booth).map((p) => ({ x: p.xMm, y: p.yMm, z: 0 }));
 
@@ -170,6 +175,35 @@ export function buildIsoScene(
       curved: geo.curved,
       wrapTexture,
       material: def.material,
+    });
+  }
+
+  // --- 배치 제품 (Digital Merchandising, v0.9.3) — 실제 위치/크기/방향으로 3D 반영 ---
+  const productById = new Map(products.map((p) => [p.id, p]));
+  for (const pp of placedProducts) {
+    const prod = productById.get(pp.productId);
+    if (!prod) continue;
+    const w = prod.widthMm * pp.scale;
+    const d = prod.depthMm * pp.scale;
+    const h = Math.max(30, Math.min(booth.heightMm ?? 2500, (prod.heightMm ?? 300) * pp.scale));
+    const rad = (pp.rotationDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const footprint: V3[] = [
+      [0, 0],
+      [w, 0],
+      [w, d],
+      [0, d],
+    ].map(([lx, ly]) => ({ x: pp.xMm + lx * cos - ly * sin, y: pp.yMm + lx * sin + ly * cos, z: 0 }));
+    const img = productImageUrl(prod, pp.facing);
+    const faces: IsoBox['faces'] = img ? { top: { url: img, opacity: 1 }, front: { url: img, opacity: 1 } } : undefined;
+    boxes.push({
+      footprint,
+      heightMm: h,
+      color: prod.displayColor ?? '#f59e0b',
+      opacity: 1,
+      name: prod.name,
+      faces,
     });
   }
 
