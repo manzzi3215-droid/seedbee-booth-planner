@@ -49,7 +49,7 @@ const QUALITY_OPTIONS = [
  * 렌더는 Dialog 가 열릴 때만 수행하고, 닫으면 상태를 정리합니다(편집기 성능 무관).
  */
 export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { project, placed, fixturesById, planImages, wallItems, layouts, currentLayoutId } = useEditor();
+  const { project, placed, fixturesById, planImages, wallItems, designAssets, layouts, currentLayoutId } = useEditor();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -76,6 +76,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       const srcs = [
         ...planImages.map((i) => i.srcDataUrl),
         ...WALL_SIDES.flatMap((s) => wallItems[s].images.map((i) => i.srcDataUrl)),
+        ...designAssets.map((a) => a.url),
       ];
       const imageEls = await preloadImages(srcs);
       if (!active) return;
@@ -86,21 +87,21 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
     return () => {
       active = false;
     };
-  }, [open, project, planImages, wallItems]);
+  }, [open, project, planImages, wallItems, designAssets]);
 
   // 옵션/데이터 변경 시 미리보기 재렌더 (동기, 로드된 이미지 재사용)
   useEffect(() => {
     if (!open || !project || !ready) return;
-    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems);
+    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets);
     const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, targetPx: PREVIEW_PX });
     setDataUrl(url);
-  }, [open, ready, opts, project, placed, fixturesById, planImages, wallItems]);
+  }, [open, ready, opts, project, placed, fixturesById, planImages, wallItems, designAssets]);
 
   const layoutName = layouts.find((l) => l.id === currentLayoutId)?.name ?? '미저장';
 
   const handleExport = () => {
     if (!project || !ready) return;
-    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems);
+    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets);
     const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, targetPx: quality });
     downloadDataURL(url, `${buildBaseName(project.name, layoutName)}_isometric.png`);
   };

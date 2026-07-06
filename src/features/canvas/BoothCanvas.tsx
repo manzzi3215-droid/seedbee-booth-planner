@@ -13,6 +13,7 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import type {
   BoothConfig,
+  DesignAsset,
   FixtureDef,
   PlacedDimension,
   PlacedFixture,
@@ -21,6 +22,7 @@ import type {
   PointMm,
   SvgDocument,
 } from '../../types';
+import { planFaceMapping, assetById } from '../design/mapping';
 import SvgHighlightOverlay from '../svg/SvgRenderer';
 import { useContainerSize } from './useContainerSize';
 import { computeFit, zoomAtPoint, pxToMm, snapMmToGrid, type Viewport } from './coords';
@@ -60,6 +62,8 @@ interface BoothCanvasProps {
   backgrounds: PlacedImage[];
   fixturesById: Map<string, FixtureDef>;
   showFixtureNames: boolean;
+  /** 디자인 에셋 (텍스처 참조) */
+  designAssets?: DesignAsset[];
   selectedFixtureId: string | null;
   selectedTextId: string | null;
   selectedDimensionId: string | null;
@@ -108,6 +112,7 @@ export default function BoothCanvas({
   backgrounds,
   fixturesById,
   showFixtureNames,
+  designAssets,
   selectedFixtureId,
   selectedTextId,
   selectedDimensionId,
@@ -135,7 +140,11 @@ export default function BoothCanvas({
   const { ref, size } = useContainerSize<HTMLDivElement>();
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
   const guideLayerRef = useRef<Konva.Layer>(null);
-  const imageMap = useImageMap([...backgrounds, ...images].map((i) => i.srcDataUrl));
+  const imageMap = useImageMap([
+    ...backgrounds.map((i) => i.srcDataUrl),
+    ...images.map((i) => i.srcDataUrl),
+    ...(designAssets ?? []).map((a) => a.url),
+  ]);
   // 이미지 또는 배경 중 선택된 것에 Transformer 부착
   const { transformerRef, register } = useImageTransformer(selectedImageId ?? selectedBackgroundId);
 
@@ -466,6 +475,8 @@ export default function BoothCanvas({
             {placed.map((p) => {
               const def = fixturesById.get(p.fixtureDefId);
               if (!def) return null;
+              const dm = planFaceMapping(p.design);
+              const asset = dm ? assetById(designAssets, dm.assetId) : null;
               return (
                 <FixtureNode
                   key={p.id}
@@ -475,6 +486,8 @@ export default function BoothCanvas({
                   boothPolygon={polygon}
                   scale={viewport.scale}
                   showName={showFixtureNames}
+                  designMapping={dm}
+                  designImage={asset ? imageMap.get(asset.url) : undefined}
                   onSelect={onSelect}
                   onDragMove={handleFixtureDragMove}
                   onDragEnd={handleFixtureDragEnd}

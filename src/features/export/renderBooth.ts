@@ -1,12 +1,15 @@
 import Konva from 'konva';
 import type {
   BoothConfig,
+  DesignAsset,
+  FaceMapping,
   FixtureDef,
   PlacedDimension,
   PlacedFixture,
   PlacedImage,
   PlacedText,
 } from '../../types';
+import { planFaceMapping, assetById, computeFitRect } from '../design/mapping';
 import { TEXT_FONT_FAMILY } from '../texts/constants';
 import { dimensionDisplayLabel, DIMENSION_FONT_FAMILY } from '../dimensions/constants';
 import {
@@ -38,6 +41,8 @@ const TARGET_PX = 1500; // 부스의 큰 변이 차지할 목표 픽셀
 interface RenderOptions {
   gridSizeMm?: number;
   pixelRatio?: number;
+  /** 디자인 에셋 (텍스처 참조) — 집기 위 디자인 렌더용 (v0.8.7) */
+  designAssets?: DesignAsset[];
 }
 
 export function createBoothDrawingDataURL(
@@ -177,10 +182,14 @@ export function createBoothDrawingDataURL(
     }
 
     // 집기
+    const designAssets = options.designAssets ?? [];
     for (const p of placed) {
       const def = fixturesById.get(p.fixtureDefId);
       if (!def) continue;
-      layer.add(buildFixtureGroup(p, def, scale, showFixtureNames));
+      const dm = planFaceMapping(p.design);
+      const asset = dm ? assetById(designAssets, dm.assetId) : null;
+      const designImage = asset ? imageElements.get(asset.url) : undefined;
+      layer.add(buildFixtureGroup(p, def, scale, showFixtureNames, dm, designImage));
     }
 
     // 텍스트
@@ -328,7 +337,14 @@ function addPlaceholder(group: Konva.Group, color: string, w: number, d: number)
 }
 
 /** 배치 집기 하나를 그리는 Konva.Group (형태별) + 이름 라벨(옵션) */
-function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number, showName: boolean): Konva.Group {
+function buildFixtureGroup(
+  p: PlacedFixture,
+  def: FixtureDef,
+  scale: number,
+  showName: boolean,
+  designMapping?: FaceMapping | null,
+  designImage?: HTMLImageElement,
+): Konva.Group {
   const group = new Konva.Group({ x: p.xMm, y: p.yMm, rotation: p.rotationDeg });
   const w = def.widthMm;
   const d = def.depthMm;
@@ -384,6 +400,11 @@ function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number, sho
       break;
   }
 
+  // 디자인 텍스처 (v0.8.7) — 집기 영역에 클립하여 매핑/변형/투명도 적용
+  if (designMapping && designImage) {
+    addDesignTexture(group, designMapping, designImage, w, d);
+  }
+
   // 이름 라벨 (토글 ON, 어떤 배경색에서도 읽히도록 흰 글자 + 어두운 외곽선)
   if (showName && def.name) {
     group.add(
@@ -407,4 +428,67 @@ function buildFixtureGroup(p: PlacedFixture, def: FixtureDef, scale: number, sho
   }
 
   return group;
+}
+
+/** 집기 그룹에 디자인 텍스처를 추가 (DesignTextureNode 의 export 판; w×d 로 클립) */
+function addDesignTexture(
+  group: Konva.Group,
+  mapping: FaceMapping,
+  image: HTMLImageElement,
+  w: number,
+  d: number,
+): void {
+  const iw = image.naturalWidth || image.width;
+  const ih = image.naturalHeight || image.height;
+  const t = mapping.transform;
+  const clip = new Konva.Group({
+    listening: false,
+    clipFunc: (ctx) => {
+      ctx.beginPath();
+      ctx.rect(0, 0, w, d);
+      ctx.closePath();
+    },
+  });
+
+  if (mapping.mode === 'tile') {
+    const base = iw > 0 ? w / iw / 3 : 1;
+    clip.add(
+      new Konva.Rect({
+        x: 0,
+        y: 0,
+        width: w,
+        height: d,
+        fillPatternImage: image,
+        fillPatternRepeat: 'repeat',
+        fillPatternScaleX: base * t.scale * (t.flipH ? -1 : 1),
+        fillPatternScaleY: base * t.scale * (t.flipV ? -1 : 1),
+        fillPatternRotation: t.rotationDeg,
+        fillPatternOffsetX: -t.offsetX * w,
+        fillPatternOffsetY: -t.offsetY * d,
+        opacity: t.opacity,
+        listening: false,
+      }),
+    );
+  } else {
+    const { dw, dh } = computeFitRect(iw, ih, w, d, mapping.mode);
+    const sdw = dw * t.scale;
+    const sdh = dh * t.scale;
+    clip.add(
+      new Konva.Image({
+        image,
+        width: sdw,
+        height: sdh,
+        offsetX: sdw / 2,
+        offsetY: sdh / 2,
+        x: w / 2 + t.offsetX * w,
+        y: d / 2 + t.offsetY * d,
+        rotation: t.rotationDeg,
+        scaleX: t.flipH ? -1 : 1,
+        scaleY: t.flipV ? -1 : 1,
+        opacity: t.opacity,
+        listening: false,
+      }),
+    );
+  }
+  group.add(clip);
 }

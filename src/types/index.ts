@@ -98,6 +98,67 @@ export interface FixtureDef {
 }
 
 /**
+ * --- Design Mapping System (v0.8.7) ---
+ * 실제 출력 디자인(이미지)을 집기 면에 입히기 위한 구조.
+ * 향후 AI/UV/Curve/Cylinder 확장을 위해 Asset(에셋) / Mapping(면 매핑) / Transform 을 분리합니다.
+ * 이미지 바이트는 Firebase Storage 에 저장하고, 여기에는 참조(URL)만 둡니다(Base64 금지).
+ */
+
+/** 업로드된 디자인 에셋 (프로젝트/배치안 단위) */
+export interface DesignAsset {
+  id: string;
+  name: string; // 파일명
+  kind: 'raster' | 'svg';
+  url: string; // Storage download URL (또는 미설정 폴백 dataURL)
+  storagePath?: string; // Storage 경로 (삭제/교체용)
+  widthPx?: number;
+  heightPx?: number;
+  createdAt: number;
+}
+
+/** 매핑 방식 */
+export type MappingMode = 'stretch' | 'contain' | 'cover' | 'center' | 'tile';
+
+/** 집기 면 */
+export type BoxFace = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom';
+
+/** 텍스처 변형 (실시간 프리뷰) */
+export interface TextureTransform {
+  scale: number; // 1 = 원본
+  rotationDeg: number;
+  flipH: boolean;
+  flipV: boolean;
+  offsetX: number; // 면 대비 비율 -1~1
+  offsetY: number;
+  opacity: number; // 0~1
+}
+
+/** 한 면의 매핑 (에셋 참조 + 방식 + 변형) */
+export interface FaceMapping {
+  assetId: string;
+  mode: MappingMode;
+  transform: TextureTransform;
+}
+
+/** 집기 전체 디자인 매핑 */
+export interface DesignMapping {
+  /** 모든 면 동일 적용 (true 면 faces.front 를 모든 면에 사용) */
+  applyAll: boolean;
+  faces: Partial<Record<BoxFace, FaceMapping>>;
+}
+
+/** 기본 텍스처 변형 */
+export const DEFAULT_TEXTURE_TRANSFORM: TextureTransform = {
+  scale: 1,
+  rotationDeg: 0,
+  flipH: false,
+  flipV: false,
+  offsetX: 0,
+  offsetY: 0,
+  opacity: 1,
+};
+
+/**
  * 배치된 집기(캔버스 위의 인스턴스). 6단계 드래그 배치부터 사용됩니다.
  * 위치/회전은 모두 mm·도(deg) 기준으로 저장하여 화면 배율과 무관하게 유지됩니다.
  */
@@ -107,6 +168,8 @@ export interface PlacedFixture {
   xMm: number; // 바운딩 박스 좌상단 X (mm)
   yMm: number; // 바운딩 박스 좌상단 Y (mm)
   rotationDeg: number; // 회전 각도(도)
+  /** 디자인 매핑 (v0.8.7) — 인스턴스 단위 */
+  design?: DesignMapping;
 }
 
 /** 텍스트 정렬 */
@@ -273,6 +336,8 @@ export interface Layout {
   planBackgrounds?: PlacedImage[];
   /** 구조 파싱된 SVG 문서 (v0.7.0 SVG Import) */
   svgDocuments?: SvgDocument[];
+  /** 디자인 에셋 (v0.8.7) — 이미지 참조(Storage URL). placedFixtures.design 이 assetId 로 참조 */
+  designAssets?: DesignAsset[];
   wallItems?: WallItems;
   createdAt: number;
   updatedAt: number;

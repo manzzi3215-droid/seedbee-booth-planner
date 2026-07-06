@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.6 - Smart Booth Shape Editor**
+> **v0.8.7 - Design Mapping System**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -186,8 +186,24 @@ src/
 | 벽면 텍스트/치수선 | ✅ |
 | 이미지/포스터 삽입 | ✅ |
 | 아이소메트릭 3D 미리보기 | ✅ |
+| 디자인 매핑(집기 텍스처) | ✅ |
 
 ### Changelog
+
+**v0.8.7 — Design Mapping System (기반)**
+- **디자인 패널(집기 속성 → 색상 아래):** 실제 출력 디자인 이미지를 집기에 입힙니다.
+  - **업로드:** PNG · JPG · JPEG · WEBP · SVG (드래그&드롭 + `Ctrl+V` 붙여넣기). 썸네일/파일명/삭제·교체 미리보기.
+  - **면별 매핑:** Front · Back · Left · Right · Top · Bottom 개별 지정, **[모든 면 동일 적용]** 스위치.
+  - **매핑 방식:** Stretch · Contain · Cover · Center · Tile. **변형**(스케일 · 회전 · 좌우/상하 반전 · X/Y 오프셋) 실시간 미리보기.
+  - **투명도**는 기존 opacity 시스템과 통합. **매핑 복사/붙여넣기**(집기 디자인을 다른 집기로 복제).
+- **에셋 매니저(집기 라이브러리 하단):** 디자인 목록(썸네일 · 파일명 · 사용 집기 수 · 교체 · 삭제).
+  - **교체 시 같은 assetId 유지** → 사용 중인 모든 집기가 자동 반영. 삭제 시 해당 매핑 정리 + Storage 파일 정리.
+- **반영 범위:** **평면도 2D**(집기 위 텍스처 클립) · **아이소메트릭 3D**(면별 텍스처) · **PNG/PDF 출력**에 동일 적용.
+- **저장:** 이미지는 **Firebase Storage** 에 업로드하고 Firestore/공유/자동저장에는 **URL 참조만** 저장(Base64 없음).
+  Storage 미구성(env) 시 업로드는 비활성화되며 오류 없이 동작. 텍스처 로더/캐시 재사용.
+- **데이터 구조:** `DesignAsset`(이미지 참조) / `DesignMapping`(면별) / `TextureTransform`(변형) 분리 —
+  추후 AI 생성 · UV · Curve · Cylinder 매핑 확장 대비.
+- 다음 단계(미구현): Three.js 기반 실사 3D · UV/Curve/Cylinder 매핑 · AI 디자인 생성 연동.
 
 **v0.8.6 — Smart Booth Shape Editor (CAD 스타일)**
 - **부스 외곽 편집 모드:** 툴바 **[부스 편집]** 토글 → 편집 모드에서만 꼭짓점/Edge 핸들 표시(평소 숨김).

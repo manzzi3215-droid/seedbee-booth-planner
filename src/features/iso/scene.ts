@@ -1,5 +1,7 @@
 import type {
   BoothConfig,
+  BoxFace,
+  DesignAsset,
   FixtureDef,
   PlacedDimension,
   PlacedFixture,
@@ -11,6 +13,7 @@ import type {
 import { getBoothPolygon, getBoothBounds } from '../canvas/boothGeometry';
 import { getFixtureCorners } from '../canvas/fixtureGeometry';
 import { isWallEnabled } from '../wall/constants';
+import { planFaceMapping, resolveFaceMapping, assetById } from '../design/mapping';
 
 /**
  * 아이소메트릭 3D 씬 데이터 (렌더러 비의존, mm 좌표).
@@ -40,6 +43,12 @@ export interface IsoWall {
   images: PlacedImage[];
 }
 
+/** 집기 면 텍스처 (디자인 매핑, v0.8.7) */
+export interface IsoFaceTexture {
+  url: string;
+  opacity: number;
+}
+
 /** 집기 박스 (바닥 footprint 4점 + 높이) */
 export interface IsoBox {
   footprint: V3[]; // z=0 4점
@@ -48,6 +57,8 @@ export interface IsoBox {
   /** 채움 투명도 0~1 (v0.8.5) */
   opacity: number;
   name: string;
+  /** 면별 디자인 텍스처 (v0.8.7). top + front/back/left/right */
+  faces?: Partial<Record<'top' | BoxFace, IsoFaceTexture>>;
 }
 
 /** 바닥 위 이미지 (z=0 평면) */
@@ -112,6 +123,7 @@ export function buildIsoScene(
   fixturesById: Map<string, FixtureDef>,
   planImages: PlacedImage[],
   wallItems: WallItems,
+  designAssets: DesignAsset[] = [],
 ): IsoScene {
   const floorPolygon: V3[] = getBoothPolygon(booth).map((p) => ({ x: p.xMm, y: p.yMm, z: 0 }));
 
@@ -119,12 +131,27 @@ export function buildIsoScene(
   for (const p of placed) {
     const def = fixturesById.get(p.fixtureDefId);
     if (!def) continue;
+    // 면별 디자인 텍스처 해석
+    let faces: IsoBox['faces'];
+    if (p.design) {
+      const f: NonNullable<IsoBox['faces']> = {};
+      const top = planFaceMapping(p.design);
+      const topAsset = top ? assetById(designAssets, top.assetId) : null;
+      if (top && topAsset) f.top = { url: topAsset.url, opacity: top.transform.opacity };
+      for (const side of ['front', 'back', 'left', 'right'] as BoxFace[]) {
+        const m = resolveFaceMapping(p.design, side);
+        const a = m ? assetById(designAssets, m.assetId) : null;
+        if (m && a) f[side] = { url: a.url, opacity: m.transform.opacity };
+      }
+      if (Object.keys(f).length > 0) faces = f;
+    }
     boxes.push({
       footprint: getFixtureCorners(p, def).map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
       heightMm: resolveFixtureHeight(def.heightMm, booth.heightMm),
       color: def.color,
       opacity: def.opacity ?? 1,
       name: def.name,
+      faces,
     });
   }
 

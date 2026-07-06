@@ -1,4 +1,4 @@
-import type { FixtureDef, PlacedDimension, PlacedFixture, PlacedImage, PlacedText, Project, WallSide } from '../../types';
+import type { DesignAsset, FixtureDef, PlacedDimension, PlacedFixture, PlacedImage, PlacedText, Project, WallSide } from '../../types';
 import { getFloorLabel, getBoothSizeLabel } from '../../constants/booth';
 import { createBoothDrawingDataURL } from './renderBooth';
 import { createWallDrawingDataURL } from './renderWall';
@@ -20,6 +20,8 @@ export interface ExportInput {
   fixturesById: Map<string, FixtureDef>;
   /** 평면도 보기 회전(deg). 현재 화면 기준 출력용 (v0.8.3) */
   viewRotationDeg?: number;
+  /** 디자인 에셋 (텍스처) — 집기 디자인 렌더용 (v0.8.7) */
+  designAssets?: DesignAsset[];
 }
 
 function formatDate(ms: number): string {
@@ -32,7 +34,11 @@ function formatDate(ms: number): string {
 
 /** 1. PNG 저장 — 부스 전체 도면 (보기 회전 반영 = 현재 화면 기준) */
 export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
-  const imageEls = await preloadImages([...input.backgrounds, ...input.images].map((i) => i.srcDataUrl));
+  const designAssets = input.designAssets ?? [];
+  const imageEls = await preloadImages([
+    ...[...input.backgrounds, ...input.images].map((i) => i.srcDataUrl),
+    ...designAssets.map((a) => a.url),
+  ]);
   const base = createBoothDrawingDataURL(
     input.project.boothConfig,
     input.placed,
@@ -43,6 +49,7 @@ export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
     imageEls,
     input.fixturesById,
     input.showFixtureNames,
+    { designAssets },
   );
   const url = await rotateDataUrl(base, input.viewRotationDeg ?? 0);
   downloadDataURL(url, `${buildBaseName(input.project.name, input.layoutName)}_layout.png`);
@@ -139,10 +146,14 @@ async function buildReportDataURL(input: ExportInput): Promise<string> {
   ctx.font = font(4, true);
   ctx.fillText('부스 도면', mm(drawBoxX), mm(drawBoxY - 1));
 
-  const imageEls = await preloadImages([...input.backgrounds, ...input.images].map((i) => i.srcDataUrl));
+  const designAssets = input.designAssets ?? [];
+  const imageEls = await preloadImages([
+    ...[...input.backgrounds, ...input.images].map((i) => i.srcDataUrl),
+    ...designAssets.map((a) => a.url),
+  ]);
   const boothImg = await loadImage(
     await rotateDataUrl(
-      createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2 }),
+      createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2, designAssets }),
       input.viewRotationDeg ?? 0,
     ),
   );

@@ -1,4 +1,4 @@
-import type { PlacedDimension, PlacedText } from '../../types';
+import type { BoxFace, PlacedDimension, PlacedText } from '../../types';
 import { dimensionDisplayLabel } from '../dimensions/constants';
 import { TEXT_FONT_FAMILY } from '../texts/constants';
 import type { IsoScene, IsoWall, V3 } from './scene';
@@ -58,6 +58,9 @@ interface ViewParams {
 }
 
 const D = Math.PI / 180;
+
+/** footprint edge index → 집기 면 (getFixtureCorners 순서 기준) */
+const SIDE_FACE_ORDER: BoxFace[] = ['back', 'right', 'front', 'left'];
 
 function viewParams(vp: IsoViewpointId): ViewParams {
   switch (vp) {
@@ -381,11 +384,26 @@ export function renderIsoSceneToDataURL(
               const dot = Math.max(-1, Math.min(1, (nx / nlen) * Lx + (ny / nlen) * Ly));
               const face = [a, bb, { ...bb, z: box.heightMm }, { ...a, z: box.heightMm }];
               polygon(face, shade(box.color, 0.72 + 0.18 * dot), 'rgba(0,0,0,0.28)', box.opacity);
+              // 면 텍스처 (디자인 매핑)
+              const tex = box.faces?.[SIDE_FACE_ORDER[i % 4]];
+              const el = tex && imageElements.get(tex.url);
+              if (tex && el) {
+                const topA: V3 = { ...a, z: box.heightMm };
+                const topB: V3 = { ...bb, z: box.heightMm };
+                drawAffineImage(ctx, el, P(topA), P(topB), P(a), el.naturalWidth || el.width, el.naturalHeight || el.height, tex.opacity);
+                reset();
+              }
             }
           }
         }
         // 윗면
         polygon(top, shade(box.color, vp.top ? 1.0 : 1.1), 'rgba(0,0,0,0.28)', box.opacity);
+        const topTex = box.faces?.top;
+        const topEl = topTex && imageElements.get(topTex.url);
+        if (topTex && topEl) {
+          drawAffineImage(ctx, topEl, P(top[0]), P(top[1]), P(top[3]), topEl.naturalWidth || topEl.width, topEl.naturalHeight || topEl.height, topTex.opacity);
+          reset();
+        }
       },
     });
     if (options.showNames) {

@@ -47,6 +47,7 @@ export default function EditorCanvasArea() {
     dimensions,
     planImages,
     planBackgrounds,
+    designAssets,
     fixturesById,
     selectedFixtureId,
     selectedTextId,
@@ -249,6 +250,7 @@ export default function EditorCanvasArea() {
               backgrounds={planBackgrounds}
               fixturesById={fixturesById}
               showFixtureNames={showFixtureNames}
+              designAssets={designAssets}
               selectedFixtureId={selectedFixtureId}
               selectedTextId={selectedTextId}
               selectedDimensionId={selectedDimensionId}

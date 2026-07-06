@@ -1,9 +1,10 @@
 import { Group, Rect, Ellipse, Line, Path, Text } from 'react-konva';
 import type Konva from 'konva';
-import type { FixtureDef, PlacedFixture, PointMm } from '../../types';
+import type { FaceMapping, FixtureDef, PlacedFixture, PointMm } from '../../types';
 import { isFixtureOutOfBounds } from './fixtureGeometry';
 import { CUSTOM_PATH_VIEW } from '../fixtures/shapes';
 import { fillColor } from '../colors/palette';
+import DesignTextureNode from '../design/DesignTextureNode';
 
 const SELECT_COLOR = '#2563eb';
 const WARN_COLOR = '#dc2626';
@@ -107,6 +108,9 @@ interface FixtureNodeProps {
   scale: number;
   /** 집기명 표시 여부 */
   showName: boolean;
+  /** 디자인 텍스처(2D) — 평면도 면 매핑 + 로드된 이미지 */
+  designMapping?: FaceMapping | null;
+  designImage?: HTMLImageElement;
   onSelect: (id: string) => void;
   /** 드래그 중 위치 보정(스마트 스냅). 보정된 좌표(mm) 반환 */
   onDragMove: (id: string, xMm: number, yMm: number, shiftKey: boolean) => { xMm: number; yMm: number };
@@ -165,6 +169,8 @@ export default function FixtureNode({
   boothPolygon,
   scale,
   showName,
+  designMapping,
+  designImage,
   onSelect,
   onDragMove,
   onDragEnd,
@@ -208,6 +214,9 @@ export default function FixtureNode({
       onDragEnd={handleDragEnd}
     >
       <ShapeBody def={def} />
+      {designMapping && designImage && (
+        <DesignTextureNode image={designImage} w={def.widthMm} d={def.depthMm} mapping={designMapping} />
+      )}
       {nameVisible && (
         <Text
           text={def.name}

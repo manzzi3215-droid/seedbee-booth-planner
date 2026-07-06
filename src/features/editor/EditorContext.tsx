@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
+  DesignAsset,
+  DesignMapping,
   FixtureDef,
   Layout,
   PlacedDimension,
@@ -126,6 +128,16 @@ interface EditorContextValue {
   localFixtures: FixtureDef[];
   updateLocalFixture: (defId: string, patch: Partial<FixtureDef>) => void;
 
+  // 디자인 매핑 (v0.8.7)
+  designAssets: DesignAsset[];
+  addDesignAsset: (asset: DesignAsset) => void;
+  /** 집기 인스턴스의 디자인 매핑 설정(undefined 면 제거) */
+  updateFixtureDesign: (fixtureId: string, design: DesignMapping | undefined) => void;
+  /** 에셋 교체(같은 id 유지) → 사용 중인 모든 집기 자동 반영 */
+  replaceDesignAsset: (assetId: string, patch: Partial<DesignAsset>) => void;
+  /** 에셋 삭제 → 참조하는 매핑도 제거 */
+  deleteDesignAsset: (assetId: string) => void;
+
   // 평면도 배치
   placed: PlacedFixture[];
   texts: PlacedText[];
@@ -230,6 +242,7 @@ const cloneImages = (l: PlacedImage[]) => l.map((i) => ({ ...i }));
 const cloneSvgDocs = (l: SvgDocument[]) =>
   l.map((d) => ({ ...d, elements: d.elements.map((e) => ({ ...e })) }));
 const cloneFixtureDefs = (l: FixtureDef[]) => l.map((f) => ({ ...f }));
+const cloneDesignAssets = (l: DesignAsset[]) => l.map((a) => ({ ...a }));
 function cloneWallItems(w: WallItems): WallItems {
   const out = emptyWallItems();
   for (const side of WALL_SIDES) {
@@ -281,6 +294,7 @@ export function EditorProvider({
   const [planImages, setPlanImages] = useState<PlacedImage[]>([]);
   const [planBackgrounds, setPlanBackgrounds] = useState<PlacedImage[]>([]);
   const [localFixtures, setLocalFixtures] = useState<FixtureDef[]>([]);
+  const [designAssets, setDesignAssets] = useState<DesignAsset[]>([]);
   const [svgDocuments, setSvgDocuments] = useState<SvgDocument[]>([]);
   const [wallItems, setWallItems] = useState<WallItems>(emptyWallItems());
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
@@ -319,6 +333,7 @@ export function EditorProvider({
       setPlanImages(latest?.planImages ? cloneImages(latest.planImages) : []);
       setPlanBackgrounds(latest?.planBackgrounds ? cloneImages(latest.planBackgrounds) : []);
       setLocalFixtures(latest?.localFixtures ? cloneFixtureDefs(latest.localFixtures) : []);
+      setDesignAssets(latest?.designAssets ? cloneDesignAssets(latest.designAssets) : []);
       setSvgDocuments(latest?.svgDocuments ? cloneSvgDocs(latest.svgDocuments) : []);
       setWallItems(cloneWallItems(normalizeWallItems(latest?.wallItems)));
       setCurrentLayoutId(latest?.id ?? null);
@@ -589,6 +604,31 @@ export function EditorProvider({
     const updateLocalFixture = (defId: string, patch: Partial<FixtureDef>) =>
       setLocalFixtures((prev) => prev.map((f) => (f.id === defId ? { ...f, ...patch } : f)));
 
+    // ---------- 디자인 매핑 (v0.8.7) ----------
+    const addDesignAsset = (asset: DesignAsset) => setDesignAssets((prev) => [...prev, asset]);
+    const updateFixtureDesign = (fixtureId: string, design: DesignMapping | undefined) =>
+      setPlaced((prev) => prev.map((p) => (p.id === fixtureId ? { ...p, design } : p)));
+    const replaceDesignAsset = (assetId: string, patch: Partial<DesignAsset>) =>
+      setDesignAssets((prev) => prev.map((a) => (a.id === assetId ? { ...a, ...patch } : a)));
+    const deleteDesignAsset = (assetId: string) => {
+      setDesignAssets((prev) => prev.filter((a) => a.id !== assetId));
+      setPlaced((prev) =>
+        prev.map((p) => {
+          if (!p.design) return p;
+          const faces = { ...p.design.faces };
+          let changed = false;
+          for (const k of Object.keys(faces) as (keyof typeof faces)[]) {
+            if (faces[k]?.assetId === assetId) {
+              delete faces[k];
+              changed = true;
+            }
+          }
+          if (!changed) return p;
+          return Object.keys(faces).length > 0 ? { ...p, design: { ...p.design, faces } } : { ...p, design: undefined };
+        }),
+      );
+    };
+
     const markElementConverted = (docId: string, elId: string) =>
       setSvgDocuments((prev) =>
         prev.map((d) =>
@@ -760,8 +800,9 @@ export function EditorProvider({
         JSON.stringify(planBackgrounds) !== JSON.stringify(currentLayout.planBackgrounds ?? []) ||
         JSON.stringify(svgDocuments) !== JSON.stringify(currentLayout.svgDocuments ?? []) ||
         JSON.stringify(localFixtures) !== JSON.stringify(currentLayout.localFixtures ?? []) ||
+        JSON.stringify(designAssets) !== JSON.stringify(currentLayout.designAssets ?? []) ||
         JSON.stringify(wallItems) !== JSON.stringify(normalizeWallItems(currentLayout.wallItems))
-      : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 || planBackgrounds.length > 0 || svgDocuments.length > 0 ||
+      : placed.length > 0 || texts.length > 0 || dimensions.length > 0 || planImages.length > 0 || planBackgrounds.length > 0 || svgDocuments.length > 0 || designAssets.length > 0 ||
         WALL_SIDES.some((s) => wallItems[s].texts.length > 0 || wallItems[s].dimensions.length > 0 || wallItems[s].images.length > 0);
 
     const suggestLayoutName = () => `v${layouts.length + 1}`;
@@ -780,6 +821,7 @@ export function EditorProvider({
       planImages: cloneImages(planImages),
       planBackgrounds: cloneImages(planBackgrounds),
       localFixtures: cloneFixtureDefs(localFixtures),
+      designAssets: cloneDesignAssets(designAssets),
       svgDocuments: cloneSvgDocs(svgDocuments),
       wallItems: cloneWallItems(wallItems),
     });
@@ -816,6 +858,7 @@ export function EditorProvider({
       setPlanImages(cloneImages(layout?.planImages ?? []));
       setPlanBackgrounds(cloneImages(layout?.planBackgrounds ?? []));
       setLocalFixtures(cloneFixtureDefs(layout?.localFixtures ?? []));
+      setDesignAssets(cloneDesignAssets(layout?.designAssets ?? []));
       setSvgDocuments(cloneSvgDocs(layout?.svgDocuments ?? []));
       setWallItems(cloneWallItems(normalizeWallItems(layout?.wallItems)));
       setCurrentLayoutId(layout?.id ?? null);
@@ -852,6 +895,7 @@ export function EditorProvider({
               planImages: cloneImages(src.planImages ?? []),
               planBackgrounds: cloneImages(src.planBackgrounds ?? []),
               localFixtures: cloneFixtureDefs(src.localFixtures ?? []),
+              designAssets: cloneDesignAssets(src.designAssets ?? []),
               svgDocuments: cloneSvgDocs(src.svgDocuments ?? []),
               wallItems: cloneWallItems(normalizeWallItems(src.wallItems)),
             };
@@ -906,6 +950,11 @@ export function EditorProvider({
       deleteFixture,
       localFixtures,
       updateLocalFixture,
+      designAssets,
+      addDesignAsset,
+      updateFixtureDesign,
+      replaceDesignAsset,
+      deleteDesignAsset,
       placed,
       texts,
       dimensions,
@@ -981,6 +1030,7 @@ export function EditorProvider({
     planImages,
     planBackgrounds,
     localFixtures,
+    designAssets,
     svgDocuments,
     wallItems,
     showFixtureNames,

@@ -17,6 +17,7 @@ import type { FixtureDef } from '../../types';
 import { getShapeLabel } from './shapes';
 import FixtureFormDialog from './FixtureFormDialog';
 import { useEditor } from '../editor/EditorContext';
+import AssetManagerPanel from '../design/AssetManagerPanel';
 
 /** 색상 스와치 */
 function ColorSwatch({ color }: { color: string }) {
@@ -255,6 +256,9 @@ export default function FixtureLibraryPanel() {
           )}
         </Stack>
       )}
+
+      {/* 디자인 에셋 관리 (v0.8.7) */}
+      <AssetManagerPanel />
 
       <FixtureFormDialog
         open={dialogOpen}

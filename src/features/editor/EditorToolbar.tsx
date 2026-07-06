@@ -75,6 +75,7 @@ export default function EditorToolbar() {
     dimensions,
     planImages,
     planBackgrounds,
+    designAssets,
     fixturesById,
     showFixtureNames,
     setShowFixtureNames,
@@ -160,6 +161,7 @@ export default function EditorToolbar() {
       showFixtureNames,
       fixturesById,
       viewRotationDeg,
+      designAssets,
     };
   };
 

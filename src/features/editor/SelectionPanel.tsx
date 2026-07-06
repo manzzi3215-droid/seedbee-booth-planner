@@ -22,6 +22,7 @@ import ImagePanel from './ImagePanel';
 import BackgroundPanel from './BackgroundPanel';
 import SvgInspectorPanel from './SvgInspectorPanel';
 import ConvertedFixtureEditor from './ConvertedFixtureEditor';
+import DesignPanel from '../design/DesignPanel';
 
 /** 빈 선택 상태 */
 function EmptyPanel() {
@@ -190,6 +191,11 @@ function FixtureInfoPanel() {
           <Divider sx={{ my: 1 }} />
         </>
       )}
+
+      {/* 디자인 매핑 (Color 아래) */}
+      <DesignPanel fixture={selected} />
+
+      <Divider sx={{ my: 1 }} />
 
       {/* 위치/회전 직접 입력 */}
       <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
