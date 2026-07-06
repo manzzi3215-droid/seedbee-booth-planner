@@ -128,6 +128,9 @@ interface EditorContextValue {
   localFixtures: FixtureDef[];
   updateLocalFixture: (defId: string, patch: Partial<FixtureDef>) => void;
 
+  // 출력물 제작 (v0.8.9) — 집기 정의의 printSettings 갱신(로컬/전역 자동 판별 저장)
+  updateFixturePrintSettings: (defId: string, printSettings: import('../../types').PrintSettings) => void;
+
   // 디자인 매핑 (v0.8.7)
   designAssets: DesignAsset[];
   addDesignAsset: (asset: DesignAsset) => void;
@@ -604,6 +607,21 @@ export function EditorProvider({
     const updateLocalFixture = (defId: string, patch: Partial<FixtureDef>) =>
       setLocalFixtures((prev) => prev.map((f) => (f.id === defId ? { ...f, ...patch } : f)));
 
+    // 출력물 제작(v0.8.9): printSettings 는 FixtureDef 에 저장.
+    // 로컬 집기(배치안 임베드) → 배치안 자동/클라우드 저장에 포함.
+    // 전역 라이브러리 집기 → storage.saveFixture 로 즉시 영속(클라우드 반영).
+    const updateFixturePrintSettings = (
+      defId: string,
+      printSettings: import('../../types').PrintSettings,
+    ) => {
+      if (localFixtures.some((f) => f.id === defId)) {
+        updateLocalFixture(defId, { printSettings });
+      } else {
+        const def = fixtures.find((f) => f.id === defId);
+        if (def) void saveFixture({ ...def, printSettings });
+      }
+    };
+
     // ---------- 디자인 매핑 (v0.8.7) ----------
     const addDesignAsset = (asset: DesignAsset) => setDesignAssets((prev) => [...prev, asset]);
     const updateFixtureDesign = (fixtureId: string, design: DesignMapping | undefined) =>
@@ -950,6 +968,7 @@ export function EditorProvider({
       deleteFixture,
       localFixtures,
       updateLocalFixture,
+      updateFixturePrintSettings,
       designAssets,
       addDesignAsset,
       updateFixtureDesign,

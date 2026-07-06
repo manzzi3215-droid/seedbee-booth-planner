@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.8.8 - Presentation Mode**
+> **v0.8.9 - Print Production Workspace**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -188,8 +188,29 @@ src/
 | 아이소메트릭 3D 미리보기 | ✅ |
 | 디자인 매핑(집기 텍스처) | ✅ |
 | Presentation Mode(고객 시안 검토) | ✅ |
+| Print Production Workspace(출력물 제작) | ✅ |
 
 ### Changelog
+
+**v0.8.9 — Print Production Workspace (출력물 제작)**
+- **툴바 [출력물 제작]:** 편집 화면이 아니라 실제 출력업체 전달용 PDF 를 만드는 작업 공간.
+  선택 집기 기준 진입(선택 없으면 첫 집기), 상단 드롭다운으로 다른 배치 집기로 전환.
+- **면별 탭:** Front · Back · Left · Right · Top · Bottom 각 면의 실제 출력면 확인.
+- **자동/수동 사이즈:** 집기 치수 기준 자동 계산(Front=W×H, Left=D×H, Top=W×D, 단위 mm) +
+  면별 수동 수정. 화면 매핑과 별도로 Print 설정에 저장.
+- **Bleed:** 0/3/5/10mm 프리셋 + 직접 입력. 블리드 포함 최종 출력 사이즈 표시.
+- **Safe Area:** ON/OFF + mm 입력(안전영역 파선 표시). **Crop Mark:** ON/OFF(재단선).
+- **DPI 체크:** 원본 이미지 해상도 대비 실효 DPI 계산 — 300+ 좋음 / 150–299 주의 / 150미만 낮음 /
+  해상도 정보 없으면 "해상도 확인 불가".
+- **Print Preview:** 디자인 이미지 · 블리드 · 안전영역 · 재단선 · 실제 mm · DPI 상태를 실제 출력물처럼 표시.
+- **출력용 변형(별도 저장):** Scale · X/Y Offset · Rotation · Flip H/V — 화면 시안용 Mapping 과 분리.
+- **Export:** 면별 PDF(`집기명_front.pdf`) · 모든 면 PDF(순차 다운로드) · `manifest.json`
+  (projectName/fixtureName/faces[사이즈·bleed·safe·dpi]). PDF 는 실제 사이즈 + Bleed + Crop Mark + Safe Area 포함.
+- **데이터:** `FixtureDef.printSettings.faces[face] = { widthMm, heightMm, bleedMm, safeAreaMm, cropMark, transform, dpiInfo }`.
+  기존 프로젝트 자동 호환(없으면 집기 치수 기준 기본값 생성). 로컬 집기는 배치안 자동/클라우드 저장에 포함,
+  전역 집기는 라이브러리에 즉시 저장.
+- **연동:** Design Mapping(v0.8.7) 에셋을 재업로드 없이 그대로 사용. Presentation Mode 와 독립적으로 동작.
+- 브라우저 한계상 PDF 는 래스터 합성(대형 면은 해상도 캡)이며, 인쇄 적합성은 DPI 체크로 안내.
 
 **v0.8.8 — Presentation Mode (고객 시안 검토)**
 - **Presentation 버튼(툴바):** 편집이 아닌 "고객에게 보여주기" 전용 전체화면 모드로 진입.

@@ -95,6 +95,43 @@ export interface FixtureDef {
    * widthMm/depthMm 바운딩 박스에 맞춰 (width/100, depth/100) 로 스케일됩니다.
    */
   svgPath?: string;
+
+  /**
+   * 출력물 제작(Print Production Workspace, v0.8.9) 설정.
+   * 화면 시안용 Design Mapping(PlacedFixture.design) 과 별도로, 실제 출력용 사이즈/블리드/
+   * 재단선/안전영역/출력용 변형을 면별로 보관합니다. 누락 시 집기 치수 기준 기본값을 생성합니다.
+   */
+  printSettings?: PrintSettings;
+}
+
+/**
+ * --- Print Production Workspace (v0.8.9) ---
+ * 실제 출력업체 전달용 데이터(면별 출력 사이즈/블리드/재단선/안전영역/출력용 변형).
+ * 디자인 에셋(이미지)은 Design Mapping(v0.8.7)의 것을 그대로 재사용합니다.
+ */
+
+/** 한 면의 출력 설정 */
+export interface PrintFaceSettings {
+  /** 출력(재단) 사이즈 — 기본은 집기 치수 기준 자동 계산, 수동 수정 가능 */
+  widthMm: number;
+  heightMm: number;
+  /** 블리드(도련) mm */
+  bleedMm: number;
+  /** 안전영역 mm */
+  safeAreaMm: number;
+  /** 안전영역 표시 여부 */
+  safeAreaOn: boolean;
+  /** 재단선(crop mark) 표시 여부 */
+  cropMark: boolean;
+  /** 출력용 변형 (화면 매핑과 별도) — opacity 는 사용하지 않음(항상 1) */
+  transform: TextureTransform;
+  /** DPI 계산용 원본 이미지 픽셀 기록(선택) */
+  dpiInfo?: { widthPx?: number; heightPx?: number };
+}
+
+/** 집기 전체 출력 설정 (면별) */
+export interface PrintSettings {
+  faces: Partial<Record<BoxFace, PrintFaceSettings>>;
 }
 
 /**

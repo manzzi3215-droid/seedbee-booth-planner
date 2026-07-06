@@ -31,6 +31,7 @@ import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateR
 import WallpaperRoundedIcon from '@mui/icons-material/WallpaperRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
 import SlideshowRoundedIcon from '@mui/icons-material/SlideshowRounded';
+import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
@@ -68,7 +69,10 @@ import { hasBoothHeight } from '../../constants/booth';
  *  - [저장]: 현재 배치안에 저장 (없으면 v1 자동 생성)
  *  - [다른 이름으로 저장]: 새 배치안으로 저장
  */
-export default function EditorToolbar({ onOpenPresentation }: { onOpenPresentation?: () => void } = {}) {
+export default function EditorToolbar({
+  onOpenPresentation,
+  onOpenPrint,
+}: { onOpenPresentation?: () => void; onOpenPrint?: () => void } = {}) {
   const {
     project,
     placed,
@@ -718,6 +722,21 @@ export default function EditorToolbar({ onOpenPresentation }: { onOpenPresentati
             disabled={!project}
           >
             Presentation
+          </Button>
+        </span>
+      </Tooltip>
+
+      <Tooltip title="출력물 제작 — 실제 출력용 PDF 작업 공간(면별 사이즈/블리드/재단선/DPI)">
+        <span>
+          <Button
+            variant="outlined"
+            size="small"
+            color="secondary"
+            startIcon={<PrintRoundedIcon />}
+            onClick={() => onOpenPrint?.()}
+            disabled={!project || placed.length === 0}
+          >
+            출력물 제작
           </Button>
         </span>
       </Tooltip>
