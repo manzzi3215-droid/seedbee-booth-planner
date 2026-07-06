@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.1 - Design Mapping & 3D Rendering Upgrade**
+> **v0.9.1 - Design Mapping & 3D Geometry Engine**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -192,7 +192,14 @@ src/
 
 ### Changelog
 
-**v0.9.1 — Design Mapping & 3D Rendering Upgrade (기존 기능 완성)**
+**v0.9.1 — Design Mapping & 3D Geometry Engine (기존 기능 완성)**
+- **Geometry Generator(2D Shape → 3D Extrude 파이프라인):** Shape 별 Renderer 를 레지스트리에 등록하는
+  확장형 구조(`src/features/iso/geometry/GeometryGenerator.ts`). Shape 마다 바닥 외곽선(footprint)만 정의하면
+  3D 렌더러가 높이만큼 Extrude 하여 자동 생성 → **새 Shape 는 Renderer 한 줄 등록**으로 3D 지원.
+  - Rectangle→Box, RoundedRectangle→라운드(곡면 코너), Circle→원기둥, Semicircle→반원, Custom Path/SVG→Path Extrude(외곽선 샘플링).
+  - **곡선 집기는 절대 박스로 표현되지 않음** — 라운드/원기둥/커스텀은 곡면 실루엣 유지.
+- **곡면 Texture Wrap(둘레 UV):** 원기둥/라운드/커스텀은 디자인 이미지를 둘레 비율로 잘라 각 면에 감아
+  진짜 UV wrap 처럼 표시. 사각형은 Front/Back/Left/Right 면별 매핑 유지, 모든 Shape 의 Top 매핑 유지.
 - **Design Mapping 정상화(최우선 버그 수정):** 업로드가 Firebase Storage 설정/보안규칙/CORS 에 의존해
   실패하던 문제를 해결. 이미지를 **경량 dataURL**(긴 변 1000px + 압축, Firestore 용량 고려)로 인코딩해
   배치안과 함께 저장 → 외부 설정 없이 **업로드 → 2D → Cloud/Auto Save → 새로고침 → 3D → PNG/PDF** 전 구간 동작.
@@ -206,8 +213,8 @@ src/
 - **품질 향상:** `imageSmoothingQuality: high`(텍스처 필터링/AA), Edge 스트로크 유지.
 - **유지:** Undo/Redo · CAD 생산성 · Print Production · Cloud/Auto Save · Advanced Color · Shape Editor · Wall View ·
   PNG/PDF · Share Links 정상.
-- 로드맵(이번 버전 미포함): 완전한 Material(Matte/Gloss/Acrylic) · Ambient/Contact Shadow 고도화 · Cylinder/Curved UV Wrap ·
-  Custom Path 3D 지오메트리. 현재 아이소메트릭 파이프라인 위에 단계적 확장 예정.
+- 로드맵(이번 버전 미포함): 완전한 Material(Matte/Gloss/Acrylic) · Ambient/Contact Shadow 고도화 ·
+  Three.js 기반 실사 렌더. 현재 Geometry Generator/아이소메트릭 파이프라인 위에 단계적 확장 예정.
 
 **v0.9.0 — Professional CAD Productivity (설계 속도 극대화)**
 - **Presentation Mode 제거:** 툴바 버튼·오버레이·PDF·`?present=1` 라우팅·관련 코드 삭제(기존 기능 영향 없음).

@@ -11,7 +11,7 @@ import type {
   WallSide,
 } from '../../types';
 import { getBoothPolygon, getBoothBounds } from '../canvas/boothGeometry';
-import { getFixtureFootprint } from '../canvas/fixtureGeometry';
+import { generateGeometry } from './geometry/GeometryGenerator';
 import { isWallEnabled } from '../wall/constants';
 import { planFaceMapping, resolveFaceMapping, assetById } from '../design/mapping';
 
@@ -49,9 +49,9 @@ export interface IsoFaceTexture {
   opacity: number;
 }
 
-/** 집기 박스 (바닥 footprint 4점 + 높이) */
+/** 집기 프리즘 (바닥 footprint 폴리곤 + 높이 extrude) */
 export interface IsoBox {
-  footprint: V3[]; // z=0 4점
+  footprint: V3[]; // z=0 외곽선 (Shape 별 다각형)
   heightMm: number;
   color: string;
   /** 채움 투명도 0~1 (v0.8.5) */
@@ -59,6 +59,10 @@ export interface IsoBox {
   name: string;
   /** 면별 디자인 텍스처 (v0.8.7). top + front/back/left/right */
   faces?: Partial<Record<'top' | BoxFace, IsoFaceTexture>>;
+  /** 곡면(라운드/원기둥/커스텀) — 측면 텍스처를 둘레 UV wrap 으로 처리 (v0.9.1) */
+  curved?: boolean;
+  /** 곡면 측면 wrap 용 텍스처 (v0.9.1) */
+  wrapTexture?: IsoFaceTexture;
 }
 
 /** 바닥 위 이미지 (z=0 평면) */
@@ -131,8 +135,11 @@ export function buildIsoScene(
   for (const p of placed) {
     const def = fixturesById.get(p.fixtureDefId);
     if (!def) continue;
+    // 2D Shape → 3D extrude 지오메트리
+    const geo = generateGeometry(p, def);
     // 면별 디자인 텍스처 해석
     let faces: IsoBox['faces'];
+    let wrapTexture: IsoFaceTexture | undefined;
     if (p.design) {
       const f: NonNullable<IsoBox['faces']> = {};
       const top = planFaceMapping(p.design);
@@ -144,14 +151,22 @@ export function buildIsoScene(
         if (m && a) f[side] = { url: a.url, opacity: m.transform.opacity };
       }
       if (Object.keys(f).length > 0) faces = f;
+      // 곡면 측면 wrap: 대표 면(front/applyAll/첫 면) 텍스처를 둘레에 감쌈
+      if (geo.curved) {
+        const wm = resolveFaceMapping(p.design, 'front');
+        const wa = wm ? assetById(designAssets, wm.assetId) : null;
+        if (wm && wa) wrapTexture = { url: wa.url, opacity: wm.transform.opacity };
+      }
     }
     boxes.push({
-      footprint: getFixtureFootprint(p, def).map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
+      footprint: geo.footprint.map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
       heightMm: resolveFixtureHeight(def.heightMm, booth.heightMm),
       color: def.color,
       opacity: def.opacity ?? 1,
       name: def.name,
       faces,
+      curved: geo.curved,
+      wrapTexture,
     });
   }
 

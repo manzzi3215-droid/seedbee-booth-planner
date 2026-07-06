@@ -405,6 +405,18 @@ export function renderIsoSceneToDataURL(
       depth: boxDepth,
       draw: () => {
         if (!vp.top) {
+          // 곡면 wrap 용 둘레 누적 길이 (Cylinder/Rounded/Path UV)
+          const wrapEl = box.curved && box.wrapTexture ? imageElements.get(box.wrapTexture.url) : undefined;
+          let perim = 0;
+          const cum: number[] = [];
+          if (wrapEl) {
+            for (let i = 0; i < fp.length; i++) {
+              cum.push(perim);
+              const nx2 = fp[(i + 1) % fp.length].x - fp[i].x;
+              const ny2 = fp[(i + 1) % fp.length].y - fp[i].y;
+              perim += Math.hypot(nx2, ny2);
+            }
+          }
           // 측면(뷰어를 향한 면만)
           for (let i = 0; i < fp.length; i++) {
             const a = fp[i];
@@ -424,15 +436,24 @@ export function renderIsoSceneToDataURL(
               const dot = Math.max(-1, Math.min(1, (nx / nlen) * Lx + (ny / nlen) * Ly));
               const face = [a, bb, { ...bb, z: box.heightMm }, { ...a, z: box.heightMm }];
               polygon(face, shade(box.color, 0.72 + 0.18 * dot), 'rgba(0,0,0,0.28)', box.opacity);
-              // 면 텍스처 (디자인 매핑) — 사각형 풋프린트(4면)에만 면별 매핑 적용.
-              // 원기둥 등 다각형은 면별 텍스처를 건너뜀(왜곡 방지, Cylinder Wrap 은 추후).
-              const tex = fp.length === 4 ? box.faces?.[SIDE_FACE_ORDER[i % 4]] : undefined;
-              const el = tex && imageElements.get(tex.url);
-              if (tex && el) {
-                const topA: V3 = { ...a, z: box.heightMm };
-                const topB: V3 = { ...bb, z: box.heightMm };
-                drawAffineImage(ctx, el, P(topA), P(topB), P(a), el.naturalWidth || el.width, el.naturalHeight || el.height, tex.opacity);
+              const topA: V3 = { ...a, z: box.heightMm };
+              const topB: V3 = { ...bb, z: box.heightMm };
+              if (wrapEl && box.wrapTexture && perim > 0) {
+                // 곡면: 이미지를 둘레 비율로 잘라 각 facet 에 감쌈 (Cylinder/곡면 UV wrap)
+                const iw = wrapEl.naturalWidth || wrapEl.width;
+                const ih = wrapEl.naturalHeight || wrapEl.height;
+                const u0 = cum[i] / perim;
+                const u1 = (cum[i] + Math.hypot(dx, dy)) / perim;
+                drawAffineImageRegion(ctx, wrapEl, u0 * iw, 0, Math.max(1, (u1 - u0) * iw), ih, P(topA), P(topB), P(a), box.wrapTexture.opacity);
                 reset();
+              } else {
+                // 사각형(4면): 면별 매핑 (front/back/left/right)
+                const tex = fp.length === 4 ? box.faces?.[SIDE_FACE_ORDER[i % 4]] : undefined;
+                const el = tex && imageElements.get(tex.url);
+                if (tex && el) {
+                  drawAffineImage(ctx, el, P(topA), P(topB), P(a), el.naturalWidth || el.width, el.naturalHeight || el.height, tex.opacity);
+                  reset();
+                }
               }
             }
           }
@@ -523,6 +544,30 @@ function drawAffineImage(
   ctx.globalAlpha = opacity;
   ctx.transform(a, b, c, d, sp00.x, sp00.y);
   ctx.drawImage(img, 0, 0, localW, localH);
+  ctx.restore();
+}
+
+/** 소스 이미지의 부분 영역(sx,sy,sw,sh)을 평행사변형에 매핑 (곡면 둘레 UV wrap, v0.9.1) */
+function drawAffineImageRegion(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  sp00: Pt,
+  sp10: Pt,
+  sp01: Pt,
+  opacity: number,
+) {
+  const a = (sp10.x - sp00.x) / sw;
+  const b = (sp10.y - sp00.y) / sw;
+  const c = (sp01.x - sp00.x) / sh;
+  const d = (sp01.y - sp00.y) / sh;
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.transform(a, b, c, d, sp00.x, sp00.y);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
   ctx.restore();
 }
 
