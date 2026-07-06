@@ -17,12 +17,13 @@ export type IsoViewpointId =
   | 'backDiagonal'
   | 'top';
 
-export const VIEWPOINTS: { id: IsoViewpointId; label: string }[] = [
-  { id: 'frontDiagonal', label: '정면 사선' },
-  { id: 'leftDiagonal', label: '좌측 사선' },
-  { id: 'rightDiagonal', label: '우측 사선' },
-  { id: 'backDiagonal', label: '후면 사선' },
-  { id: 'top', label: 'Top View' },
+/** 시점 프리셋 — 방위각(°)/고도(°) 로 자유 궤도(orbit) 카메라와 통일 (v0.9.1) */
+export const VIEWPOINTS: { id: IsoViewpointId; label: string; azimuthDeg: number; elevationDeg: number }[] = [
+  { id: 'frontDiagonal', label: '정면 사선', azimuthDeg: 14, elevationDeg: 28 },
+  { id: 'leftDiagonal', label: '좌측 사선', azimuthDeg: -48, elevationDeg: 28 },
+  { id: 'rightDiagonal', label: '우측 사선', azimuthDeg: 48, elevationDeg: 28 },
+  { id: 'backDiagonal', label: '후면 사선', azimuthDeg: -132, elevationDeg: 28 },
+  { id: 'top', label: 'Top View', azimuthDeg: 0, elevationDeg: 90 },
 ];
 
 export interface IsoRenderOptions {
@@ -41,6 +42,13 @@ export interface IsoRenderOptions {
   targetPx: number;
   /** 배경 테마 (기본 light). Presentation Dark 모드에서 dark (v0.8.8) */
   background?: 'light' | 'dark';
+  /** 자유 궤도 카메라 방위각(°). 지정 시 viewpoint 대신 사용 (v0.9.1) */
+  azimuthDeg?: number;
+  /** 자유 궤도 카메라 고도(°) 20~90. 지정 시 viewpoint 대신 사용 (v0.9.1) */
+  elevationDeg?: number;
+  /** 이미지 패닝(px) — 자유 카메라 (v0.9.1) */
+  panX?: number;
+  panY?: number;
 }
 
 export const DEFAULT_ISO_OPTIONS: IsoRenderOptions = {
@@ -71,18 +79,20 @@ const D = Math.PI / 180;
 const SIDE_FACE_ORDER: BoxFace[] = ['back', 'right', 'front', 'left'];
 
 function viewParams(vp: IsoViewpointId): ViewParams {
-  switch (vp) {
-    case 'leftDiagonal':
-      return { az: -48 * D, kDepth: 0.52, kZ: 1, top: false };
-    case 'rightDiagonal':
-      return { az: 48 * D, kDepth: 0.52, kZ: 1, top: false };
-    case 'frontDiagonal':
-      return { az: 14 * D, kDepth: 0.5, kZ: 1, top: false };
-    case 'backDiagonal':
-      return { az: -132 * D, kDepth: 0.52, kZ: 1, top: false };
-    case 'top':
-      return { az: 0, kDepth: 1, kZ: 0, top: true };
-  }
+  const preset = VIEWPOINTS.find((v) => v.id === vp) ?? VIEWPOINTS[0];
+  return orbitParams(preset.azimuthDeg, preset.elevationDeg);
+}
+
+/** 방위각/고도(°) → 투영 파라미터 (자유 궤도 카메라, v0.9.1) */
+function orbitParams(azimuthDeg: number, elevationDeg: number): ViewParams {
+  const e = Math.max(20, Math.min(90, elevationDeg));
+  const u = Math.max(0, Math.min(1, (e - 25) / 65)); // 0 @25° .. 1 @90°(top)
+  return {
+    az: azimuthDeg * D,
+    kDepth: 0.5 + 0.5 * u,
+    kZ: 1 - u,
+    top: e >= 88,
+  };
 }
 
 /** hex 색을 factor 로 밝기 조절 → rgb() */
@@ -127,9 +137,15 @@ export function renderIsoSceneToDataURL(
   imageElements: Map<string, HTMLImageElement>,
   options: IsoRenderOptions,
 ): string {
-  const vp = viewParams(options.viewpoint);
+  // 자유 궤도 카메라(azimuth/elevation) 우선, 없으면 viewpoint 프리셋
+  const vp =
+    options.azimuthDeg != null && options.elevationDeg != null
+      ? orbitParams(options.azimuthDeg, options.elevationDeg)
+      : viewParams(options.viewpoint);
   const ca = Math.cos(vp.az);
   const sa = Math.sin(vp.az);
+  const panX = options.panX ?? 0;
+  const panY = options.panY ?? 0;
 
   const rawProj = (p: V3): Pt => ({
     x: p.x * ca - p.y * sa,
@@ -165,14 +181,21 @@ export function renderIsoSceneToDataURL(
 
   const P = (p: V3): Pt => {
     const r = rawProj(p);
-    return { x: r.x * scale + offX, y: r.y * scale + offY };
+    return { x: r.x * scale + offX + panX, y: r.y * scale + offY + panY };
   };
 
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(contentW * scale + MARGIN * 2);
   canvas.height = Math.ceil(contentH * scale + MARGIN * 2);
   const ctx = canvas.getContext('2d')!;
-  const reset = () => ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // 텍스처 필터링/안티에일리어싱 품질 향상 (v0.9.1)
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  const reset = () => {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  };
 
   // 배경 (부드러운 그라디언트). Dark 테마면 어두운 톤
   const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -243,7 +266,9 @@ export function renderIsoSceneToDataURL(
   const Lx = -0.42 / Llen;
   const Ly = -0.6 / Llen;
 
-  const units: DrawUnit[] = [];
+  const units: DrawUnit[] = []; // 바닥/그림자/바닥이미지 (배경)
+  const wallUnits: DrawUnit[] = []; // 벽 (항상 집기 뒤) — v0.9.1 z-order
+  const boxUnits: DrawUnit[] = []; // 집기 (항상 벽 앞)
 
   // --- 바닥 + 체크 패턴 ---
   units.push({
@@ -359,7 +384,7 @@ export function renderIsoSceneToDataURL(
     const dot = Math.max(-1, Math.min(1, nx * Lx + ny * Ly));
     const bright = 0.6 + 0.32 * dot; // 면별 명암 차이
     const alpha = facing > 0 ? options.wallOpacity : 0.96;
-    units.push({
+    wallUnits.push({
       depth: depthOf(quad),
       draw: () => {
         polygon(quad, shade('#c3ccd8', bright), 'rgba(100,116,139,0.7)', alpha);
@@ -376,7 +401,7 @@ export function renderIsoSceneToDataURL(
     const bcx = fp.reduce((s, p) => s + p.x, 0) / fp.length;
     const bcy = fp.reduce((s, p) => s + p.y, 0) / fp.length;
     const boxDepth = depthOf([...fp, ...top]);
-    units.push({
+    boxUnits.push({
       depth: boxDepth,
       draw: () => {
         if (!vp.top) {
@@ -399,8 +424,9 @@ export function renderIsoSceneToDataURL(
               const dot = Math.max(-1, Math.min(1, (nx / nlen) * Lx + (ny / nlen) * Ly));
               const face = [a, bb, { ...bb, z: box.heightMm }, { ...a, z: box.heightMm }];
               polygon(face, shade(box.color, 0.72 + 0.18 * dot), 'rgba(0,0,0,0.28)', box.opacity);
-              // 면 텍스처 (디자인 매핑)
-              const tex = box.faces?.[SIDE_FACE_ORDER[i % 4]];
+              // 면 텍스처 (디자인 매핑) — 사각형 풋프린트(4면)에만 면별 매핑 적용.
+              // 원기둥 등 다각형은 면별 텍스처를 건너뜀(왜곡 방지, Cylinder Wrap 은 추후).
+              const tex = fp.length === 4 ? box.faces?.[SIDE_FACE_ORDER[i % 4]] : undefined;
               const el = tex && imageElements.get(tex.url);
               if (tex && el) {
                 const topA: V3 = { ...a, z: box.heightMm };
@@ -429,8 +455,13 @@ export function renderIsoSceneToDataURL(
     }
   }
 
+  // z-order: 배경(바닥/그림자) → 벽(항상 뒤) → 집기(항상 앞). 각 그룹 내부는 깊이순.
   units.sort((a, b) => a.depth - b.depth);
+  wallUnits.sort((a, b) => a.depth - b.depth);
+  boxUnits.sort((a, b) => a.depth - b.depth);
   for (const u of units) u.draw();
+  for (const u of wallUnits) u.draw();
+  for (const u of boxUnits) u.draw();
   reset();
 
   // --- 집기명 (최상단, 깊이순) ---

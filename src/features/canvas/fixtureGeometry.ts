@@ -32,6 +32,30 @@ export function getFixtureCorners(placed: PlacedFixture, def: FixtureDef): Point
   }));
 }
 
+/**
+ * 3D/렌더용 집기 바닥 풋프린트(mm). Shape 에 따라 다각형 근사 (v0.9.1).
+ *  - circle: 타원 N각형(원기둥 실루엣)
+ *  - 그 외: 바운딩 박스 4점 (getFixtureCorners)
+ * 회전축은 좌상단(xMm,yMm).
+ */
+export function getFixtureFootprint(placed: PlacedFixture, def: FixtureDef, segments = 28): PointMm[] {
+  if (def.shape !== 'circle') return getFixtureCorners(placed, def);
+  const { xMm: x, yMm: y, rotationDeg } = placed;
+  const rad = (rotationDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const rx = def.widthMm / 2;
+  const ry = def.depthMm / 2;
+  const pts: PointMm[] = [];
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    const lx = rx + Math.cos(a) * rx; // 로컬 좌표(좌상단 기준 0..w)
+    const ly = ry + Math.sin(a) * ry;
+    pts.push({ xMm: x + lx * cos - ly * sin, yMm: y + lx * sin + ly * cos });
+  }
+  return pts;
+}
+
 /** 회전을 반영한 축 정렬 경계 상자(AABB, mm) */
 export function computeFixtureAABB(placed: PlacedFixture, def: FixtureDef): AABB {
   const corners = getFixtureCorners(placed, def);

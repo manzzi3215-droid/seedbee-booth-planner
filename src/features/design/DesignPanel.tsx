@@ -22,7 +22,7 @@ import type { BoxFace, DesignMapping, FaceMapping, MappingMode, PlacedFixture } 
 import { DEFAULT_TEXTURE_TRANSFORM } from '../../types';
 import { useEditor } from '../editor/EditorContext';
 import { BOX_FACES, MAPPING_MODES, assetById } from './mapping';
-import { uploadDesignAsset, isSupportedDesignFile, isStorageConfigured } from '../../firebase/storage';
+import { uploadDesignAsset, isSupportedDesignFile } from '../../firebase/storage';
 
 // 집기 간 매핑 복사용 클립보드 (모듈 수준)
 let designClipboard: DesignMapping | null = null;
@@ -62,7 +62,6 @@ export default function DesignPanel({ fixture }: { fixture: PlacedFixture }) {
   const handleFiles = async (files: FileList | File[]) => {
     const file = [...files].find(isSupportedDesignFile);
     if (!file) return setError('지원하지 않는 형식입니다 (PNG/JPG/WEBP/SVG).');
-    if (!isStorageConfigured) return setError('Firebase Storage 가 설정되지 않았습니다. 업로드할 수 없습니다.');
     setError(null);
     setUploading(true);
     try {
@@ -70,7 +69,7 @@ export default function DesignPanel({ fixture }: { fixture: PlacedFixture }) {
       addDesignAsset(a);
       setFaceMapping({ assetId: a.id, mode: 'contain', transform: { ...DEFAULT_TEXTURE_TRANSFORM } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : '업로드 실패');
+      setError(e instanceof Error ? e.message : '이미지 처리 실패');
     } finally {
       setUploading(false);
     }

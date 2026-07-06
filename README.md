@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.0 - Professional CAD Productivity**
+> **v0.9.1 - Design Mapping & 3D Rendering Upgrade**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -191,6 +191,23 @@ src/
 | Undo/Redo · 다중선택 · 정렬/분배/미러/배열 | ✅ |
 
 ### Changelog
+
+**v0.9.1 — Design Mapping & 3D Rendering Upgrade (기존 기능 완성)**
+- **Design Mapping 정상화(최우선 버그 수정):** 업로드가 Firebase Storage 설정/보안규칙/CORS 에 의존해
+  실패하던 문제를 해결. 이미지를 **경량 dataURL**(긴 변 1000px + 압축, Firestore 용량 고려)로 인코딩해
+  배치안과 함께 저장 → 외부 설정 없이 **업로드 → 2D → Cloud/Auto Save → 새로고침 → 3D → PNG/PDF** 전 구간 동작.
+  crossOrigin/CORS 무관(캔버스 taint 없음). Front/Back/Left/Right/Top 면별 매핑 반영.
+- **3D 벽 Z-Order 수정:** 벽은 항상 배경, 집기는 항상 벽 앞(렌더 페이즈 분리: 바닥→벽→집기). 모든 카메라 동일.
+- **Design Mapping → 3D:** 평면도에서 지정한 면 디자인이 3D 아이소메트릭 각 면에 어파인 매핑으로 표시.
+- **집기 Shape 반영:** `circle` 은 다각형(원기둥) 실루엣으로 3D 렌더(그 외는 박스). 원기둥 텍스처는 왜곡 방지 위해
+  면별 매핑 생략(Cylinder Wrap 은 로드맵).
+- **3D Auto Orbit:** ▶/⏸ 360° 자동 회전 + 속도(Slow/Normal/Fast).
+- **3D 자유 카메라:** 마우스 드래그로 궤도 회전(방위각·고도), Shift+드래그 이동(Pan), 휠 확대/축소. 기존 5개 시점 프리셋 유지.
+- **품질 향상:** `imageSmoothingQuality: high`(텍스처 필터링/AA), Edge 스트로크 유지.
+- **유지:** Undo/Redo · CAD 생산성 · Print Production · Cloud/Auto Save · Advanced Color · Shape Editor · Wall View ·
+  PNG/PDF · Share Links 정상.
+- 로드맵(이번 버전 미포함): 완전한 Material(Matte/Gloss/Acrylic) · Ambient/Contact Shadow 고도화 · Cylinder/Curved UV Wrap ·
+  Custom Path 3D 지오메트리. 현재 아이소메트릭 파이프라인 위에 단계적 확장 예정.
 
 **v0.9.0 — Professional CAD Productivity (설계 속도 극대화)**
 - **Presentation Mode 제거:** 툴바 버튼·오버레이·PDF·`?present=1` 라우팅·관련 코드 삭제(기존 기능 영향 없음).

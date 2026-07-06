@@ -11,7 +11,7 @@ import type {
   WallSide,
 } from '../../types';
 import { getBoothPolygon, getBoothBounds } from '../canvas/boothGeometry';
-import { getFixtureCorners } from '../canvas/fixtureGeometry';
+import { getFixtureFootprint } from '../canvas/fixtureGeometry';
 import { isWallEnabled } from '../wall/constants';
 import { planFaceMapping, resolveFaceMapping, assetById } from '../design/mapping';
 
@@ -146,7 +146,7 @@ export function buildIsoScene(
       if (Object.keys(f).length > 0) faces = f;
     }
     boxes.push({
-      footprint: getFixtureCorners(p, def).map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
+      footprint: getFixtureFootprint(p, def).map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
       heightMm: resolveFixtureHeight(def.heightMm, booth.heightMm),
       color: def.color,
       opacity: def.opacity ?? 1,

@@ -22,6 +22,9 @@ import ImageRoundedIcon from '@mui/icons-material/ImageRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import FitScreenRoundedIcon from '@mui/icons-material/FitScreenRounded';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
+import PauseRoundedIcon from '@mui/icons-material/PauseRounded';
+import ThreeSixtyRoundedIcon from '@mui/icons-material/ThreeSixtyRounded';
 import { useEditor } from '../editor/EditorContext';
 import { buildIsoScene } from './scene';
 import {
@@ -58,6 +61,25 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const [opts, setOpts] = useState<IsoRenderOptions>(DEFAULT_ISO_OPTIONS);
   const imageElsRef = useRef<Map<string, HTMLImageElement>>(new Map());
 
+  // 자유 궤도 카메라 (v0.9.1)
+  const [azimuthDeg, setAzimuthDeg] = useState(VIEWPOINTS[0].azimuthDeg);
+  const [elevationDeg, setElevationDeg] = useState(VIEWPOINTS[0].elevationDeg);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [autoOrbit, setAutoOrbit] = useState(false);
+  const [orbitSpeed, setOrbitSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
+  const dragRef = useRef<{ mode: 'orbit' | 'pan'; x: number; y: number } | null>(null);
+
+  const applyViewpoint = (id: IsoViewpointId) => {
+    const vp = VIEWPOINTS.find((v) => v.id === id);
+    if (!vp) return;
+    setAzimuthDeg(vp.azimuthDeg);
+    setElevationDeg(vp.elevationDeg);
+    setPan({ x: 0, y: 0 });
+  };
+  // 현재 az/el 이 어떤 프리셋과 일치하는지(하이라이트용)
+  const activeViewpoint =
+    VIEWPOINTS.find((v) => Math.abs(((v.azimuthDeg - azimuthDeg) % 360)) < 0.5 && Math.abs(v.elevationDeg - elevationDeg) < 0.5)?.id ?? null;
+
   const setOpt = <K extends keyof IsoRenderOptions>(key: K, value: IsoRenderOptions[K]) =>
     setOpts((o) => ({ ...o, [key]: value }));
 
@@ -67,6 +89,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       setDataUrl(null);
       setReady(false);
       setZoom(1);
+      setPan({ x: 0, y: 0 });
+      setAutoOrbit(false);
       imageElsRef.current = new Map();
       return;
     }
@@ -89,20 +113,28 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
     };
   }, [open, project, planImages, wallItems, designAssets]);
 
-  // 옵션/데이터 변경 시 미리보기 재렌더 (동기, 로드된 이미지 재사용)
+  // 옵션/카메라/데이터 변경 시 미리보기 재렌더 (동기, 로드된 이미지 재사용)
   useEffect(() => {
     if (!open || !project || !ready) return;
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, targetPx: PREVIEW_PX });
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, azimuthDeg, elevationDeg, targetPx: PREVIEW_PX });
     setDataUrl(url);
-  }, [open, ready, opts, project, placed, fixturesById, planImages, wallItems, designAssets]);
+  }, [open, ready, opts, azimuthDeg, elevationDeg, project, placed, fixturesById, planImages, wallItems, designAssets]);
+
+  // 자동 회전(Auto Orbit) — 360° 연속 회전
+  useEffect(() => {
+    if (!autoOrbit || !open) return;
+    const stepDeg = orbitSpeed === 'slow' ? 0.4 : orbitSpeed === 'fast' ? 1.8 : 0.9;
+    const timer = setInterval(() => setAzimuthDeg((a) => (a + stepDeg) % 360), 40);
+    return () => clearInterval(timer);
+  }, [autoOrbit, orbitSpeed, open]);
 
   const layoutName = layouts.find((l) => l.id === currentLayoutId)?.name ?? '미저장';
 
   const handleExport = () => {
     if (!project || !ready) return;
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, targetPx: quality });
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, azimuthDeg, elevationDeg, targetPx: quality });
     downloadDataURL(url, `${buildBaseName(project.name, layoutName)}_isometric.png`);
   };
 
@@ -110,6 +142,32 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     setZoom((z) => clampZoom(z * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+  };
+
+  // 마우스 드래그: 좌드래그=궤도 회전(orbit), Shift+드래그=패닝(pan)
+  const onDragStart = (e: React.MouseEvent) => {
+    dragRef.current = { mode: e.shiftKey ? 'pan' : 'orbit', x: e.clientX, y: e.clientY };
+  };
+  const onDragMove = (e: React.MouseEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    d.x = e.clientX;
+    d.y = e.clientY;
+    if (d.mode === 'pan') {
+      setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
+    } else {
+      setAzimuthDeg((a) => (a - dx * 0.4 + 360) % 360);
+      setElevationDeg((el) => Math.max(20, Math.min(90, el - dy * 0.3)));
+    }
+  };
+  const onDragEnd = () => {
+    dragRef.current = null;
+  };
+  const resetView = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   };
 
   return (
@@ -126,14 +184,32 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
             exclusive
             size="small"
             color="primary"
-            value={opts.viewpoint}
-            onChange={(_, v) => v && setOpt('viewpoint', v as IsoViewpointId)}
+            value={activeViewpoint}
+            onChange={(_, v) => v && applyViewpoint(v as IsoViewpointId)}
           >
             {VIEWPOINTS.map((vp) => (
               <ToggleButton key={vp.id} value={vp.id} sx={{ px: 1.5 }}>
                 {vp.label}
               </ToggleButton>
             ))}
+          </ToggleButtonGroup>
+
+          {/* Auto Orbit (자동 회전) */}
+          <Tooltip title={autoOrbit ? '자동 회전 정지' : '자동 회전 (360°)'}>
+            <IconButton size="small" color={autoOrbit ? 'primary' : 'default'} onClick={() => setAutoOrbit((v) => !v)}>
+              {autoOrbit ? <PauseRoundedIcon fontSize="small" /> : <PlayArrowRoundedIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+          <ThreeSixtyRoundedIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={orbitSpeed}
+            onChange={(_, v) => v && setOrbitSpeed(v)}
+          >
+            <ToggleButton value="slow" sx={{ px: 1, py: 0.25 }}>Slow</ToggleButton>
+            <ToggleButton value="normal" sx={{ px: 1, py: 0.25 }}>Normal</ToggleButton>
+            <ToggleButton value="fast" sx={{ px: 1, py: 0.25 }}>Fast</ToggleButton>
           </ToggleButtonGroup>
 
           <Box sx={{ flex: 1 }} />
@@ -151,8 +227,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
               <AddRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="화면 맞춤">
-            <IconButton size="small" onClick={() => setZoom(1)}>
+          <Tooltip title="화면 맞춤(줌·이동 초기화)">
+            <IconButton size="small" onClick={resetView}>
               <FitScreenRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -242,9 +318,13 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
           </Stack>
         </Stack>
 
-        {/* 미리보기 영역 */}
+        {/* 미리보기 영역 — 드래그: 궤도 회전 / Shift+드래그: 이동 / 휠: 확대·축소 */}
         <Box
           onWheel={onWheel}
+          onMouseDown={onDragStart}
+          onMouseMove={onDragMove}
+          onMouseUp={onDragEnd}
+          onMouseLeave={onDragEnd}
           sx={{
             height: '62vh',
             display: 'flex',
@@ -252,7 +332,10 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
             justifyContent: 'center',
             bgcolor: '#eef1f5',
             borderRadius: 1,
-            overflow: 'auto',
+            overflow: 'hidden',
+            cursor: 'grab',
+            '&:active': { cursor: 'grabbing' },
+            userSelect: 'none',
           }}
         >
           {loading && <CircularProgress />}
@@ -260,12 +343,12 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
             <img
               src={dataUrl}
               alt="아이소메트릭 미리보기"
+              draggable={false}
               style={{
-                transform: `scale(${zoom})`,
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                 transformOrigin: 'center',
                 maxWidth: '100%',
                 maxHeight: '100%',
-                transition: 'transform 0.08s',
               }}
             />
           )}
@@ -276,7 +359,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
           )}
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          편집 없는 미리보기입니다. 배치는 평면도/벽면에서 수정하세요. 마우스 휠로 확대/축소할 수 있습니다.
+          편집 없는 미리보기입니다. <b>드래그</b>로 궤도 회전, <b>Shift+드래그</b>로 이동, <b>휠</b>로 확대/축소, <b>▶</b>로 360° 자동 회전.
         </Typography>
       </DialogContent>
       <DialogActions>
