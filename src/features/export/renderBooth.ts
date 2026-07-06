@@ -43,6 +43,10 @@ interface RenderOptions {
   pixelRatio?: number;
   /** 디자인 에셋 (텍스처 참조) — 집기 위 디자인 렌더용 (v0.8.7) */
   designAssets?: DesignAsset[];
+  /** 그리드 표시 (기본 true). Presentation 모드에서 false (v0.8.8) */
+  showGrid?: boolean;
+  /** 치수(부스 치수 라벨 + 사용자 치수선) 표시 (기본 true). Presentation 모드에서 false (v0.8.8) */
+  showDimensions?: boolean;
 }
 
 export function createBoothDrawingDataURL(
@@ -106,7 +110,9 @@ export function createBoothDrawingDataURL(
       }),
     );
 
-    // 그리드 (부스 폴리곤 내부로 클립)
+    // 그리드 (부스 폴리곤 내부로 클립). Presentation 모드에서는 생략
+    const showGrid = options.showGrid !== false;
+    if (showGrid) {
     const gridGroup = new Konva.Group({
       clipFunc: (ctx) => {
         ctx.beginPath();
@@ -138,6 +144,7 @@ export function createBoothDrawingDataURL(
       );
     }
     layer.add(gridGroup);
+    }
 
     // 벽체: polygon 은 전체 외곽, rectangle 은 오픈면 기준 닫힌 변
     if (isPolygon) {
@@ -197,37 +204,39 @@ export function createBoothDrawingDataURL(
       layer.add(buildTextLabel(t));
     }
 
-    // 치수선
-    for (const d of dimensions) {
-      layer.add(buildDimensionGroup(d, scale));
-    }
+    // 치수선 + 부스 치수 라벨. Presentation 모드에서는 생략
+    if (options.showDimensions !== false) {
+      for (const d of dimensions) {
+        layer.add(buildDimensionGroup(d, scale));
+      }
 
-    // 치수 라벨 (바운딩 박스 기준)
-    const labelFont = 24 / scale;
-    layer.add(
-      new Konva.Text({
-        x: minX,
-        y: maxY + 26 / scale,
-        width: boothW,
-        align: 'center',
-        text: `${boothW} mm`,
-        fontSize: labelFont,
-        fill: CANVAS_COLORS.dimText,
-      }),
-    );
-    layer.add(
-      new Konva.Text({
-        x: minX - 26 / scale,
-        y: maxY,
-        width: boothD,
-        align: 'center',
-        rotation: -90,
-        offsetY: labelFont + 2 / scale,
-        text: `${boothD} mm`,
-        fontSize: labelFont,
-        fill: CANVAS_COLORS.dimText,
-      }),
-    );
+      // 치수 라벨 (바운딩 박스 기준)
+      const labelFont = 24 / scale;
+      layer.add(
+        new Konva.Text({
+          x: minX,
+          y: maxY + 26 / scale,
+          width: boothW,
+          align: 'center',
+          text: `${boothW} mm`,
+          fontSize: labelFont,
+          fill: CANVAS_COLORS.dimText,
+        }),
+      );
+      layer.add(
+        new Konva.Text({
+          x: minX - 26 / scale,
+          y: maxY,
+          width: boothD,
+          align: 'center',
+          rotation: -90,
+          offsetY: labelFont + 2 / scale,
+          text: `${boothD} mm`,
+          fontSize: labelFont,
+          fill: CANVAS_COLORS.dimText,
+        }),
+      );
+    }
 
     return stage.toDataURL({ pixelRatio: options.pixelRatio ?? 2 });
   } finally {

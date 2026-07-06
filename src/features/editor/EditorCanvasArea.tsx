@@ -16,13 +16,14 @@ import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import KeyboardRoundedIcon from '@mui/icons-material/KeyboardRounded';
 import ViewSidebarRoundedIcon from '@mui/icons-material/ViewSidebarRounded';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { WallSide } from '../../types';
 import { useEditor } from './EditorContext';
 import BoothCanvas from '../canvas/BoothCanvas';
 import EditorToolbar from './EditorToolbar';
 import WallCanvas from '../wall/WallCanvas';
+import PresentationMode from '../presentation/PresentationMode';
 import { getBoothSizeLabel, getFloorLabel, hasBoothHeight } from '../../constants/booth';
 import {
   VIEW_MODE_OPTIONS,
@@ -88,6 +89,14 @@ export default function EditorCanvasArea() {
   } = useEditor();
 
   const [wallMenuAnchor, setWallMenuAnchor] = useState<null | HTMLElement>(null);
+  const [presentationOpen, setPresentationOpen] = useState(false);
+
+  // 공유 Presentation 링크(?present=1)로 진입 시 프로젝트 로드 후 자동 열기
+  useEffect(() => {
+    if (!project) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('present') === '1') setPresentationOpen(true);
+  }, [project]);
 
   if (projectLoading) {
     return (
@@ -126,6 +135,7 @@ export default function EditorCanvasArea() {
       : null;
 
   return (
+    <>
     <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 보기 모드 탭 (높이 미설정/OFF 벽면 비활성) + 사용할 벽면 설정 */}
       <Stack
@@ -192,7 +202,7 @@ export default function EditorCanvasArea() {
             <Typography variant="caption">벽면에 텍스트·치수선·이미지 추가 · Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동</Typography>
           </Stack>
 
-          <EditorToolbar />
+          <EditorToolbar onOpenPresentation={() => setPresentationOpen(true)} />
 
           <Box sx={{ flex: 1, minHeight: 320 }}>
             <WallCanvas
@@ -238,7 +248,7 @@ export default function EditorCanvasArea() {
             </Typography>
           </Stack>
 
-          <EditorToolbar />
+          <EditorToolbar onOpenPresentation={() => setPresentationOpen(true)} />
 
           <Box sx={{ flex: 1, minHeight: 320 }}>
             <BoothCanvas
@@ -279,5 +289,7 @@ export default function EditorCanvasArea() {
         </>
       )}
     </Box>
+    <PresentationMode open={presentationOpen} onClose={() => setPresentationOpen(false)} />
+    </>
   );
 }

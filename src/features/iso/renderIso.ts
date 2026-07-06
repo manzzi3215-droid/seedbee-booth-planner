@@ -10,12 +10,18 @@ import type { IsoScene, IsoWall, V3 } from './scene';
  * (투영식만 바꾸면 추후 Three.js 로 교체 가능한 구조)
  */
 
-export type IsoViewpointId = 'leftDiagonal' | 'rightDiagonal' | 'frontDiagonal' | 'top';
+export type IsoViewpointId =
+  | 'leftDiagonal'
+  | 'rightDiagonal'
+  | 'frontDiagonal'
+  | 'backDiagonal'
+  | 'top';
 
 export const VIEWPOINTS: { id: IsoViewpointId; label: string }[] = [
+  { id: 'frontDiagonal', label: '정면 사선' },
   { id: 'leftDiagonal', label: '좌측 사선' },
   { id: 'rightDiagonal', label: '우측 사선' },
-  { id: 'frontDiagonal', label: '정면 사선' },
+  { id: 'backDiagonal', label: '후면 사선' },
   { id: 'top', label: 'Top View' },
 ];
 
@@ -33,6 +39,8 @@ export interface IsoRenderOptions {
   showShadows: boolean;
   /** 출력 긴 변 px */
   targetPx: number;
+  /** 배경 테마 (기본 light). Presentation Dark 모드에서 dark (v0.8.8) */
+  background?: 'light' | 'dark';
 }
 
 export const DEFAULT_ISO_OPTIONS: IsoRenderOptions = {
@@ -70,6 +78,8 @@ function viewParams(vp: IsoViewpointId): ViewParams {
       return { az: 48 * D, kDepth: 0.52, kZ: 1, top: false };
     case 'frontDiagonal':
       return { az: 14 * D, kDepth: 0.5, kZ: 1, top: false };
+    case 'backDiagonal':
+      return { az: -132 * D, kDepth: 0.52, kZ: 1, top: false };
     case 'top':
       return { az: 0, kDepth: 1, kZ: 0, top: true };
   }
@@ -164,10 +174,15 @@ export function renderIsoSceneToDataURL(
   const ctx = canvas.getContext('2d')!;
   const reset = () => ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  // 배경 (부드러운 그라디언트)
+  // 배경 (부드러운 그라디언트). Dark 테마면 어두운 톤
   const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  bg.addColorStop(0, '#fbfcfe');
-  bg.addColorStop(1, '#e9edf3');
+  if (options.background === 'dark') {
+    bg.addColorStop(0, '#1e293b');
+    bg.addColorStop(1, '#0b1220');
+  } else {
+    bg.addColorStop(0, '#fbfcfe');
+    bg.addColorStop(1, '#e9edf3');
+  }
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 

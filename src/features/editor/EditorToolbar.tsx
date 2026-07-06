@@ -30,6 +30,7 @@ import StraightenRoundedIcon from '@mui/icons-material/StraightenRounded';
 import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import WallpaperRoundedIcon from '@mui/icons-material/WallpaperRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
+import SlideshowRoundedIcon from '@mui/icons-material/SlideshowRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
@@ -67,7 +68,7 @@ import { hasBoothHeight } from '../../constants/booth';
  *  - [저장]: 현재 배치안에 저장 (없으면 v1 자동 생성)
  *  - [다른 이름으로 저장]: 새 배치안으로 저장
  */
-export default function EditorToolbar() {
+export default function EditorToolbar({ onOpenPresentation }: { onOpenPresentation?: () => void } = {}) {
   const {
     project,
     placed,
@@ -702,6 +703,21 @@ export default function EditorToolbar() {
             disabled={!project || !hasBoothHeight(project.boothConfig)}
           >
             3D 미리보기
+          </Button>
+        </span>
+      </Tooltip>
+
+      <Tooltip title="Presentation Mode — 고객 시안 검토(편집 UI 숨김)">
+        <span>
+          <Button
+            variant="contained"
+            size="small"
+            color="primary"
+            startIcon={<SlideshowRoundedIcon />}
+            onClick={() => onOpenPresentation?.()}
+            disabled={!project}
+          >
+            Presentation
           </Button>
         </span>
       </Tooltip>
