@@ -34,6 +34,8 @@ import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
 import RedoRoundedIcon from '@mui/icons-material/RedoRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
@@ -49,7 +51,6 @@ import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
-import IsoPreviewDialog from '../iso/IsoPreviewDialog';
 import { useEditor } from './EditorContext';
 import { parseSvgDocument } from '../svg/SvgParser';
 import {
@@ -74,7 +75,16 @@ import { hasBoothHeight } from '../../constants/booth';
 export default function EditorToolbar({
   onOpenPrint,
   onOpenMerchandising,
-}: { onOpenPrint?: () => void; onOpenMerchandising?: () => void } = {}) {
+  onOpen3D,
+  onOpenSettings,
+  onOpenPalette,
+}: {
+  onOpenPrint?: () => void;
+  onOpenMerchandising?: () => void;
+  onOpen3D?: () => void;
+  onOpenSettings?: () => void;
+  onOpenPalette?: () => void;
+} = {}) {
   const {
     project,
     placed,
@@ -146,7 +156,6 @@ export default function EditorToolbar({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [usageOpen, setUsageOpen] = useState(false);
-  const [isoOpen, setIsoOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameName, setRenameName] = useState('');
@@ -534,6 +543,17 @@ export default function EditorToolbar({
         </span>
       </Tooltip>
 
+      <Tooltip title="명령 검색 · 모든 기능 (Ctrl+K)">
+        <IconButton size="small" onClick={() => onOpenPalette?.()} aria-label="명령 검색">
+          <SearchRoundedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="설정 (그리드·스냅·표시)">
+        <IconButton size="small" onClick={() => onOpenSettings?.()} aria-label="설정">
+          <SettingsRoundedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+
       {/* 보기 회전 (평면도 전용, 보기 전용 변환) */}
       {viewMode === 'plan' && (
         <>
@@ -730,7 +750,7 @@ export default function EditorToolbar({
             size="small"
             color="secondary"
             startIcon={<ViewInArRoundedIcon />}
-            onClick={() => setIsoOpen(true)}
+            onClick={() => onOpen3D?.()}
             disabled={!project || !hasBoothHeight(project.boothConfig)}
           >
             3D 미리보기
@@ -773,7 +793,6 @@ export default function EditorToolbar({
         rows={computeFixtureUsage(placed, fixturesById)}
         onClose={() => setUsageOpen(false)}
       />
-      <IsoPreviewDialog open={isoOpen} onClose={() => setIsoOpen(false)} />
 
       <Snackbar
         open={toast !== null}

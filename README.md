@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.4 - Display Surface & Merchandising Preset System**
+> **v0.9.5 - Professional Workspace & UI/UX Refinement**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -192,8 +192,24 @@ src/
 | 3D Lighting System(조명·그림자·재질) | ✅ |
 | Digital Merchandising(제품 진열·Display Guide) | ✅ |
 | Display Surface·진열 프리셋(집기 위 진열) | ✅ |
+| Command Palette(Ctrl+K)·상태바·설정 | ✅ |
 
 ### Changelog
+
+**v0.9.5 — Professional Workspace & UI/UX Refinement (정돈된 전문 UI)**
+- **Command Palette (Ctrl+K):** Figma/VSCode 스타일 명령 검색 실행기. Undo/Redo · 정렬/분배/미러 · 회전/복제/삭제 ·
+  텍스트/치수 추가 · 3D/출력/진열 관리/설정 열기 · PNG/PDF 내보내기 등 **모든 주요 기능을 검색해 즉시 실행**.
+  기능이 많아도 찾기 쉬운 UI 의 핵심.
+- **하단 상태바(Status Bar):** 그리드 · 스냅 · 확대율 · 선택 개수 · 부스 면적(㎡) · 집기/제품 개수를 항상 표시.
+- **설정(Settings) 다이얼로그:** 그리드 크기(100/250/500/1000mm) · 그리드 스냅 ON/OFF · 집기명 표시 — 실시간 반영.
+- **툴바 정리:** 명령 검색(Ctrl+K)·설정 버튼 추가, 3D 미리보기 다이얼로그를 중앙(EditorCanvasArea)으로 통합해
+  Command Palette·툴바 어디서나 열 수 있게 정돈.
+- **단축키 힌트:** 주요 버튼 툴팁에 단축키 표기. 좌측 사이드바 탭(집기/제품/프리셋) + Property Panel 자동 전환은
+  기존 구조를 그대로 활용해 "정보 계층"을 정돈.
+- **비파괴:** 기존 데이터/기능(Undo/Redo · Cloud/Auto Save · Geometry · Lighting · 3D · Design Mapping ·
+  Print · Display Guide · Preset · Merchandising) 100% 유지. 그리드/스냅은 옵션으로 추가(기본 동작 불변).
+- 로드맵(이번 버전 미포함): 상단 Workspace 탭 · 우클릭 Context Menu · Notification Center · 프로젝트 Dashboard ·
+  최근 사용/즐겨찾기 — 현재 파이프라인 위 단계적 확장.
 
 **v0.9.4 — Display Surface & Merchandising Preset System (실전 VMD)**
 - **Display Surface(구조 변경):** 제품은 더 이상 바닥이 아니라 **집기 상판(Display Surface) 위**에 진열됩니다.

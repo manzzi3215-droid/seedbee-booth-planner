@@ -106,6 +106,8 @@ interface BoothCanvasProps {
   onChangeImage: (id: string, patch: Partial<PlacedImage>) => void;
   onSelectBackground: (id: string | null) => void;
   onChangeBackground: (id: string, patch: Partial<PlacedImage>) => void;
+  /** 확대율 변경 알림 (상태바용, v0.9.5) */
+  onZoomChange?: (scale: number) => void;
 }
 
 /**
@@ -156,6 +158,7 @@ export default function BoothCanvas({
   onChangeImage,
   onSelectBackground,
   onChangeBackground,
+  onZoomChange,
 }: BoothCanvasProps) {
   const { ref, size } = useContainerSize<HTMLDivElement>();
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
@@ -288,6 +291,12 @@ export default function BoothCanvas({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY, viewRotationDeg]);
+
+  // 확대율 상태바 보고 (v0.9.5)
+  useEffect(() => {
+    onZoomChange?.(viewport.scale);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewport.scale]);
 
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();

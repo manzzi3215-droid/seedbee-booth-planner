@@ -208,6 +208,11 @@ interface EditorContextValue {
   // 벽면 배치
   wallItems: WallItems;
   gridSizeMm: number;
+  /** 그리드 크기 변경 (Settings, v0.9.5) */
+  setGridSizeMm: (mm: number) => void;
+  /** 그리드 스냅 on/off (Settings, v0.9.5) */
+  snapEnabled: boolean;
+  setSnapEnabled: (v: boolean) => void;
 
   // 집기명 표시 토글 (저장 안 함)
   showFixtureNames: boolean;
@@ -432,7 +437,8 @@ export function EditorProvider({
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
   const [selectedFixtureIds, setSelectedFixtureIds] = useState<string[]>([]); // 다중 선택 (v0.9.0)
   const [selectedSvgElementId, setSelectedSvgElementId] = useState<string | null>(null);
-  const [gridSizeMm] = useState(DEFAULT_GRID_SIZE_MM);
+  const [gridSizeMm, setGridSizeMm] = useState(DEFAULT_GRID_SIZE_MM);
+  const [snapEnabled, setSnapEnabled] = useState(true); // 그리드 스냅 on/off (v0.9.5 Settings)
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
   // 평면도 보기 회전(deg) — 보기 전용 변환. 실제 좌표는 바꾸지 않음. (UI 상태, 저장 안 함)
   const [viewRotationDeg, setViewRotationDeg] = useState(0);
@@ -673,8 +679,9 @@ export function EditorProvider({
       setSelectedItem({ scope: 'plan', type: 'fixture', id });
     };
     const move = (id: string, xMm: number, yMm: number, snapToGrid = true) => {
-      const nx = snapToGrid ? snapMmToGrid(xMm, gridSizeMm) : xMm;
-      const ny = snapToGrid ? snapMmToGrid(yMm, gridSizeMm) : yMm;
+      const doSnap = snapToGrid && snapEnabled;
+      const nx = doSnap ? snapMmToGrid(xMm, gridSizeMm) : xMm;
+      const ny = doSnap ? snapMmToGrid(yMm, gridSizeMm) : yMm;
       setPlaced((prev) => prev.map((p) => (p.id === id ? { ...p, xMm: nx, yMm: ny } : p)));
     };
     const setSelectedPosition = (xMm: number, yMm: number) => {
@@ -942,8 +949,9 @@ export function EditorProvider({
         prev.map((p) => {
           if (p.id !== id) return p;
           if (p.lock) return p; // Display Lock: 이동 금지
-          const nx = snap ? snapMmToGrid(xMm, gridSizeMm) : xMm;
-          const ny = snap ? snapMmToGrid(yMm, gridSizeMm) : yMm;
+          const doSnap = snap && snapEnabled;
+          const nx = doSnap ? snapMmToGrid(xMm, gridSizeMm) : xMm;
+          const ny = doSnap ? snapMmToGrid(yMm, gridSizeMm) : yMm;
           const c = constrainToSurface(p, nx, ny); // 상판 밖이면 자동 복귀
           return { ...p, xMm: c.xMm, yMm: c.yMm };
         }),
@@ -1612,6 +1620,9 @@ export function EditorProvider({
       planBackgrounds,
       wallItems,
       gridSizeMm,
+      setGridSizeMm,
+      snapEnabled,
+      setSnapEnabled,
       showFixtureNames,
       setShowFixtureNames,
       selectedItem,
@@ -1715,6 +1726,7 @@ export function EditorProvider({
     selectedImage,
     selectedBackground,
     gridSizeMm,
+    snapEnabled,
     layouts,
     currentLayoutId,
     saveStatus,

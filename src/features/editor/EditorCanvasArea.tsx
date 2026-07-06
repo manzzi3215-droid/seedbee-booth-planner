@@ -26,8 +26,13 @@ import WallCanvas from '../wall/WallCanvas';
 import PrintWorkspace from '../print/PrintWorkspace';
 import MerchandisingWorkspace from '../products/MerchandisingWorkspace';
 import MultiActionToolbar from '../tools/MultiActionToolbar';
-import { useMemo } from 'react';
+import IsoPreviewDialog from '../iso/IsoPreviewDialog';
+import CommandPalette, { type Command } from './CommandPalette';
+import SettingsDialog from './SettingsDialog';
+import EditorStatusBar from './EditorStatusBar';
+import { useEffect, useMemo } from 'react';
 import { detectCollisions, productById as findProduct } from '../products/productModel';
+import { downloadLayoutPNG, downloadLayoutPDF, type ExportInput } from '../export/exportLayout';
 import { getBoothSizeLabel, getFloorLabel, hasBoothHeight } from '../../constants/booth';
 import {
   VIEW_MODE_OPTIONS,
@@ -96,10 +101,41 @@ export default function EditorCanvasArea() {
     updateWallImage,
     clearSelection,
     setWallEnabled,
+    // v0.9.5 명령/상태
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    rotateSelected,
+    copySelected,
+    deleteSelected,
+    addText,
+    addDimension,
+    alignFixtures,
+    distributeFixtures,
+    mirrorFixtures,
+    layouts,
+    currentLayoutId,
   } = useEditor();
 
   const [wallMenuAnchor, setWallMenuAnchor] = useState<null | HTMLElement>(null);
   const [printOpen, setPrintOpen] = useState(false);
+  const [isoOpen, setIsoOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+
+  // Ctrl/Cmd+K → Command Palette
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [merchOpen, setMerchOpen] = useState(false);
 
   // 제품 충돌 검출 (v0.9.3)
@@ -107,6 +143,57 @@ export default function EditorCanvasArea() {
     () => detectCollisions(placedProducts, (id) => findProduct(products, id)),
     [placedProducts, products],
   );
+
+  // 내보내기 (Command Palette 용)
+  const runExport = async (kind: 'png' | 'pdf') => {
+    if (!project) return;
+    const cl = layouts.find((l) => l.id === currentLayoutId);
+    const now = Date.now();
+    const input: ExportInput = {
+      project,
+      layoutName: cl?.name ?? '미저장',
+      createdAt: cl?.createdAt ?? now,
+      updatedAt: cl?.updatedAt ?? now,
+      placed,
+      texts,
+      dimensions,
+      images: planImages,
+      backgrounds: planBackgrounds,
+      showFixtureNames,
+      fixturesById,
+      viewRotationDeg,
+      designAssets,
+      placedProducts,
+      products,
+    };
+    if (kind === 'png') await downloadLayoutPNG(input);
+    else await downloadLayoutPDF(input);
+  };
+
+  // Command Palette 명령 목록 (v0.9.5)
+  const commands: Command[] = [
+    { id: 'undo', label: '실행 취소 (Undo)', group: '편집', shortcut: 'Ctrl+Z', keywords: 'undo', disabled: !canUndo, run: undo },
+    { id: 'redo', label: '다시 실행 (Redo)', group: '편집', shortcut: 'Ctrl+Y', keywords: 'redo', disabled: !canRedo, run: redo },
+    { id: 'rotate', label: '90° 회전', group: '편집', shortcut: 'R', keywords: 'rotate', disabled: !selectedItem, run: rotateSelected },
+    { id: 'dup', label: '복사/복제', group: '편집', shortcut: 'Ctrl+D', keywords: 'duplicate copy', disabled: !selectedItem, run: copySelected },
+    { id: 'del', label: '삭제', group: '편집', shortcut: 'Delete', keywords: 'delete remove', disabled: !selectedItem, run: deleteSelected },
+    { id: 'alignL', label: '왼쪽 정렬', group: '정렬', keywords: 'align left', disabled: selectedFixtureIds.length < 2, run: () => alignFixtures('left') },
+    { id: 'alignR', label: '오른쪽 정렬', group: '정렬', keywords: 'align right', disabled: selectedFixtureIds.length < 2, run: () => alignFixtures('right') },
+    { id: 'alignCH', label: '가로 중앙 정렬', group: '정렬', keywords: 'align center', disabled: selectedFixtureIds.length < 2, run: () => alignFixtures('centerH') },
+    { id: 'alignCV', label: '세로 중앙 정렬', group: '정렬', keywords: 'align middle', disabled: selectedFixtureIds.length < 2, run: () => alignFixtures('centerV') },
+    { id: 'distH', label: '가로 균등 분배', group: '정렬', keywords: 'distribute', disabled: selectedFixtureIds.length < 3, run: () => distributeFixtures('h') },
+    { id: 'distV', label: '세로 균등 분배', group: '정렬', keywords: 'distribute', disabled: selectedFixtureIds.length < 3, run: () => distributeFixtures('v') },
+    { id: 'mirrorH', label: '좌우 미러', group: '정렬', keywords: 'mirror flip', disabled: selectedFixtureIds.length < 1, run: () => mirrorFixtures('h', false) },
+    { id: 'mirrorHc', label: '좌우 미러 복사', group: '정렬', keywords: 'mirror copy', disabled: selectedFixtureIds.length < 1, run: () => mirrorFixtures('h', true) },
+    { id: 'addText', label: '텍스트 추가', group: '추가', keywords: 'text add', disabled: !canEdit, run: addText },
+    { id: 'addDim', label: '치수선 추가', group: '추가', keywords: 'dimension', disabled: !canEdit, run: addDimension },
+    { id: '3d', label: '3D 미리보기 열기', group: '보기', keywords: '3d preview iso lighting', run: () => setIsoOpen(true) },
+    { id: 'print', label: '출력물 제작 열기', group: '보기', keywords: 'print pdf', run: () => setPrintOpen(true) },
+    { id: 'merch', label: '진열 관리 열기', group: '보기', keywords: 'merchandising display guide', run: () => setMerchOpen(true) },
+    { id: 'settings', label: '설정 열기', group: '보기', keywords: 'settings grid snap', run: () => setSettingsOpen(true) },
+    { id: 'expPng', label: 'PNG 내보내기', group: '내보내기', keywords: 'export png image', run: () => void runExport('png') },
+    { id: 'expPdf', label: 'PDF 내보내기', group: '내보내기', keywords: 'export pdf', run: () => void runExport('pdf') },
+  ];
 
   if (projectLoading) {
     return (
@@ -212,7 +299,13 @@ export default function EditorCanvasArea() {
             <Typography variant="caption">벽면에 텍스트·치수선·이미지 추가 · Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동</Typography>
           </Stack>
 
-          <EditorToolbar onOpenPrint={() => setPrintOpen(true)} onOpenMerchandising={() => setMerchOpen(true)} />
+          <EditorToolbar
+            onOpenPrint={() => setPrintOpen(true)}
+            onOpenMerchandising={() => setMerchOpen(true)}
+            onOpen3D={() => setIsoOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
 
           <Box sx={{ flex: 1, minHeight: 320 }}>
             <WallCanvas
@@ -258,7 +351,13 @@ export default function EditorCanvasArea() {
             </Typography>
           </Stack>
 
-          <EditorToolbar onOpenPrint={() => setPrintOpen(true)} onOpenMerchandising={() => setMerchOpen(true)} />
+          <EditorToolbar
+            onOpenPrint={() => setPrintOpen(true)}
+            onOpenMerchandising={() => setMerchOpen(true)}
+            onOpen3D={() => setIsoOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
 
           <Box sx={{ flex: 1, minHeight: 320, position: 'relative' }}>
             <MultiActionToolbar />
@@ -302,8 +401,10 @@ export default function EditorCanvasArea() {
               onChangeImage={updatePlanImage}
               onSelectBackground={selectBackground}
               onChangeBackground={updatePlanBackground}
+              onZoomChange={setZoom}
             />
           </Box>
+          <EditorStatusBar zoom={zoom} />
         </>
       )}
     </Box>
@@ -313,6 +414,9 @@ export default function EditorCanvasArea() {
       initialFixtureId={selectedFixtureId}
     />
     <MerchandisingWorkspace open={merchOpen} onClose={() => setMerchOpen(false)} />
+    <IsoPreviewDialog open={isoOpen} onClose={() => setIsoOpen(false)} />
+    <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
     </>
   );
 }
