@@ -36,6 +36,7 @@ import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
 import RedoRoundedIcon from '@mui/icons-material/RedoRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
+import MapRoundedIcon from '@mui/icons-material/MapRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
@@ -129,6 +130,7 @@ export default function EditorToolbar({
     redo,
     canUndo,
     canRedo,
+    openImportWizard,
   } = useEditor();
 
   // 부스 넓이(m²) + 외곽 밖 집기 경고 (실시간)
@@ -552,6 +554,13 @@ export default function EditorToolbar({
         <IconButton size="small" onClick={() => onOpenSettings?.()} aria-label="설정">
           <SettingsRoundedIcon fontSize="small" />
         </IconButton>
+      </Tooltip>
+      <Tooltip title="도면 가져오기 — 실제 행사장 도면(PDF/이미지)을 배경으로">
+        <span>
+          <Button size="small" variant="outlined" startIcon={<MapRoundedIcon />} onClick={openImportWizard} disabled={!canEdit} sx={{ ml: 0.5 }}>
+            도면
+          </Button>
+        </span>
       </Tooltip>
 
       {/* 보기 회전 (평면도 전용, 보기 전용 변환) */}

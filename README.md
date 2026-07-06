@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.5 - Professional Workspace & UI/UX Refinement**
+> **v0.9.6 - Professional Floorplan Import & CAD Workspace**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -193,8 +193,26 @@ src/
 | Digital Merchandising(제품 진열·Display Guide) | ✅ |
 | Display Surface·진열 프리셋(집기 위 진열) | ✅ |
 | Command Palette(Ctrl+K)·상태바·설정 | ✅ |
+| 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v0.9.6 — Professional Floorplan Import & CAD Workspace (실제 행사장 도면 가져오기)**
+- **도면 가져오기 마법사(Floorplan Import Wizard):** 실제 행사장 도면을 그대로 가져와 설계 시작.
+  **PDF**(pdfjs 지연 로드로 1페이지 렌더) · **PNG · JPG · SVG** 지원. 단계형 UI(파일 선택 → 미리보기·보정 → 스케일).
+- **스케일 캘리브레이션(핵심):** 미리보기에서 **기준선 2점 클릭 + 실제 길이(mm)** 입력 → 도면을 실측 스케일로 자동 변환.
+  또는 **전체 가로 실제 크기(mm)** 로 빠른 스케일. mm/px · 도면 실제 크기(m) · 정확도 표시.
+- **이미지 보정:** 밝기 · 대비 · 반전 · 흑백(임계값) — 흐린 도면 개선.
+- **Background Layer(Drawing Manager):** 가져온 도면은 배경 레이어. 좌측 **도면** 탭에서 썸네일 · 투명도 · 잠금 · 삭제,
+  캔버스에서 이동/스냅. 배치안에 저장되어 **Cloud/Auto Save · Undo/Redo · Share** 자동 지원.
+- **툴바/커맨드팔레트 연동:** 툴바 **도면** 버튼 + Command Palette "도면 가져오기". 그 위에 부스 외곽(Shape Editor)을
+  트레이싱하듯 그려 5분 안에 설계 시작.
+- **확장 구조(Future Ready):** 도면→트레이스→지오메트리→집기→제품→조명→진열→출력 Reference 기반 레이어 구조.
+  향후 AI Wall/Space Recognition · AI Booth/Furniture/Product Placement · DXF/DWG 벡터 파싱으로 확장 가능한 기반.
+- **비파괴:** 기존 기능/데이터 100% 유지(Undo · Cloud/Auto Save · CAD · Lighting · 3D · Merchandising · Preset ·
+  Design Mapping · Print · Display Guide). 배경 레이어 인프라를 재사용해 리스크 최소화.
+- 로드맵(이번 버전 미포함): DXF/DWG 벡터 · 자동 벽/기둥/출입구 인식 · 벡터 PDF 추출 · Drawing Compare · 도면 메모/핀 ·
+  현장 사진 비교 · 회사 공용 도면 라이브러리 · 도면 버전 관리 · AI 자동 인식/생성.
 
 **v0.9.5 — Professional Workspace & UI/UX Refinement (정돈된 전문 UI)**
 - **Command Palette (Ctrl+K):** Figma/VSCode 스타일 명령 검색 실행기. Undo/Redo · 정렬/분배/미러 · 회전/복제/삭제 ·

@@ -263,9 +263,15 @@ interface EditorContextValue {
   updateWallImage: (wall: WallSide, id: string, patch: Partial<PlacedImage>) => void;
 
   // SVG 배경 (평면도 전용)
-  addBackground: (input: NewImageInput) => void;
+  addBackground: (input: NewImageInput, opts?: { xMm?: number; yMm?: number; opacity?: number; locked?: boolean }) => void;
   selectBackground: (id: string | null) => void;
   updatePlanBackground: (id: string, patch: Partial<PlacedImage>) => void;
+  /** 도면(배경) 삭제 (v0.9.6) */
+  deleteBackground: (id: string) => void;
+  /** 도면 가져오기 마법사 (v0.9.6) */
+  importWizardOpen: boolean;
+  openImportWizard: () => void;
+  closeImportWizard: () => void;
 
   // SVG 문서 (구조 파싱, 평면도 전용) — v0.7.0
   svgDocuments: SvgDocument[];
@@ -439,6 +445,7 @@ export function EditorProvider({
   const [selectedSvgElementId, setSelectedSvgElementId] = useState<string | null>(null);
   const [gridSizeMm, setGridSizeMm] = useState(DEFAULT_GRID_SIZE_MM);
   const [snapEnabled, setSnapEnabled] = useState(true); // 그리드 스냅 on/off (v0.9.5 Settings)
+  const [importWizardOpen, setImportWizardOpen] = useState(false); // 도면 가져오기 마법사 (v0.9.6)
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
   // 평면도 보기 회전(deg) — 보기 전용 변환. 실제 좌표는 바꾸지 않음. (UI 상태, 저장 안 함)
   const [viewRotationDeg, setViewRotationDeg] = useState(0);
@@ -807,18 +814,21 @@ export function EditorProvider({
       updateWall(wall, (g) => ({ ...g, images: g.images.map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
 
     // ---------- SVG 배경 (평면도 전용) ----------
-    const addBackground = (input: NewImageInput) => {
+    const addBackground = (
+      input: NewImageInput,
+      opts?: { xMm?: number; yMm?: number; opacity?: number; locked?: boolean },
+    ) => {
       const bg: PlacedImage = {
         id: generateId(),
         name: input.name,
         srcDataUrl: input.srcDataUrl,
-        xMm: 0,
-        yMm: 0,
+        xMm: opts?.xMm ?? 0,
+        yMm: opts?.yMm ?? 0,
         widthMm: input.widthMm,
         heightMm: input.heightMm,
         rotationDeg: 0,
-        opacity: 0.8,
-        locked: false,
+        opacity: opts?.opacity ?? 0.8,
+        locked: opts?.locked ?? false,
       };
       setPlanBackgrounds((prev) => [...prev, bg]);
       setSelectedItem({ scope: 'plan', type: 'background', id: bg.id });
@@ -826,6 +836,10 @@ export function EditorProvider({
     const selectBackground = (id: string | null) => setSelectedItem(id ? { scope: 'plan', type: 'background', id } : null);
     const updatePlanBackground = (id: string, patch: Partial<PlacedImage>) =>
       setPlanBackgrounds((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+    const deleteBackground = (id: string) => {
+      setPlanBackgrounds((prev) => prev.filter((b) => b.id !== id));
+      setSelectedItem((cur) => (cur?.scope === 'plan' && cur.type === 'background' && cur.id === id ? null : cur));
+    };
 
     // ---------- SVG 문서 (구조 파싱) ----------
     const addSvgDocument = (doc: SvgDocument) => {
@@ -1659,6 +1673,10 @@ export function EditorProvider({
       addBackground,
       selectBackground,
       updatePlanBackground,
+      deleteBackground,
+      importWizardOpen,
+      openImportWizard: () => setImportWizardOpen(true),
+      closeImportWizard: () => setImportWizardOpen(false),
       svgDocuments,
       selectedSvgId,
       selectedSvgDocument,
@@ -1727,6 +1745,7 @@ export function EditorProvider({
     selectedBackground,
     gridSizeMm,
     snapEnabled,
+    importWizardOpen,
     layouts,
     currentLayoutId,
     saveStatus,
