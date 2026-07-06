@@ -28,6 +28,8 @@ import type {
   WallSide,
 } from '../../types';
 import { gridArrange as gridArrangeProducts } from '../products/productModel';
+import { getFixtureSurface, pickTargetFixture, clampToSurface } from '../products/displaySurface';
+import type { ProductPreset, ProductPresetItem } from '../../types';
 import { storage, isCloudStorage } from '../../storage';
 import { generateId } from '../../utils/id';
 import { useFixtures } from '../fixtures/useFixtures';
@@ -170,21 +172,32 @@ interface EditorContextValue {
   addProduct: (p: Product) => void;
   updateProduct: (id: string, patch: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
-  /** 배치된 제품 (Product Layer) */
+  /** 배치된 제품 (집기 Display Surface 위) */
   placedProducts: PlacedProduct[];
   selectedProductId: string | null;
   selectProduct: (id: string | null) => void;
-  placeProduct: (productId: string, xMm?: number, yMm?: number) => void;
+  placeProduct: (productId: string, hintFixtureId?: string) => void;
   moveProduct: (id: string, xMm: number, yMm: number, snap?: boolean) => void;
   updatePlacedProduct: (id: string, patch: Partial<PlacedProduct>) => void;
   deletePlacedProduct: (id: string) => void;
   duplicatePlacedProduct: (id: string) => void;
   replacePlacedProduct: (id: string, newProductId: string) => void;
+  /** 한 번에 제품 교체(전체) */
+  replaceProductEverywhere: (oldProductId: string, newProductId: string) => void;
   gridArrangeProduct: (
     productId: string,
     count: number,
-    opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing },
+    opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing; fixtureId?: string },
   ) => void;
+
+  // Merchandising Preset System (v0.9.4)
+  productPresets: ProductPreset[];
+  saveFixtureAsPreset: (fixtureId: string, name: string) => void;
+  applyPresetToFixture: (fixtureId: string, presetId: string) => void;
+  renamePreset: (id: string, name: string) => void;
+  duplicatePreset: (id: string) => void;
+  deletePreset: (id: string) => void;
+  importPreset: (preset: ProductPreset) => void;
 
   // 평면도 배치
   placed: PlacedFixture[];
@@ -413,6 +426,7 @@ export function EditorProvider({
   const [designAssets, setDesignAssets] = useState<DesignAsset[]>([]);
   const [products, setProducts] = useState<Product[]>([]); // 제품 라이브러리(프로젝트 단위) v0.9.3
   const [placedProducts, setPlacedProducts] = useState<PlacedProduct[]>([]); // 배치 제품(배치안) v0.9.3
+  const [productPresets, setProductPresets] = useState<ProductPreset[]>([]); // 진열 프리셋(프로젝트 단위) v0.9.4
   const [svgDocuments, setSvgDocuments] = useState<SvgDocument[]>([]);
   const [wallItems, setWallItems] = useState<WallItems>(emptyWallItems());
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
@@ -455,6 +469,7 @@ export function EditorProvider({
       setDesignAssets(latest?.designAssets ? cloneDesignAssets(latest.designAssets) : []);
       setProducts(found?.products ? cloneProducts(found.products) : []);
       setPlacedProducts(latest?.placedProducts ? clonePlacedProducts(latest.placedProducts) : []);
+      setProductPresets(found?.productPresets ? found.productPresets.map((p) => ({ ...p, items: p.items.map((i) => ({ ...i })) })) : []);
       setSvgDocuments(latest?.svgDocuments ? cloneSvgDocs(latest.svgDocuments) : []);
       setWallItems(cloneWallItems(normalizeWallItems(latest?.wallItems)));
       setCurrentLayoutId(latest?.id ?? null);
@@ -883,26 +898,55 @@ export function EditorProvider({
       setPlacedProducts((prev) => prev.filter((pp) => pp.productId !== id));
     };
 
-    // 제품 배치(배치안 단위 → Undo/Auto/Cloud/Share 자동)
+    // 제품 배치(배치안 단위 → Undo/Auto/Cloud/Share 자동). 제품은 항상 집기 Display Surface 위 (v0.9.4)
     const selectProduct = (id: string | null) =>
       setSelectedItem(id ? { scope: 'plan', type: 'product', id } : null);
-    const placeProduct = (productId: string, xMm?: number, yMm?: number) => {
+    /** 배치 대상 집기(선택된 집기 우선) */
+    const targetFixtureId = (): string | null =>
+      selectedItem?.scope === 'plan' && selectedItem.type === 'fixture' ? selectedItem.id : null;
+
+    const placeProduct = (productId: string, hintFixtureId?: string) => {
       const prod = products.find((p) => p.id === productId);
       if (!prod) return;
-      const px = xMm ?? snapMmToGrid(boothW / 2 - prod.widthMm / 2, gridSizeMm);
-      const py = yMm ?? snapMmToGrid(boothD / 2 - prod.depthMm / 2, gridSizeMm);
+      const target = pickTargetFixture(placed, fixturesById, hintFixtureId ?? targetFixtureId(), boothW / 2, boothD / 2);
+      if (!target) return; // 집기 없으면 배치 불가(바닥 진열 금지)
+      const surf = getFixtureSurface(target.pf, target.def);
       const id = generateId();
-      setPlacedProducts((prev) => [
-        ...prev,
-        { id, productId, xMm: px, yMm: py, rotationDeg: 0, scale: 1, facing: prod.displayDirection ?? 'front' },
-      ]);
+      const base: PlacedProduct = {
+        id,
+        productId,
+        fixtureId: target.pf.id,
+        xMm: surf.centerX - (prod.widthMm / 2),
+        yMm: surf.centerY - (prod.depthMm / 2),
+        rotationDeg: 0,
+        scale: 1,
+        facing: prod.displayDirection ?? 'front',
+      };
+      const clamped = clampToSurface(prod, base, surf);
+      setPlacedProducts((prev) => [...prev, { ...base, ...clamped }]);
       setSelectedItem({ scope: 'plan', type: 'product', id });
     };
+
+    /** 소속 집기 상판으로 위치 제한 (없으면 그대로) */
+    const constrainToSurface = (pp: PlacedProduct, x: number, y: number): { xMm: number; yMm: number } => {
+      const prod = products.find((p) => p.id === pp.productId);
+      const pf = pp.fixtureId ? placed.find((f) => f.id === pp.fixtureId) : null;
+      const def = pf ? fixturesById.get(pf.fixtureDefId) : null;
+      if (!prod || !pf || !def) return { xMm: x, yMm: y };
+      const surf = getFixtureSurface(pf, def);
+      return clampToSurface(prod, { ...pp, xMm: x, yMm: y }, surf);
+    };
+
     const moveProduct = (id: string, xMm: number, yMm: number, snap = true) =>
       setPlacedProducts((prev) =>
-        prev.map((p) =>
-          p.id === id ? { ...p, xMm: snap ? snapMmToGrid(xMm, gridSizeMm) : xMm, yMm: snap ? snapMmToGrid(yMm, gridSizeMm) : yMm } : p,
-        ),
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          if (p.lock) return p; // Display Lock: 이동 금지
+          const nx = snap ? snapMmToGrid(xMm, gridSizeMm) : xMm;
+          const ny = snap ? snapMmToGrid(yMm, gridSizeMm) : yMm;
+          const c = constrainToSurface(p, nx, ny); // 상판 밖이면 자동 복귀
+          return { ...p, xMm: c.xMm, yMm: c.yMm };
+        }),
       );
     const updatePlacedProduct = (id: string, patch: Partial<PlacedProduct>) =>
       setPlacedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -914,26 +958,98 @@ export function EditorProvider({
       const nid = generateId();
       setPlacedProducts((prev) => {
         const src = prev.find((p) => p.id === id);
-        return src ? [...prev, { ...src, id: nid, xMm: src.xMm + gridSizeMm, yMm: src.yMm + gridSizeMm }] : prev;
+        if (!src) return prev;
+        const moved = constrainToSurface(src, src.xMm + gridSizeMm, src.yMm + gridSizeMm);
+        return [...prev, { ...src, id: nid, xMm: moved.xMm, yMm: moved.yMm, lock: false }];
       });
       setSelectedItem({ scope: 'plan', type: 'product', id: nid });
     };
     const replacePlacedProduct = (id: string, newProductId: string) =>
       setPlacedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, productId: newProductId } : p)));
+    /** 한 번에 제품 교체: 특정 제품의 모든 배치 인스턴스를 신제품으로 (⑦) */
+    const replaceProductEverywhere = (oldProductId: string, newProductId: string) =>
+      setPlacedProducts((prev) => prev.map((p) => (p.productId === oldProductId ? { ...p, productId: newProductId } : p)));
+
     const gridArrangeProduct = (
       productId: string,
       count: number,
-      opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing },
+      opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing; fixtureId?: string },
     ) => {
       const prod = products.find((p) => p.id === productId);
       if (!prod) return;
+      const target = pickTargetFixture(placed, fixturesById, opts?.fixtureId ?? targetFixtureId(), boothW / 2, boothD / 2);
+      if (!target) return;
+      const surf = getFixtureSurface(target.pf, target.def);
       const arr = gridArrangeProducts(productId, prod, count, {
-        originXMm: snapMmToGrid(boothW * 0.2, gridSizeMm),
-        originYMm: snapMmToGrid(boothD * 0.2, gridSizeMm),
+        originXMm: surf.minX,
+        originYMm: surf.minY,
         ...opts,
+      }).map((pp) => {
+        const c = clampToSurface(prod, pp, surf);
+        return { ...pp, fixtureId: target.pf.id, xMm: c.xMm, yMm: c.yMm };
       });
       if (arr.length) setPlacedProducts((prev) => [...prev, ...arr]);
     };
+
+    // ---------- Merchandising Preset System (v0.9.4) ----------
+    const persistPresets = (next: ProductPreset[]) => {
+      setProductPresets(next);
+      setProject((p) => (p ? { ...p, productPresets: next } : p));
+      if (project) void storage.saveProject({ ...project, productPresets: next, updatedAt: Date.now() });
+    };
+    /** 집기의 현재 진열을 프리셋으로 저장 (집기 로컬 상대 좌표) */
+    const saveFixtureAsPreset = (fixtureId: string, name: string) => {
+      const pf = placed.find((f) => f.id === fixtureId);
+      const def = pf ? fixturesById.get(pf.fixtureDefId) : null;
+      if (!pf || !def) return;
+      const items: ProductPresetItem[] = placedProducts
+        .filter((pp) => pp.fixtureId === fixtureId)
+        .map((pp) => ({
+          productId: pp.productId,
+          dxMm: pp.xMm - pf.xMm,
+          dyMm: pp.yMm - pf.yMm,
+          rotationDeg: pp.rotationDeg,
+          scale: pp.scale,
+          facing: pp.facing,
+        }));
+      if (items.length === 0) return;
+      const preset: ProductPreset = { id: generateId(), name: name || '새 프리셋', items, createdAt: Date.now(), sourceWidthMm: def.widthMm, sourceDepthMm: def.depthMm };
+      persistPresets([...productPresets, preset]);
+    };
+    /** 프리셋을 집기에 적용 → 제품 자동 생성/배치 */
+    const applyPresetToFixture = (fixtureId: string, presetId: string) => {
+      const pf = placed.find((f) => f.id === fixtureId);
+      const def = pf ? fixturesById.get(pf.fixtureDefId) : null;
+      const preset = productPresets.find((p) => p.id === presetId);
+      if (!pf || !def || !preset) return;
+      const surf = getFixtureSurface(pf, def);
+      const newOnes: PlacedProduct[] = [];
+      for (const it of preset.items) {
+        const prod = products.find((p) => p.id === it.productId);
+        if (!prod) continue;
+        const base: PlacedProduct = {
+          id: generateId(),
+          productId: it.productId,
+          fixtureId,
+          xMm: pf.xMm + it.dxMm,
+          yMm: pf.yMm + it.dyMm,
+          rotationDeg: it.rotationDeg,
+          scale: it.scale,
+          facing: it.facing,
+        };
+        const c = clampToSurface(prod, base, surf);
+        newOnes.push({ ...base, ...c });
+      }
+      if (newOnes.length) setPlacedProducts((prev) => [...prev, ...newOnes]);
+    };
+    const renamePreset = (id: string, name: string) => persistPresets(productPresets.map((p) => (p.id === id ? { ...p, name } : p)));
+    const duplicatePreset = (id: string) => {
+      const src = productPresets.find((p) => p.id === id);
+      if (!src) return;
+      persistPresets([...productPresets, { ...src, id: generateId(), name: `${src.name} 복사본`, createdAt: Date.now(), items: src.items.map((i) => ({ ...i })) }]);
+    };
+    const deletePreset = (id: string) => persistPresets(productPresets.filter((p) => p.id !== id));
+    const importPreset = (preset: ProductPreset) => persistPresets([...productPresets, { ...preset, id: generateId(), createdAt: Date.now() }]);
 
     const markElementConverted = (docId: string, elId: string) =>
       setSvgDocuments((prev) =>
@@ -1480,7 +1596,15 @@ export function EditorProvider({
       deletePlacedProduct,
       duplicatePlacedProduct,
       replacePlacedProduct,
+      replaceProductEverywhere,
       gridArrangeProduct,
+      productPresets,
+      saveFixtureAsPreset,
+      applyPresetToFixture,
+      renamePreset,
+      duplicatePreset,
+      deletePreset,
+      importPreset,
       placed,
       texts,
       dimensions,
@@ -1572,6 +1696,7 @@ export function EditorProvider({
     designAssets,
     products,
     placedProducts,
+    productPresets,
     selectedProductId,
     svgDocuments,
     wallItems,

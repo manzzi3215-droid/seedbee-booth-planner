@@ -35,6 +35,7 @@ export interface DisplayGuideInput {
 }
 
 interface GuideRow {
+  number: string;
   name: string;
   brand: string;
   sizeLabel: string;
@@ -43,8 +44,16 @@ interface GuideRow {
   color: string;
 }
 
+/** 제품 번호 맵 (P-01, P-02 …) — 라이브러리 순서 기준 (v0.9.4 ①) */
+export function productNumberMap(products: Product[]): Map<string, string> {
+  const m = new Map<string, string>();
+  products.forEach((p, i) => m.set(p.id, `P-${String(i + 1).padStart(2, '0')}`));
+  return m;
+}
+
 function buildRows(placedProducts: PlacedProduct[], products: Product[]): GuideRow[] {
   const byId = new Map(products.map((p) => [p.id, p]));
+  const numMap = productNumberMap(products);
   const agg = new Map<string, GuideRow>();
   for (const pp of placedProducts) {
     const prod = byId.get(pp.productId);
@@ -54,6 +63,7 @@ function buildRows(placedProducts: PlacedProduct[], products: Product[]): GuideR
     if (ex) ex.count += 1;
     else
       agg.set(key, {
+        number: numMap.get(pp.productId) ?? '',
         name: prod.name,
         brand: prod.brand || '—',
         sizeLabel: `${prod.widthMm}×${prod.depthMm}${prod.heightMm ? `×${prod.heightMm}` : ''}mm`,
@@ -62,7 +72,28 @@ function buildRows(placedProducts: PlacedProduct[], products: Product[]): GuideR
         color: prod.displayColor || '#f59e0b',
       });
   }
-  return [...agg.values()].sort((a, b) => b.count - a.count);
+  return [...agg.values()].sort((a, b) => (a.number < b.number ? -1 : 1));
+}
+
+/** 집기별 제품 수량 (Counter A: 샴푸 12개 …) — v0.9.4 ③ */
+function fixtureCounts(input: DisplayGuideInput): { fixtureName: string; items: { name: string; count: number }[] }[] {
+  const byProduct = new Map(input.products.map((p) => [p.id, p]));
+  const byFixtureDef = input.fixturesById;
+  const groups = new Map<string, { fixtureName: string; items: Map<string, number> }>();
+  for (const pp of input.placedProducts) {
+    const fid = pp.fixtureId ?? '__none__';
+    const pf = input.placed.find((f) => f.id === pp.fixtureId);
+    const fname = pf ? byFixtureDef.get(pf.fixtureDefId)?.name ?? '집기' : '미할당';
+    const prod = byProduct.get(pp.productId);
+    if (!prod) continue;
+    let g = groups.get(fid);
+    if (!g) {
+      g = { fixtureName: fname, items: new Map() };
+      groups.set(fid, g);
+    }
+    g.items.set(prod.name, (g.items.get(prod.name) ?? 0) + 1);
+  }
+  return [...groups.values()].map((g) => ({ fixtureName: g.fixtureName, items: [...g.items.entries()].map(([name, count]) => ({ name, count })) }));
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -168,15 +199,18 @@ export async function buildDisplayGuideDataURL(input: DisplayGuideInput): Promis
   const rowH = 8;
   for (const row of rows) {
     if (ty > PAGE_H - PAD) break;
-    // 색 스와치
+    // 색 스와치 + 번호
     ctx.fillStyle = row.color;
     ctx.fillRect(mm(tblX), mm(ty - 3), mm(3), mm(3));
+    ctx.fillStyle = '#7c3aed';
+    ctx.font = font(2.9, true);
+    ctx.fillText(row.number, mm(tblX + 4), mm(ty));
     ctx.fillStyle = '#0f172a';
     ctx.font = font(3.4, true);
-    ctx.fillText(row.name, mm(tblX + 4), mm(ty));
+    ctx.fillText(row.name, mm(tblX + 14), mm(ty));
     ctx.fillStyle = '#64748b';
     ctx.font = font(2.7);
-    ctx.fillText(`${row.brand} · ${row.sizeLabel} · Facing ${row.facing}`, mm(tblX + 4), mm(ty + 3));
+    ctx.fillText(`${row.brand} · ${row.sizeLabel} · Facing ${row.facing}`, mm(tblX + 14), mm(ty + 3));
     ctx.fillStyle = '#0f172a';
     ctx.font = font(4, true);
     ctx.textAlign = 'right';
@@ -193,6 +227,22 @@ export async function buildDisplayGuideDataURL(input: DisplayGuideInput): Promis
     ctx.fillStyle = '#94a3b8';
     ctx.font = font(3.2);
     ctx.fillText('진열된 제품이 없습니다.', mm(tblX), mm(ty));
+  }
+
+  // 집기별 수량 (왼쪽 진열도 아래) — v0.9.4 ③
+  const fc = fixtureCounts(input);
+  let fy = drawBoxY + drawBoxH + 5;
+  ctx.fillStyle = '#334155';
+  ctx.font = font(3.4, true);
+  ctx.fillText('집기별 수량', mm(drawBoxX), mm(fy));
+  fy += 4;
+  ctx.font = font(2.9);
+  for (const g of fc.slice(0, 2)) {
+    if (fy > PAGE_H - 4) break;
+    ctx.fillStyle = '#0f172a';
+    const line = `${g.fixtureName}: ${g.items.map((i) => `${i.name} ${i.count}개`).join(' · ')}`;
+    ctx.fillText(line.slice(0, 80), mm(drawBoxX), mm(fy));
+    fy += 4;
   }
 
   return canvas.toDataURL('image/png');

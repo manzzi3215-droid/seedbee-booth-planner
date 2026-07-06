@@ -196,7 +196,7 @@ export function renderIsoSceneToDataURL(
     allPts.push(w.baseStart, w.baseEnd, { ...w.baseStart, z: w.heightMm }, { ...w.baseEnd, z: w.heightMm });
   }
   for (const box of scene.boxes) {
-    for (const f of box.footprint) allPts.push(f, { ...f, z: box.heightMm });
+    for (const f of box.footprint) allPts.push(f, { ...f, z: (box.baseZmm ?? 0) + box.heightMm });
   }
   const projected = allPts.map(rawProj);
   const minX = Math.min(...projected.map((p) => p.x));
@@ -461,7 +461,9 @@ export function renderIsoSceneToDataURL(
   const nameDraws: { screen: Pt; depth: number; text: string }[] = [];
   for (const box of scene.boxes) {
     const fp = box.footprint;
-    const top = fp.map((f) => ({ ...f, z: box.heightMm }));
+    const topZ = (box.baseZmm ?? 0) + box.heightMm; // 상판 위 제품은 baseZ 만큼 올라감 (v0.9.4)
+    const midZ = (box.baseZmm ?? 0) + box.heightMm / 2;
+    const top = fp.map((f) => ({ ...f, z: topZ }));
     const bcx = fp.reduce((s, p) => s + p.x, 0) / fp.length;
     const bcy = fp.reduce((s, p) => s + p.y, 0) / fp.length;
     const boxDepth = depthOf([...fp, ...top]);
@@ -500,12 +502,12 @@ export function renderIsoSceneToDataURL(
             if (nx * sa + ny * ca > 0) {
               const nlen = Math.hypot(nx, ny) || 1;
               const sideNormal: Vec3 = { x: nx / nlen, y: ny / nlen, z: 0 };
-              const face = [a, bb, { ...bb, z: box.heightMm }, { ...a, z: box.heightMm }];
-              polygon(face, shadeFace(lighting, box.color, sideNormal, { x: (a.x + bb.x) / 2, y: (a.y + bb.y) / 2, z: box.heightMm / 2 }), 'rgba(0,0,0,0.32)', boxAlpha);
+              const face = [a, bb, { ...bb, z: topZ }, { ...a, z: topZ }];
+              polygon(face, shadeFace(lighting, box.color, sideNormal, { x: (a.x + bb.x) / 2, y: (a.y + bb.y) / 2, z: midZ }), 'rgba(0,0,0,0.32)', boxAlpha);
               const spec = specularAt(sideNormal, mat);
               if (spec > 0.02) polygon(face, '#ffffff', undefined, Math.min(0.55, spec) * boxAlpha);
-              const topA: V3 = { ...a, z: box.heightMm };
-              const topB: V3 = { ...bb, z: box.heightMm };
+              const topA: V3 = { ...a, z: topZ };
+              const topB: V3 = { ...bb, z: topZ };
               if (wrapEl && box.wrapTexture && perim > 0) {
                 // 곡면: 이미지를 둘레 비율로 잘라 각 facet 에 감쌈 (Cylinder/곡면 UV wrap)
                 const iw = wrapEl.naturalWidth || wrapEl.width;
@@ -528,7 +530,7 @@ export function renderIsoSceneToDataURL(
         }
         // 윗면
         const topNormal: Vec3 = { x: 0, y: 0, z: 1 };
-        polygon(top, shadeFace(lighting, box.color, topNormal, { x: bcx, y: bcy, z: box.heightMm }), 'rgba(0,0,0,0.3)', boxAlpha);
+        polygon(top, shadeFace(lighting, box.color, topNormal, { x: bcx, y: bcy, z: topZ }), 'rgba(0,0,0,0.3)', boxAlpha);
         const topSpec = specularAt(topNormal, mat);
         if (topSpec > 0.02) polygon(top, '#ffffff', undefined, Math.min(0.55, topSpec) * boxAlpha);
         const topTex = box.faces?.top;
@@ -541,8 +543,8 @@ export function renderIsoSceneToDataURL(
     });
     if (options.showNames) {
       const anchor: V3 = vp.top
-        ? { x: bcx, y: bcy, z: 0 }
-        : { x: bcx, y: bcy, z: box.heightMm };
+        ? { x: bcx, y: bcy, z: (box.baseZmm ?? 0) }
+        : { x: bcx, y: bcy, z: topZ };
       nameDraws.push({ screen: P(anchor), depth: boxDepth, text: box.name });
     }
   }

@@ -7,8 +7,11 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Switch from '@mui/material/Switch';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
 import type { ProductFacing } from '../../types';
 import { useEditor } from '../editor/EditorContext';
 import { PRODUCT_FACINGS } from './productModel';
@@ -25,6 +28,7 @@ export default function ProductPanel() {
     deletePlacedProduct,
     duplicatePlacedProduct,
     replacePlacedProduct,
+    replaceProductEverywhere,
   } = useEditor();
 
   const pp = placedProducts.find((p) => p.id === selectedProductId) ?? null;
@@ -86,17 +90,35 @@ export default function ProductPanel() {
 
       <Divider sx={{ my: 1 }} />
 
+      {/* Display Lock */}
+      <FormControlLabel
+        control={<Switch size="small" checked={!!pp.lock} onChange={(e) => updatePlacedProduct(pp.id, { lock: e.target.checked })} />}
+        label={<Typography variant="body2">진열 잠금 (이동 금지)</Typography>}
+        sx={{ ml: 0, mb: 0.5 }}
+      />
+
       {/* 제품 교체 (위치 유지) */}
       <TextField
-        select size="small" fullWidth label="제품 교체 (위치 유지)"
+        select size="small" fullWidth label="제품 교체 (이 인스턴스)"
         value={pp.productId}
         onChange={(e) => replacePlacedProduct(pp.id, e.target.value)}
-        sx={{ mb: 1.5 }}
+        sx={{ mb: 1 }}
       >
         {products.map((x) => <MenuItem key={x.id} value={x.id}>{x.name}</MenuItem>)}
       </TextField>
 
       <Stack spacing={1}>
+        <Button variant="outlined" startIcon={<SwapHorizRoundedIcon />} fullWidth
+          onClick={() => {
+            const others = products.filter((x) => x.id !== pp.productId);
+            if (others.length === 0) return;
+            const name = window.prompt(`"${prod.name}"을(를) 어떤 제품으로 전체 교체할까요?\n${others.map((o, i) => `${i + 1}. ${o.name}`).join('\n')}\n번호 입력:`, '1');
+            const idx = Number(name) - 1;
+            if (idx >= 0 && idx < others.length) replaceProductEverywhere(pp.productId, others[idx].id);
+          }}
+        >
+          이 제품 전체 교체
+        </Button>
         <Button variant="outlined" startIcon={<ContentCopyRoundedIcon />} onClick={() => duplicatePlacedProduct(pp.id)} fullWidth>
           복제
         </Button>

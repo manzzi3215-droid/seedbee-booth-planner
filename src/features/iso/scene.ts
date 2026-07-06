@@ -68,6 +68,8 @@ export interface IsoBox {
   wrapTexture?: IsoFaceTexture;
   /** 3D 재질 (v0.9.2) */
   material?: import('../../types').FixtureMaterial;
+  /** 바닥 기준 시작 높이(mm). 제품은 집기 상판 높이에서 시작 (v0.9.4) */
+  baseZmm?: number;
 }
 
 /** 바닥 위 이미지 (z=0 평면) */
@@ -178,14 +180,20 @@ export function buildIsoScene(
     });
   }
 
-  // --- 배치 제품 (Digital Merchandising, v0.9.3) — 실제 위치/크기/방향으로 3D 반영 ---
+  // --- 배치 제품 (Digital Merchandising, v0.9.3~v0.9.4) — 집기 Display Surface 위에 실제처럼 올라감 ---
   const productById = new Map(products.map((p) => [p.id, p]));
+  const placedFixtureById = new Map(placed.map((f) => [f.id, f]));
   for (const pp of placedProducts) {
     const prod = productById.get(pp.productId);
     if (!prod) continue;
+    // 소속 집기의 상판 높이(Display Surface) — 제품은 이 높이에서 시작 (바닥 아님)
+    let baseZ = 0;
+    const pf = pp.fixtureId ? placedFixtureById.get(pp.fixtureId) : undefined;
+    const fdef = pf ? fixturesById.get(pf.fixtureDefId) : undefined;
+    if (fdef) baseZ = Math.max(0, fdef.heightMm ?? 900);
     const w = prod.widthMm * pp.scale;
     const d = prod.depthMm * pp.scale;
-    const h = Math.max(30, Math.min(booth.heightMm ?? 2500, (prod.heightMm ?? 300) * pp.scale));
+    const h = Math.max(30, (prod.heightMm ?? 300) * pp.scale);
     const rad = (pp.rotationDeg * Math.PI) / 180;
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
@@ -194,12 +202,13 @@ export function buildIsoScene(
       [w, 0],
       [w, d],
       [0, d],
-    ].map(([lx, ly]) => ({ x: pp.xMm + lx * cos - ly * sin, y: pp.yMm + lx * sin + ly * cos, z: 0 }));
+    ].map(([lx, ly]) => ({ x: pp.xMm + lx * cos - ly * sin, y: pp.yMm + lx * sin + ly * cos, z: baseZ }));
     const img = productImageUrl(prod, pp.facing);
     const faces: IsoBox['faces'] = img ? { top: { url: img, opacity: 1 }, front: { url: img, opacity: 1 } } : undefined;
     boxes.push({
       footprint,
       heightMm: h,
+      baseZmm: baseZ,
       color: prod.displayColor ?? '#f59e0b',
       opacity: 1,
       name: prod.name,

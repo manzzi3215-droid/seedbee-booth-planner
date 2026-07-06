@@ -386,11 +386,13 @@ export interface Product {
   meta?: Record<string, unknown>;
 }
 
-/** 배치된 제품 인스턴스 (평면도 Product Layer) */
+/** 배치된 제품 인스턴스 (집기 Display Surface 위, v0.9.4) */
 export interface PlacedProduct {
   id: string;
   productId: string;
-  xMm: number; // 바운딩 박스 좌상단
+  /** 소속 집기(Display Surface). 제품은 항상 집기 상판 위에 진열됨 (v0.9.4) */
+  fixtureId?: string;
+  xMm: number; // 바운딩 박스 좌상단(월드 mm) — 소속 집기 상판 위로 제한됨
   yMm: number;
   rotationDeg: number;
   /** 스케일 배율(1=100%) */
@@ -399,6 +401,32 @@ export interface PlacedProduct {
   facing: ProductFacing;
   /** 그룹 id(그룹 이동/복사/잠금) */
   groupId?: string;
+  /** 진열 잠금(이동 금지) — Display Lock (v0.9.4) */
+  lock?: boolean;
+  /** 설치 순서(선택) */
+  seq?: number;
+}
+
+/** 제품 진열 프리셋 아이템 — 집기 상판 기준 상대 좌표 (v0.9.4) */
+export interface ProductPresetItem {
+  productId: string;
+  /** 집기 로컬(좌상단 0,0) 기준 상대 좌표 mm */
+  dxMm: number;
+  dyMm: number;
+  rotationDeg: number;
+  scale: number;
+  facing: ProductFacing;
+}
+
+/** 제품 진열 프리셋 — 빈 집기에 적용하면 진열 자동 완성 (v0.9.4 핵심) */
+export interface ProductPreset {
+  id: string;
+  name: string;
+  items: ProductPresetItem[];
+  createdAt: number;
+  /** 참고: 만든 집기 크기(적용 시 스케일 판단용) */
+  sourceWidthMm?: number;
+  sourceDepthMm?: number;
 }
 
 /** 제품 세트(패키지) — 드래그 한 번으로 세트 전체 배치 (#13) */
@@ -489,6 +517,8 @@ export interface Project extends BaseEntity {
   productPackages?: ProductPackage[];
   /** 행사별 진열 템플릿 */
   productTemplates?: ProductTemplate[];
+  /** 진열 프리셋 (v0.9.4) — 집기에 적용하면 진열 자동 완성 */
+  productPresets?: ProductPreset[];
 
   // --- 공유 (v0.8.2). 누락 시 owner 전용/비공개로 취급(하위 호환) ---
   /** Firestore 소유자 uid (읽을 때 채워짐) */

@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.3 - Digital Merchandising System**
+> **v0.9.4 - Display Surface & Merchandising Preset System**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -191,8 +191,23 @@ src/
 | Undo/Redo · 다중선택 · 정렬/분배/미러/배열 | ✅ |
 | 3D Lighting System(조명·그림자·재질) | ✅ |
 | Digital Merchandising(제품 진열·Display Guide) | ✅ |
+| Display Surface·진열 프리셋(집기 위 진열) | ✅ |
 
 ### Changelog
+
+**v0.9.4 — Display Surface & Merchandising Preset System (실전 VMD)**
+- **Display Surface(구조 변경):** 제품은 더 이상 바닥이 아니라 **집기 상판(Display Surface) 위**에 진열됩니다.
+  모든 집기는 Geometry Engine 의 footprint(사각형/원형/곡선/커스텀) 그대로 상판을 자동 생성.
+  제품에 `fixtureId` 부여 → 배치 시 선택/최근접 집기 상판 위에 올라가고, **상판 밖으로 나가면 자동 복귀(clamp)**.
+- **3D 반영:** 제품이 집기 상판 높이(`baseZmm`)에서 시작해 실제처럼 위에 올라감. Lighting/Shadow/Material 그대로 적용.
+- **Merchandising Preset System(핵심):** 집기의 진열 상태를 **프리셋으로 저장**(집기 로컬 상대 좌표)하고,
+  빈 집기를 선택해 **적용하면 제품이 자동 생성·배치**되어 몇 초 만에 진열 완성. 좌측 **프리셋** 탭에서
+  저장/이름변경/복제/삭제/내보내기(JSON)/가져오기. 프로젝트(행사) 단위 Cloud Save + JSON 공유.
+- **추천 기능:** ① 제품 자동 번호(P-01…) — Display Guide 표시, ③ 집기별 수량 자동 계산(Display Guide),
+  ⑥ Display Lock(진열 잠금·이동 금지), ⑦ 한 번에 제품 전체 교체.
+- **Display Guide/PNG/PDF:** 제품 번호 + 집기별 수량 포함 출력. 제품이 2D·3D·PNG·PDF·Display Guide 동일 반영.
+- **유지:** Undo/Redo · Cloud/Auto Save · CAD · Lighting · 3D Geometry · Design Mapping · Print Workspace · Display Guide 정상.
+- 로드맵(구조만 선반영): Auto Layout(Snake/Random/균등)·부족 수량 감지·실사 사진 비교·행사별 Template·ERP/AI 자동 진열.
 
 **v0.9.3 — Digital Merchandising System (제품 진열 · 현장 설치)**
 - **Product Component 모델(확장형 핵심):** `Product`(정의) / `PlacedProduct`(배치) / `ProductPackage`(세트) /

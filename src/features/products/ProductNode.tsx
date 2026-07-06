@@ -53,7 +53,7 @@ export default function ProductNode({
       x={placed.xMm}
       y={placed.yMm}
       rotation={placed.rotationDeg}
-      draggable
+      draggable={!placed.lock}
       onMouseDown={() => onSelect(placed.id)}
       onTouchStart={() => onSelect(placed.id)}
       onDragStart={() => onSelect(placed.id)}
