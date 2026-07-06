@@ -146,6 +146,8 @@ interface EditorContextValue {
 
   // 출력물 제작 (v0.8.9) — 집기 정의의 printSettings 갱신(로컬/전역 자동 판별 저장)
   updateFixturePrintSettings: (defId: string, printSettings: import('../../types').PrintSettings) => void;
+  // 3D 재질 (v0.9.2)
+  updateFixtureMaterial: (defId: string, material: import('../../types').FixtureMaterial) => void;
 
   // 디자인 매핑 (v0.8.7)
   designAssets: DesignAsset[];
@@ -793,6 +795,16 @@ export function EditorProvider({
       }
     };
 
+    // 3D 재질 설정 (v0.9.2) — 로컬/전역 자동 판별 저장
+    const updateFixtureMaterial = (defId: string, material: import('../../types').FixtureMaterial) => {
+      if (localFixtures.some((f) => f.id === defId)) {
+        updateLocalFixture(defId, { material });
+      } else {
+        const def = fixtures.find((f) => f.id === defId);
+        if (def) void saveFixture({ ...def, material });
+      }
+    };
+
     // ---------- 디자인 매핑 (v0.8.7) ----------
     const addDesignAsset = (asset: DesignAsset) => setDesignAssets((prev) => [...prev, asset]);
     const updateFixtureDesign = (fixtureId: string, design: DesignMapping | undefined) =>
@@ -1329,6 +1341,7 @@ export function EditorProvider({
       localFixtures,
       updateLocalFixture,
       updateFixturePrintSettings,
+      updateFixtureMaterial,
       designAssets,
       addDesignAsset,
       updateFixtureDesign,

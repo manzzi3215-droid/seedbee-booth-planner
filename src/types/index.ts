@@ -64,6 +64,9 @@ export type FixtureShape =
   | 'semicircle'
   | 'customPath';
 
+/** 3D 재질 (v0.9.2) — 반사/광택/투명 표현 */
+export type FixtureMaterial = 'matte' | 'semiGloss' | 'gloss' | 'transparent' | 'acrylic';
+
 /** 2D 좌표 (mm 기준). Canvas 내부 좌표는 항상 mm 로 관리합니다. */
 export interface PointMm {
   xMm: number;
@@ -84,6 +87,8 @@ export interface FixtureDef {
   color: string;
   /** 채움 투명도 0~1 (v0.8.5). 누락 시 1(불투명)로 취급 — 하위 호환 */
   opacity?: number;
+  /** 3D 재질 (v0.9.2). 누락 시 'matte' — 하위 호환 */
+  material?: FixtureMaterial;
   memo?: string;
 
   // --- shape 별 파라미터 (해당 shape 일 때만 사용) ---

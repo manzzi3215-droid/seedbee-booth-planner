@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.1 - Design Mapping & 3D Geometry Engine**
+> **v0.9.2 - Professional Lighting System**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -189,8 +189,26 @@ src/
 | 디자인 매핑(집기 텍스처) | ✅ |
 | Print Production Workspace(출력물 제작) | ✅ |
 | Undo/Redo · 다중선택 · 정렬/분배/미러/배열 | ✅ |
+| 3D Lighting System(조명·그림자·재질) | ✅ |
 
 ### Changelog
+
+**v0.9.2 — Professional Lighting System (3D 렌더 품질)**
+- **Lighting Engine(확장형 조명 엔진):** `src/features/iso/lighting/LightingEngine.ts` — Ambient · Directional ·
+  Spot · Area 조명을 Light 유니온 + accumulate 로 계산. 새 조명(LED/간접/쇼케이스/월워시)은 타입 + case 추가로 확장.
+  기본값 Ambient + Directional. 아이소메트릭 각 면(바닥/벽/집기)에 Lambert diffuse + ambient + spot 물리 근사 셰이딩.
+- **Sun Direction:** 좌/우/정면/후면/상단 프리셋 + 방위각/고도 각도.
+- **Spot Light:** 위치·높이·세기·콘 각도 조절.
+- **Shadow System 개선:** Real floor shadow(실제 집기 형태 footprint 를 광원 방향으로 투영) + Contact(접지) + Soft(부드러움).
+  단순 원형이 아니라 형태 그대로 투영.
+- **Material(재질):** Matte / Semi Gloss / Gloss / Transparent / Acrylic — 집기 속성에서 선택. Blinn-Phong 스페큘러 하이라이트 +
+  투명/아크릴 반투명. 로컬/전역 집기 자동 판별 저장(Cloud/Auto Save 반영).
+- **Color Temperature:** 2700 / 3000 / 4000 / 5000 / 6500K (Tanner Helland 근사 틴트).
+- **Ground Reflection:** 반사 강도에 따른 바닥 광택 하이라이트.
+- **품질:** imageSmoothing high(직전) 유지 + Edge 스트로크 강화.
+- **Lighting Panel:** 3D 미리보기에 조명 패널(Ambient/Directional/태양/Spot/그림자/색온도/바닥반사).
+- **유지:** Design Mapping · 3D Geometry · Auto Orbit · 자유 카메라 · Undo/Redo · CAD · Print · Cloud/Auto Save 정상.
+- 로드맵: Three.js 기반 실사 렌더(GI/실시간 반사), Area Light 소프트섀도 고도화.
 
 **v0.9.1 — Design Mapping & 3D Geometry Engine (기존 기능 완성)**
 - **Geometry Generator(2D Shape → 3D Extrude 파이프라인):** Shape 별 Renderer 를 레지스트리에 등록하는

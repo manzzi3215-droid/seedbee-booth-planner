@@ -2,6 +2,15 @@ import type { BoxFace, PlacedDimension, PlacedText } from '../../types';
 import { dimensionDisplayLabel } from '../dimensions/constants';
 import { TEXT_FONT_FAMILY } from '../texts/constants';
 import type { IsoScene, IsoWall, V3 } from './scene';
+import {
+  type LightingConfig,
+  type Vec3,
+  defaultLighting,
+  shadeFace,
+  materialProps,
+  primaryShadowOffset,
+  sunToLightDir,
+} from './lighting/LightingEngine';
 
 /**
  * 아이소메트릭 2D 렌더러 (preview 전용, 편집 없음).
@@ -49,6 +58,8 @@ export interface IsoRenderOptions {
   /** 이미지 패닝(px) — 자유 카메라 (v0.9.1) */
   panX?: number;
   panY?: number;
+  /** 조명 설정 (v0.9.2). 미지정 시 기본 조명(Ambient+Directional) */
+  lighting?: LightingConfig;
 }
 
 export const DEFAULT_ISO_OPTIONS: IsoRenderOptions = {
@@ -146,6 +157,28 @@ export function renderIsoSceneToDataURL(
   const sa = Math.sin(vp.az);
   const panX = options.panX ?? 0;
   const panY = options.panY ?? 0;
+
+  // --- 조명 (v0.9.2) ---
+  const lighting = options.lighting ?? defaultLighting();
+  const n3 = (v: Vec3): Vec3 => {
+    const l = Math.hypot(v.x, v.y, v.z) || 1;
+    return { x: v.x / l, y: v.y / l, z: v.z / l };
+  };
+  const dot3 = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
+  // 뷰어를 향하는 근사 벡터(스페큘러용)
+  const viewDir = n3({ x: -sa, y: -ca, z: 0.55 });
+  // 주 directional 광원(스페큘러/하이라이트용)
+  const primaryDir = lighting.lights.find((l) => l.type === 'directional' && l.enabled) as
+    | { azimuthDeg: number; elevationDeg: number; intensity: number }
+    | undefined;
+  /** Blinn-Phong 근사 스페큘러 세기(0..1) */
+  const specularAt = (normal: Vec3, mat: ReturnType<typeof materialProps>): number => {
+    if (!primaryDir || mat.specular <= 0) return 0;
+    const L = sunToLightDir(primaryDir.azimuthDeg, primaryDir.elevationDeg);
+    const H = n3({ x: L.x + viewDir.x, y: L.y + viewDir.y, z: L.z + viewDir.z });
+    const nh = Math.max(0, dot3(n3(normal), H));
+    return Math.pow(nh, mat.shininess) * mat.specular * (primaryDir.intensity || 1);
+  };
 
   const rawProj = (p: V3): Pt => ({
     x: p.x * ca - p.y * sa,
@@ -261,11 +294,6 @@ export function renderIsoSceneToDataURL(
     return { nx: nx / len, ny: ny / len };
   };
 
-  // 조명 방향(지면) — 좌상단 앞에서
-  const Llen = Math.hypot(-0.42, -0.6);
-  const Lx = -0.42 / Llen;
-  const Ly = -0.6 / Llen;
-
   const units: DrawUnit[] = []; // 바닥/그림자/바닥이미지 (배경)
   const wallUnits: DrawUnit[] = []; // 벽 (항상 집기 뒤) — v0.9.1 z-order
   const boxUnits: DrawUnit[] = []; // 집기 (항상 벽 앞)
@@ -274,12 +302,13 @@ export function renderIsoSceneToDataURL(
   units.push({
     depth: -Infinity,
     draw: () => {
-      polygon(scene.floorPolygon, options.floorColor, '#94a3b8');
+      const litFloor = shadeFace(lighting, options.floorColor, { x: 0, y: 0, z: 1 }, { x: cx, y: cy, z: 0 });
+      polygon(scene.floorPolygon, litFloor, '#94a3b8');
       if (options.floorChecker) {
         ctx.save();
         clipFloor();
         const cell = 500;
-        const dark = shade(options.floorColor, 0.92);
+        const dark = shade(options.floorColor, 0.86);
         const i0 = Math.floor(gMinX / cell);
         const i1 = Math.ceil(gMaxX / cell);
         const j0 = Math.floor(gMinY / cell);
@@ -305,52 +334,83 @@ export function renderIsoSceneToDataURL(
         }
         ctx.restore();
       }
+      // Ground Reflection: 반사 재질 바닥 광택(부드러운 하이라이트) — v0.9.2
+      if (lighting.groundReflection > 0) {
+        ctx.save();
+        clipFloor();
+        const gc = P({ x: cx, y: cy, z: 0 });
+        const rad = Math.max(canvas.width, canvas.height) * 0.6;
+        const grad = ctx.createRadialGradient(gc.x, gc.y - rad * 0.15, rad * 0.05, gc.x, gc.y, rad);
+        const a = Math.min(0.4, lighting.groundReflection * 0.5);
+        grad.addColorStop(0, `rgba(255,255,255,${a.toFixed(3)})`);
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
     },
   });
 
-  // --- 그림자 (바닥 바로 위) ---
-  if (options.showShadows) {
-    const blurPx = Math.max(3, options.targetPx * 0.006);
-    const shadowPolys: Pt[][] = [];
+  // --- 그림자 (바닥 바로 위) — Real floor shadow: 실제 집기 형태 투영 + Contact + Soft (v0.9.2) ---
+  if (options.showShadows && lighting.shadow.enabled) {
+    const sh = lighting.shadow;
+    const off = primaryShadowOffset(lighting); // 광원 기준 지면 투영 방향(높이 1당 오프셋)
+    const softBlur = Math.max(2, options.targetPx * 0.005 * (0.4 + sh.softness));
+    const contactBlur = Math.max(1, options.targetPx * 0.0018);
 
-    // 집기 그림자: footprint 를 빛 반대방향으로 높이만큼 스윕
+    // 캐스트 그림자: 실제 footprint 를 광원 반대방향으로 높이만큼 스윕(형태 유지)
+    const castPolys: Pt[][] = [];
+    const contactPolys: Pt[][] = [];
     for (const box of scene.boxes) {
-      const off = box.heightMm * 0.7;
-      const ground: Pt[] = [];
-      for (const f of box.footprint) {
-        ground.push({ x: f.x, y: f.y });
-        ground.push({ x: f.x - Lx * off, y: f.y - Ly * off });
+      contactPolys.push(box.footprint.map((f) => ({ x: f.x, y: f.y })));
+      if (off) {
+        const h = box.heightMm;
+        const ground: Pt[] = [];
+        for (const f of box.footprint) {
+          ground.push({ x: f.x, y: f.y });
+          ground.push({ x: f.x + off.dx * h, y: f.y + off.dy * h });
+        }
+        castPolys.push(convexHull(ground));
       }
-      shadowPolys.push(convexHull(ground));
     }
-    // 벽 그림자: 벽 상단선을 지면에 투영
-    for (const w of scene.walls) {
-      const off = w.heightMm * 0.7;
-      shadowPolys.push([
-        { x: w.baseStart.x, y: w.baseStart.y },
-        { x: w.baseEnd.x, y: w.baseEnd.y },
-        { x: w.baseEnd.x - Lx * off, y: w.baseEnd.y - Ly * off },
-        { x: w.baseStart.x - Lx * off, y: w.baseStart.y - Ly * off },
-      ]);
+    if (off) {
+      for (const w of scene.walls) {
+        const h = w.heightMm;
+        castPolys.push([
+          { x: w.baseStart.x, y: w.baseStart.y },
+          { x: w.baseEnd.x, y: w.baseEnd.y },
+          { x: w.baseEnd.x + off.dx * h, y: w.baseEnd.y + off.dy * h },
+          { x: w.baseStart.x + off.dx * h, y: w.baseStart.y + off.dy * h },
+        ]);
+      }
     }
+
+    const fillPolys = (polys: Pt[][], color: string, blur: number) => {
+      ctx.filter = `blur(${blur}px)`;
+      ctx.fillStyle = color;
+      for (const gp of polys) {
+        if (gp.length < 3) continue;
+        const sp = gp.map((g) => P({ x: g.x, y: g.y, z: 0 }));
+        ctx.beginPath();
+        ctx.moveTo(sp[0].x, sp[0].y);
+        for (let k = 1; k < sp.length; k++) ctx.lineTo(sp[k].x, sp[k].y);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.filter = 'none';
+    };
 
     units.push({
       depth: -Infinity + 1,
       draw: () => {
         ctx.save();
         clipFloor();
-        ctx.filter = `blur(${blurPx}px)`;
-        ctx.fillStyle = 'rgba(15,23,42,0.18)';
-        for (const gp of shadowPolys) {
-          if (gp.length < 3) continue;
-          const sp = gp.map((g) => P({ x: g.x, y: g.y, z: 0 }));
-          ctx.beginPath();
-          ctx.moveTo(sp[0].x, sp[0].y);
-          for (let k = 1; k < sp.length; k++) ctx.lineTo(sp[k].x, sp[k].y);
-          ctx.closePath();
-          ctx.fill();
+        // Soft cast shadow (넓고 옅게)
+        fillPolys(castPolys, `rgba(15,23,42,${(sh.opacity * 0.65).toFixed(3)})`, softBlur);
+        // Contact/Ambient shadow (집기 바로 아래, 좁고 진하게)
+        if (sh.contact) {
+          fillPolys(contactPolys, `rgba(15,23,42,${Math.min(0.5, sh.opacity * 1.25).toFixed(3)})`, contactBlur);
         }
-        ctx.filter = 'none';
         ctx.restore();
       },
     });
@@ -381,13 +441,17 @@ export function renderIsoSceneToDataURL(
     const quad = [w.baseStart, w.baseEnd, topEnd, topStart];
     const { nx, ny } = wallNormal(w);
     const facing = nx * sa + ny * ca; // >0 : 시점을 향한 근접 벽
-    const dot = Math.max(-1, Math.min(1, nx * Lx + ny * Ly));
-    const bright = 0.6 + 0.32 * dot; // 면별 명암 차이
     const alpha = facing > 0 ? options.wallOpacity : 0.96;
+    const wallCenter: Vec3 = {
+      x: (w.baseStart.x + w.baseEnd.x) / 2,
+      y: (w.baseStart.y + w.baseEnd.y) / 2,
+      z: w.heightMm / 2,
+    };
+    const wallFill = shadeFace(lighting, '#c3ccd8', { x: nx, y: ny, z: 0 }, wallCenter);
     wallUnits.push({
       depth: depthOf(quad),
       draw: () => {
-        polygon(quad, shade('#c3ccd8', bright), 'rgba(100,116,139,0.7)', alpha);
+        polygon(quad, wallFill, 'rgba(100,116,139,0.7)', alpha);
         drawWallItems(ctx, w, imageElements, P, reset);
       },
     });
@@ -401,6 +465,8 @@ export function renderIsoSceneToDataURL(
     const bcx = fp.reduce((s, p) => s + p.x, 0) / fp.length;
     const bcy = fp.reduce((s, p) => s + p.y, 0) / fp.length;
     const boxDepth = depthOf([...fp, ...top]);
+    const mat = materialProps(box.material);
+    const boxAlpha = box.opacity * mat.alphaMul;
     boxUnits.push({
       depth: boxDepth,
       draw: () => {
@@ -433,9 +499,11 @@ export function renderIsoSceneToDataURL(
             }
             if (nx * sa + ny * ca > 0) {
               const nlen = Math.hypot(nx, ny) || 1;
-              const dot = Math.max(-1, Math.min(1, (nx / nlen) * Lx + (ny / nlen) * Ly));
+              const sideNormal: Vec3 = { x: nx / nlen, y: ny / nlen, z: 0 };
               const face = [a, bb, { ...bb, z: box.heightMm }, { ...a, z: box.heightMm }];
-              polygon(face, shade(box.color, 0.72 + 0.18 * dot), 'rgba(0,0,0,0.28)', box.opacity);
+              polygon(face, shadeFace(lighting, box.color, sideNormal, { x: (a.x + bb.x) / 2, y: (a.y + bb.y) / 2, z: box.heightMm / 2 }), 'rgba(0,0,0,0.32)', boxAlpha);
+              const spec = specularAt(sideNormal, mat);
+              if (spec > 0.02) polygon(face, '#ffffff', undefined, Math.min(0.55, spec) * boxAlpha);
               const topA: V3 = { ...a, z: box.heightMm };
               const topB: V3 = { ...bb, z: box.heightMm };
               if (wrapEl && box.wrapTexture && perim > 0) {
@@ -459,7 +527,10 @@ export function renderIsoSceneToDataURL(
           }
         }
         // 윗면
-        polygon(top, shade(box.color, vp.top ? 1.0 : 1.1), 'rgba(0,0,0,0.28)', box.opacity);
+        const topNormal: Vec3 = { x: 0, y: 0, z: 1 };
+        polygon(top, shadeFace(lighting, box.color, topNormal, { x: bcx, y: bcy, z: box.heightMm }), 'rgba(0,0,0,0.3)', boxAlpha);
+        const topSpec = specularAt(topNormal, mat);
+        if (topSpec > 0.02) polygon(top, '#ffffff', undefined, Math.min(0.55, topSpec) * boxAlpha);
         const topTex = box.faces?.top;
         const topEl = topTex && imageElements.get(topTex.url);
         if (topTex && topEl) {

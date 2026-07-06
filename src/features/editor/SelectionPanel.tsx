@@ -7,7 +7,9 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import TextField from '@mui/material/TextField';
+import MenuItem from '@mui/material/MenuItem';
 import InputAdornment from '@mui/material/InputAdornment';
+import type { FixtureMaterial } from '../../types';
 import Rotate90DegreesCwRoundedIcon from '@mui/icons-material/Rotate90DegreesCwRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
@@ -23,6 +25,15 @@ import BackgroundPanel from './BackgroundPanel';
 import SvgInspectorPanel from './SvgInspectorPanel';
 import ConvertedFixtureEditor from './ConvertedFixtureEditor';
 import DesignPanel from '../design/DesignPanel';
+
+/** 3D 재질 옵션 (v0.9.2) */
+const MATERIAL_OPTIONS: { value: FixtureMaterial; label: string }[] = [
+  { value: 'matte', label: '무광 (Matte)' },
+  { value: 'semiGloss', label: '반광 (Semi Gloss)' },
+  { value: 'gloss', label: '유광 (Gloss)' },
+  { value: 'transparent', label: '투명 (Transparent)' },
+  { value: 'acrylic', label: '아크릴 (Acrylic)' },
+];
 
 /** 빈 선택 상태 */
 function EmptyPanel() {
@@ -76,6 +87,7 @@ function FixtureInfoPanel() {
     deleteSelected,
     setSelectedPosition,
     setSelectedRotation,
+    updateFixtureMaterial,
   } = useEditor();
 
   const selected = placed.find((p) => p.id === selectedFixtureId) ?? null;
@@ -191,6 +203,21 @@ function FixtureInfoPanel() {
           <Divider sx={{ my: 1 }} />
         </>
       )}
+
+      {/* 3D 재질 (v0.9.2) — 모든 집기 공통 */}
+      <TextField
+        select
+        size="small"
+        fullWidth
+        label="3D 재질 (Material)"
+        value={def.material ?? 'matte'}
+        onChange={(e) => updateFixtureMaterial(def.id, e.target.value as FixtureMaterial)}
+        sx={{ mb: 1 }}
+      >
+        {MATERIAL_OPTIONS.map((m) => (
+          <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
+        ))}
+      </TextField>
 
       {/* 디자인 매핑 (Color 아래) */}
       <DesignPanel fixture={selected} />

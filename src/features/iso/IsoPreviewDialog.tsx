@@ -36,6 +36,13 @@ import {
 } from './renderIso';
 import { preloadImages, buildBaseName, downloadDataURL } from '../export/download';
 import { WALL_SIDES } from '../wall/constants';
+import {
+  type LightingConfig,
+  type Light,
+  defaultLighting,
+  SUN_PRESETS,
+  COLOR_TEMPS,
+} from './lighting/LightingEngine';
 
 /** 미리보기 렌더 해상도 (출력은 품질 옵션 별도) */
 const PREVIEW_PX = 1400;
@@ -68,6 +75,20 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const [autoOrbit, setAutoOrbit] = useState(false);
   const [orbitSpeed, setOrbitSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
   const dragRef = useRef<{ mode: 'orbit' | 'pan'; x: number; y: number } | null>(null);
+
+  // 조명 (v0.9.2)
+  const [lighting, setLighting] = useState<LightingConfig>(defaultLighting);
+  const amb = lighting.lights.find((l) => l.type === 'ambient');
+  const dir = lighting.lights.find((l) => l.type === 'directional');
+  const spot = lighting.lights.find((l) => l.type === 'spot');
+  const updateLight = (type: Light['type'], patch: Partial<Light>) =>
+    setLighting((cfg) => ({ ...cfg, lights: cfg.lights.map((l) => (l.type === type ? ({ ...l, ...patch } as Light) : l)) }));
+  const setShadowCfg = (patch: Partial<LightingConfig['shadow']>) =>
+    setLighting((cfg) => ({ ...cfg, shadow: { ...cfg.shadow, ...patch } }));
+  const activeSun =
+    dir && dir.type === 'directional'
+      ? SUN_PRESETS.find((s) => Math.abs(s.azimuthDeg - dir.azimuthDeg) < 1 && Math.abs(s.elevationDeg - dir.elevationDeg) < 1)?.id ?? null
+      : null;
 
   const applyViewpoint = (id: IsoViewpointId) => {
     const vp = VIEWPOINTS.find((v) => v.id === id);
@@ -117,9 +138,9 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   useEffect(() => {
     if (!open || !project || !ready) return;
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, azimuthDeg, elevationDeg, targetPx: PREVIEW_PX });
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, azimuthDeg, elevationDeg, lighting, targetPx: PREVIEW_PX });
     setDataUrl(url);
-  }, [open, ready, opts, azimuthDeg, elevationDeg, project, placed, fixturesById, planImages, wallItems, designAssets]);
+  }, [open, ready, opts, azimuthDeg, elevationDeg, lighting, project, placed, fixturesById, planImages, wallItems, designAssets]);
 
   // 자동 회전(Auto Orbit) — 360° 연속 회전
   useEffect(() => {
@@ -134,7 +155,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const handleExport = () => {
     if (!project || !ready) return;
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, azimuthDeg, elevationDeg, targetPx: quality });
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, azimuthDeg, elevationDeg, lighting, targetPx: quality });
     downloadDataURL(url, `${buildBaseName(project.name, layoutName)}_isometric.png`);
   };
 
@@ -283,17 +304,6 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
             control={
               <Switch
                 size="small"
-                checked={opts.showShadows}
-                onChange={(e) => setOpt('showShadows', e.target.checked)}
-              />
-            }
-            label={<Typography variant="caption">그림자</Typography>}
-            sx={{ ml: 0 }}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
                 checked={opts.showNames}
                 onChange={(e) => setOpt('showNames', e.target.checked)}
               />
@@ -316,6 +326,94 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
               ))}
             </Select>
           </Stack>
+        </Stack>
+
+        {/* 조명(Lighting) 패널 — v0.9.2 */}
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{ mb: 1.5, p: 1, alignItems: 'center', flexWrap: 'wrap', gap: 1.25, bgcolor: 'action.hover', borderRadius: 1 }}
+        >
+          <Typography variant="caption" sx={{ fontWeight: 800 }}>조명</Typography>
+
+          <Box sx={{ minWidth: 110 }}>
+            <Typography variant="caption" color="text.secondary">Ambient {Math.round((amb?.intensity ?? 0) * 100)}%</Typography>
+            <Slider size="small" min={0} max={1.5} step={0.05} value={amb?.intensity ?? 0} onChange={(_, v) => updateLight('ambient', { intensity: v as number })} />
+          </Box>
+          <Box sx={{ minWidth: 110 }}>
+            <Typography variant="caption" color="text.secondary">Directional {Math.round((dir?.intensity ?? 0) * 100)}%</Typography>
+            <Slider size="small" min={0} max={1.5} step={0.05} value={dir?.intensity ?? 0} onChange={(_, v) => updateLight('directional', { intensity: v as number })} />
+          </Box>
+
+          <Divider orientation="vertical" flexItem />
+
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">태양</Typography>
+            <ToggleButtonGroup
+              exclusive size="small" value={activeSun}
+              onChange={(_, v) => {
+                const p = SUN_PRESETS.find((s) => s.id === v);
+                if (p) updateLight('directional', { azimuthDeg: p.azimuthDeg, elevationDeg: p.elevationDeg });
+              }}
+            >
+              {SUN_PRESETS.map((s) => (
+                <ToggleButton key={s.id} value={s.id} sx={{ px: 1, py: 0.25 }}>{s.label}</ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Stack>
+
+          <Divider orientation="vertical" flexItem />
+
+          <FormControlLabel
+            control={<Switch size="small" checked={spot?.enabled ?? false} onChange={(e) => updateLight('spot', { enabled: e.target.checked })} />}
+            label={<Typography variant="caption">Spot</Typography>}
+            sx={{ ml: 0 }}
+          />
+          {spot?.enabled && spot.type === 'spot' && (
+            <>
+              <Box sx={{ minWidth: 90 }}>
+                <Typography variant="caption" color="text.secondary">세기 {Math.round(spot.intensity * 100)}%</Typography>
+                <Slider size="small" min={0} max={1.5} step={0.05} value={spot.intensity} onChange={(_, v) => updateLight('spot', { intensity: v as number })} />
+              </Box>
+              <Box sx={{ minWidth: 90 }}>
+                <Typography variant="caption" color="text.secondary">각도 {spot.angleDeg}°</Typography>
+                <Slider size="small" min={10} max={80} step={1} value={spot.angleDeg} onChange={(_, v) => updateLight('spot', { angleDeg: v as number })} />
+              </Box>
+            </>
+          )}
+
+          <Divider orientation="vertical" flexItem />
+
+          <FormControlLabel
+            control={<Switch size="small" checked={lighting.shadow.enabled} onChange={(e) => setShadowCfg({ enabled: e.target.checked })} />}
+            label={<Typography variant="caption">그림자</Typography>}
+            sx={{ ml: 0 }}
+          />
+          <Box sx={{ minWidth: 90 }}>
+            <Typography variant="caption" color="text.secondary">부드러움</Typography>
+            <Slider size="small" min={0} max={1} step={0.05} value={lighting.shadow.softness} onChange={(_, v) => setShadowCfg({ softness: v as number })} disabled={!lighting.shadow.enabled} />
+          </Box>
+          <FormControlLabel
+            control={<Switch size="small" checked={lighting.shadow.contact} onChange={(e) => setShadowCfg({ contact: e.target.checked })} disabled={!lighting.shadow.enabled} />}
+            label={<Typography variant="caption">접지</Typography>}
+            sx={{ ml: 0 }}
+          />
+
+          <Divider orientation="vertical" flexItem />
+
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">색온도</Typography>
+            <Select size="small" value={lighting.colorTempK} onChange={(e) => setLighting((cfg) => ({ ...cfg, colorTempK: Number(e.target.value) }))}>
+              {COLOR_TEMPS.map((k) => (
+                <MenuItem key={k} value={k}>{k}K</MenuItem>
+              ))}
+            </Select>
+          </Stack>
+
+          <Box sx={{ minWidth: 90 }}>
+            <Typography variant="caption" color="text.secondary">바닥반사 {Math.round(lighting.groundReflection * 100)}%</Typography>
+            <Slider size="small" min={0} max={1} step={0.05} value={lighting.groundReflection} onChange={(_, v) => setLighting((cfg) => ({ ...cfg, groundReflection: v as number }))} />
+          </Box>
         </Stack>
 
         {/* 미리보기 영역 — 드래그: 궤도 회전 / Shift+드래그: 이동 / 휠: 확대·축소 */}

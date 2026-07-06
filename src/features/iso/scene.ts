@@ -63,6 +63,8 @@ export interface IsoBox {
   curved?: boolean;
   /** 곡면 측면 wrap 용 텍스처 (v0.9.1) */
   wrapTexture?: IsoFaceTexture;
+  /** 3D 재질 (v0.9.2) */
+  material?: import('../../types').FixtureMaterial;
 }
 
 /** 바닥 위 이미지 (z=0 평면) */
@@ -167,6 +169,7 @@ export function buildIsoScene(
       faces,
       curved: geo.curved,
       wrapTexture,
+      material: def.material,
     });
   }
 
