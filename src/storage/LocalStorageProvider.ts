@@ -1,4 +1,4 @@
-import type { Project, FixtureDef, Layout } from '../types';
+import type { Project, FixtureDef, Layout, Asset } from '../types';
 import type { StorageProvider } from './StorageProvider';
 import { getProjectLastModified } from '../utils/project';
 
@@ -13,6 +13,7 @@ import { getProjectLastModified } from '../utils/project';
 const KEY_PREFIX = 'blp'; // booth-layout-planner
 const PROJECTS_KEY = `${KEY_PREFIX}:projects`;
 const FIXTURES_KEY = `${KEY_PREFIX}:fixtures`;
+const ASSETS_KEY = `${KEY_PREFIX}:assets`;
 
 function readJSON<T>(key: string, fallback: T): T {
   try {
@@ -100,6 +101,27 @@ export class LocalStorageProvider implements StorageProvider {
     writeJSON(
       FIXTURES_KEY,
       fixtures.filter((f) => f.id !== id),
+    );
+  }
+
+  // --- Asset (에셋 라이브러리, v0.9.7) ---
+  async getAssets(): Promise<Asset[]> {
+    return readJSON<Asset[]>(ASSETS_KEY, []);
+  }
+
+  async saveAsset(asset: Asset): Promise<void> {
+    const assets = readJSON<Asset[]>(ASSETS_KEY, []);
+    const idx = assets.findIndex((a) => a.id === asset.id);
+    if (idx >= 0) assets[idx] = asset;
+    else assets.push(asset);
+    writeJSON(ASSETS_KEY, assets);
+  }
+
+  async deleteAsset(id: string): Promise<void> {
+    const assets = readJSON<Asset[]>(ASSETS_KEY, []);
+    writeJSON(
+      ASSETS_KEY,
+      assets.filter((a) => a.id !== id),
     );
   }
 

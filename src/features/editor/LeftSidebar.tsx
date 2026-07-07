@@ -6,16 +6,18 @@ import ChairRoundedIcon from '@mui/icons-material/ChairRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import BookmarksRoundedIcon from '@mui/icons-material/BookmarksRounded';
 import MapRoundedIcon from '@mui/icons-material/MapRounded';
+import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
 import FixtureLibraryPanel from '../fixtures/FixtureLibraryPanel';
 import ProductLibraryPanel from '../products/ProductLibraryPanel';
 import DisplayPresetsPanel from '../products/DisplayPresetsPanel';
 import DrawingsPanel from '../floorplan/DrawingsPanel';
+import AssetLibraryPanel from '../assets/AssetLibraryPanel';
 
 /**
  * 편집기 왼쪽 사이드바 — 집기(Furniture) / 제품(Products) 레이어 분리 (Merchandising Mode, v0.9.3).
  */
 export default function LeftSidebar() {
-  const [tab, setTab] = useState<'drawings' | 'furniture' | 'products' | 'presets'>('furniture');
+  const [tab, setTab] = useState<'drawings' | 'furniture' | 'assets' | 'products' | 'presets'>('furniture');
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Tabs
@@ -26,6 +28,7 @@ export default function LeftSidebar() {
       >
         <Tab value="drawings" icon={<MapRoundedIcon fontSize="small" />} iconPosition="start" label="도면" sx={{ minHeight: 42, py: 0 }} />
         <Tab value="furniture" icon={<ChairRoundedIcon fontSize="small" />} iconPosition="start" label="집기" sx={{ minHeight: 42, py: 0 }} />
+        <Tab value="assets" icon={<CategoryRoundedIcon fontSize="small" />} iconPosition="start" label="에셋" sx={{ minHeight: 42, py: 0 }} />
         <Tab value="products" icon={<ShoppingBagRoundedIcon fontSize="small" />} iconPosition="start" label="제품" sx={{ minHeight: 42, py: 0 }} />
         <Tab value="presets" icon={<BookmarksRoundedIcon fontSize="small" />} iconPosition="start" label="프리셋" sx={{ minHeight: 42, py: 0 }} />
       </Tabs>
@@ -34,6 +37,9 @@ export default function LeftSidebar() {
       </Box>
       <Box sx={{ flex: 1, minHeight: 0, display: tab === 'furniture' ? 'block' : 'none' }}>
         <FixtureLibraryPanel />
+      </Box>
+      <Box sx={{ flex: 1, minHeight: 0, display: tab === 'assets' ? 'block' : 'none' }}>
+        <AssetLibraryPanel />
       </Box>
       <Box sx={{ flex: 1, minHeight: 0, display: tab === 'products' ? 'block' : 'none' }}>
         <ProductLibraryPanel />

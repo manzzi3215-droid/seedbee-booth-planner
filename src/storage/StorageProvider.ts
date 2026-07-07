@@ -1,4 +1,4 @@
-import type { Project, FixtureDef, Layout } from '../types';
+import type { Project, FixtureDef, Layout, Asset } from '../types';
 
 /**
  * StorageProvider
@@ -25,6 +25,11 @@ export interface StorageProvider {
   getFixture(id: string): Promise<FixtureDef | null>;
   saveFixture(fixture: FixtureDef): Promise<void>;
   deleteFixture(id: string): Promise<void>;
+
+  // --- Asset (에셋 라이브러리, v0.9.7) ---
+  getAssets(): Promise<Asset[]>;
+  saveAsset(asset: Asset): Promise<void>;
+  deleteAsset(id: string): Promise<void>;
 
   // --- Layout (프로젝트별 배치안 버전) ---
   // UI 는 layouts 배열을 직접 다루지 않고 아래 메서드만 사용합니다.

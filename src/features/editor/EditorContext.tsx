@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
+  Asset,
   BoothConfig,
   DesignAsset,
   DesignMapping,
@@ -33,6 +34,9 @@ import type { ProductPreset, ProductPresetItem } from '../../types';
 import { storage, isCloudStorage } from '../../storage';
 import { generateId } from '../../utils/id';
 import { useFixtures } from '../fixtures/useFixtures';
+import { useAssets } from '../assets/useAssets';
+import { fixtureDefFromAsset } from '../assets/assetModel';
+import { DEFAULT_TEXTURE_TRANSFORM } from '../../types';
 import { snapMmToGrid } from '../canvas/coords';
 import { DEFAULT_GRID_SIZE_MM } from '../canvas/constants';
 import { computeFixtureAABB } from '../canvas/fixtureGeometry';
@@ -146,6 +150,20 @@ interface EditorContextValue {
   fixturesById: Map<string, FixtureDef>;
   saveFixture: (f: FixtureDef) => Promise<void>;
   deleteFixture: (id: string) => Promise<void>;
+
+  // ---------- Asset Library 2.0 (v0.9.7) ----------
+  /** 전역 에셋 라이브러리 (My/Company) */
+  assets: Asset[];
+  assetsLoading: boolean;
+  saveAsset: (a: Asset) => Promise<void>;
+  deleteAsset: (id: string) => Promise<void>;
+  toggleAssetFavorite: (id: string) => Promise<void>;
+  /** 최근 사용 에셋 id (최신순) */
+  recentAssetIds: string[];
+  /** 에셋을 부스에 배치 (집기+디자인 매핑 파이프라인 재사용 → 2D/3D 자동 반영) */
+  placeAsset: (asset: Asset) => void;
+  /** 배치된 집기를 에셋으로 등록 */
+  createAssetFromFixture: (fixtureId: string, patch?: Partial<Asset>) => Asset | null;
 
   // SVG 변환 집기(배치안 로컬 정의) — v0.7.2
   localFixtures: FixtureDef[];
@@ -427,6 +445,15 @@ export function EditorProvider({
   const [projectLoading, setProjectLoading] = useState(true);
 
   const { fixtures, loading: fixturesLoading, saveFixture, deleteFixture } = useFixtures();
+  const {
+    assets,
+    loading: assetsLoading,
+    saveAsset,
+    deleteAsset,
+    toggleFavorite: toggleAssetFavorite,
+    recentIds: recentAssetIds,
+    markRecent: markRecentAsset,
+  } = useAssets();
 
   const [placed, setPlaced] = useState<PlacedFixture[]>([]);
   const [texts, setTexts] = useState<PlacedText[]>([]);
@@ -670,6 +697,63 @@ export function EditorProvider({
       const id = generateId();
       setPlaced((prev) => [...prev, { id, fixtureDefId: def.id, xMm: x, yMm: y, rotationDeg: 0 }]);
       setSelectedItem({ scope: 'plan', type: 'fixture', id });
+    };
+
+    // 에셋 배치 (v0.9.7): 에셋 → 배치안 로컬 집기 정의 생성 + 디자인 매핑(썸네일)까지 함께 배치.
+    // 기존 집기/디자인 파이프라인을 그대로 타므로 2D/3D/조명/재질/Undo/저장이 자동 동작합니다.
+    const placeAsset = (asset: Asset) => {
+      const defId = generateId();
+      const def = fixtureDefFromAsset(asset, defId);
+      setLocalFixtures((prev) => [...prev, def]);
+
+      // 썸네일 이미지가 있으면 디자인 에셋 + 매핑(applyAll)으로 모든 면에 반영
+      let design: DesignMapping | undefined;
+      const imgUrl = asset.thumbnailUrl ?? asset.previewImageUrl;
+      if (imgUrl) {
+        const daId = generateId();
+        setDesignAssets((prev) => [
+          ...prev,
+          { id: daId, name: asset.name, kind: 'raster', url: imgUrl, createdAt: Date.now() },
+        ]);
+        design = {
+          applyAll: true,
+          faces: { front: { assetId: daId, mode: 'contain', transform: { ...DEFAULT_TEXTURE_TRANSFORM } } },
+        };
+      }
+
+      const x = snapMmToGrid(boothW / 2 - def.widthMm / 2, gridSizeMm);
+      const y = snapMmToGrid(boothD / 2 - def.depthMm / 2, gridSizeMm);
+      const id = generateId();
+      setPlaced((prev) => [...prev, { id, fixtureDefId: defId, xMm: x, yMm: y, rotationDeg: 0, design }]);
+      setSelectedItem({ scope: 'plan', type: 'fixture', id });
+      markRecentAsset(asset.id);
+    };
+
+    // 배치된 집기 → 에셋 등록 (v0.9.7). 저장은 호출부에서 saveAsset 으로 수행하도록 객체만 생성.
+    const createAssetFromFixture = (fixtureId: string, patch?: Partial<Asset>): Asset | null => {
+      const pf = placed.find((p) => p.id === fixtureId);
+      const def = pf ? fixturesById.get(pf.fixtureDefId) : null;
+      if (!def) return null;
+      const now = Date.now();
+      const dm = pf?.design ? (pf.design.faces.front ?? pf.design.faces.top ?? null) : null;
+      const da = dm ? designAssets.find((a) => a.id === dm.assetId) : null;
+      return {
+        id: generateId(),
+        name: def.name,
+        category: 'furniture',
+        widthMm: def.widthMm,
+        depthMm: def.depthMm,
+        heightMm: def.heightMm,
+        color: def.color,
+        material: def.material,
+        modelType: def.shape === 'circle' ? 'cylinder' : 'box',
+        thumbnailUrl: da?.url,
+        visibility: 'private',
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+        ...patch,
+      };
     };
     // 집기 선택 (additive=true 면 다중 선택 토글) — v0.9.0
     const select = (id: string | null, additive = false) => {
@@ -1595,6 +1679,15 @@ export function EditorProvider({
       fixturesById,
       saveFixture,
       deleteFixture,
+      // Asset Library 2.0 (v0.9.7)
+      assets,
+      assetsLoading,
+      saveAsset,
+      deleteAsset,
+      toggleAssetFavorite,
+      recentAssetIds,
+      placeAsset,
+      createAssetFromFixture,
       localFixtures,
       updateLocalFixture,
       updateFixturePrintSettings,
@@ -1716,6 +1809,12 @@ export function EditorProvider({
     fixturesById,
     saveFixture,
     deleteFixture,
+    assets,
+    assetsLoading,
+    saveAsset,
+    deleteAsset,
+    toggleAssetFavorite,
+    recentAssetIds,
     placed,
     texts,
     dimensions,

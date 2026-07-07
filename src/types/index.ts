@@ -67,6 +67,58 @@ export type FixtureShape =
 /** 3D 재질 (v0.9.2) — 반사/광택/투명 표현 */
 export type FixtureMaterial = 'matte' | 'semiGloss' | 'gloss' | 'transparent' | 'acrylic';
 
+/**
+ * --- Asset Library 2.0 (v0.9.7) ---
+ * 집기·소품·POP·제품·사람·식물·조명 등 자주 쓰는 에셋을 한 곳에서 관리.
+ * 사용자 전역(My) / 회사 공용(Company) 라이브러리 구조. 이미지는 경량 dataURL(Storage 참조 필드 확장 대비).
+ * 배치는 기존 집기+디자인 매핑 파이프라인을 재사용해 2D/3D/조명/재질/Undo/저장이 자동 동작합니다.
+ */
+export type AssetCategory =
+  | 'furniture'
+  | 'displayFixture'
+  | 'product'
+  | 'pop'
+  | 'poster'
+  | 'banner'
+  | 'decoration'
+  | 'plant'
+  | 'human'
+  | 'lighting'
+  | 'wallObject'
+  | 'floorObject'
+  | 'signage'
+  | 'custom';
+
+export type AssetVisibility = 'private' | 'company';
+export type AssetModelType = 'box' | 'cylinder' | 'flat' | 'custom';
+
+export interface Asset {
+  id: string;
+  name: string;
+  category: AssetCategory;
+  tags?: string[];
+  brand?: string;
+  widthMm: number;
+  depthMm: number;
+  heightMm?: number;
+  /** 대표 썸네일(dataURL). Storage 미사용 폴백 */
+  thumbnailUrl?: string;
+  previewImageUrl?: string;
+  /** 향후 Firebase Storage 참조 경로 (assets/users/{uid}/… , assets/company/{companyId}/…) */
+  storagePath?: string;
+  modelType?: AssetModelType;
+  color?: string;
+  material?: FixtureMaterial;
+  createdAt: number;
+  updatedAt: number;
+  owner?: string;
+  visibility: AssetVisibility;
+  /** 에셋 버전 (v0.9.7) */
+  version?: number;
+  /** 즐겨찾기 */
+  favorite?: boolean;
+}
+
 /** 2D 좌표 (mm 기준). Canvas 내부 좌표는 항상 mm 로 관리합니다. */
 export interface PointMm {
   xMm: number;

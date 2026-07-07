@@ -8,7 +8,7 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore';
-import type { Project, FixtureDef, Layout, ProjectVisibility, SharePermission } from '../types';
+import type { Project, FixtureDef, Layout, Asset, ProjectVisibility, SharePermission } from '../types';
 import type { StorageProvider } from './StorageProvider';
 import { LocalStorageProvider } from './LocalStorageProvider';
 import { getFirebase } from '../firebase/app';
@@ -204,7 +204,8 @@ export class FirestoreStorageProvider implements StorageProvider {
 
   private async writeCloudFixtures(fixtures: FixtureDef[]): Promise<void> {
     const { db, uid } = await this.ctx();
-    await setDoc(doc(db, 'libraries', uid), { fixtures, updatedAt: Date.now() });
+    // merge: 같은 문서의 assets(v0.9.7) 필드를 덮어쓰지 않도록 병합 저장
+    await setDoc(doc(db, 'libraries', uid), { fixtures, updatedAt: Date.now() }, { merge: true });
   }
 
   async getFixtures(): Promise<FixtureDef[]> {
@@ -236,6 +237,47 @@ export class FirestoreStorageProvider implements StorageProvider {
     await this.cache.deleteFixture(id);
     const cloud = await this.readCloudFixtures();
     await this.writeCloudFixtures(cloud.filter((f) => f.id !== id));
+  }
+
+  // ---------- Asset 라이브러리 (uid 단위, v0.9.7) ----------
+  // 별도 컬렉션 대신 기존 libraries/{uid} 문서의 assets 필드에 저장합니다.
+  // (이미 보안 규칙이 적용된 컬렉션을 재사용 → 규칙 추가 배포 없이 동작)
+  //   libraries/{uid} = { fixtures: FixtureDef[], assets: Asset[], updatedAt }
+  private async readCloudAssets(): Promise<Asset[]> {
+    const { db, uid } = await this.ctx();
+    const d = await getDoc(doc(db, 'libraries', uid));
+    return d.exists() ? ((d.data().assets ?? []) as Asset[]) : [];
+  }
+
+  private async writeCloudAssets(assets: Asset[]): Promise<void> {
+    const { db, uid } = await this.ctx();
+    // merge: 같은 문서의 fixtures 필드를 덮어쓰지 않도록 병합 저장
+    await setDoc(doc(db, 'libraries', uid), { assets, updatedAt: Date.now() }, { merge: true });
+  }
+
+  async getAssets(): Promise<Asset[]> {
+    try {
+      const assets = await this.readCloudAssets();
+      localStorage.setItem('blp:assets', JSON.stringify(assets));
+      return assets;
+    } catch {
+      return this.cache.getAssets();
+    }
+  }
+
+  async saveAsset(asset: Asset): Promise<void> {
+    await this.cache.saveAsset(asset);
+    const cloud = await this.readCloudAssets();
+    const idx = cloud.findIndex((a) => a.id === asset.id);
+    if (idx >= 0) cloud[idx] = asset;
+    else cloud.push(asset);
+    await this.writeCloudAssets(cloud);
+  }
+
+  async deleteAsset(id: string): Promise<void> {
+    await this.cache.deleteAsset(id);
+    const cloud = await this.readCloudAssets();
+    await this.writeCloudAssets(cloud.filter((a) => a.id !== id));
   }
 
   // ---------- Layout (프로젝트 문서에 임베드) ----------
@@ -293,6 +335,17 @@ export class FirestoreStorageProvider implements StorageProvider {
     const cloudFixtures = await this.readCloudFixtures();
     if (cloudFixtures.length === 0 && localFixtures.length > 0) {
       await this.writeCloudFixtures(localFixtures);
+    }
+
+    // 로컬 에셋 라이브러리 업로드 (클라우드가 비어 있을 때만, v0.9.7)
+    try {
+      const localAssets = await this.cache.getAssets();
+      const cloudAssets = await this.readCloudAssets();
+      if (cloudAssets.length === 0 && localAssets.length > 0) {
+        await this.writeCloudAssets(localAssets);
+      }
+    } catch {
+      /* 에셋 마이그레이션 실패는 전체 마이그레이션을 막지 않음 */
     }
 
     await setDoc(userRef, { migrationCompleted: true, migratedAt: Date.now() }, { merge: true });
