@@ -61,7 +61,13 @@ export default function ProductNode({
       onDragEnd={handleDragEnd}
     >
       {image ? (
-        <KonvaImage image={image} width={w} height={d} />
+        <>
+          {/* Solid 배경 모드일 때만 이미지 뒤에 진열색을 채움. transparent/미지정은 PNG alpha 유지(§2,§3) */}
+          {product.backgroundMode === 'solid' && (
+            <Rect width={w} height={d} fill={color} cornerRadius={Math.min(w, d) * 0.08} />
+          )}
+          <KonvaImage image={image} width={w} height={d} />
+        </>
       ) : (
         <Rect width={w} height={d} fill={color} cornerRadius={Math.min(w, d) * 0.08} stroke="rgba(0,0,0,0.3)" strokeWidth={1} strokeScaleEnabled={false} />
       )}

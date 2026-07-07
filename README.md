@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.8 - Professional Styling & Decoration System**
+> **v0.9.9 - Product 3D Upgrade & Workspace Simplification**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -39,7 +39,20 @@
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
 
-**스타일 · 재질 시스템 (v0.9.8)**
+**제품 3D 업그레이드 (v0.9.9)**
+- **입체 제품 오브젝트:** 제품을 얇은 판이 아니라 Depth 를 가진 3D 오브젝트로 표현.
+  **3D 형태**(Auto/Bottle/Tube/Box/Pouch/Jar/Can/Standee/Flat Card) — Auto 는 비율을 보고 자동 선택.
+  Bottle/Can/Jar/Tube 는 원기둥(둘레 이미지 wrap), Box/Pouch 는 박스, Standee/Flat Card 는 얇은 판
+- **두께(mm)·실측 크기(폭/높이/깊이)·재질**(Paper/Matte/Plastic/Glossy/Glass/Metal, Glossy 반사)
+- **배경 처리:** Solid Color / **Transparent(누끼)** — Transparent 는 흰 배경 없이 PNG alpha 그대로 2D·3D 표시
+- **제품 그림자·조명:** 집기와 동일하게 바닥/접지 그림자 + Ambient/Directional 조명·재질 영향
+- **집기 Top Face 스냅:** 제품은 항상 집기 상판 기준 배치(집기 높이 변경 시 함께 이동)
+- **진열 패턴:** Single / Grid / Row / Circle
+- **Hover 3D 미리보기:** 제품 라이브러리에서 카드에 마우스를 올리면 3D 미리보기 표시
+- **모두 저장:** 3D 형태·두께·배경·재질·크기·회전 등 Cloud/Auto Save
+- *스타일/재질/환경(Style) 패널은 이번 버전에서 UI 비활성(코드·데이터 구조는 유지, 향후 재사용)*
+
+**스타일 · 재질 시스템 (v0.9.8, 현재 UI 비활성 — 코드 유지)**
 - **Quick Style 프리셋(원클릭 스타일링):** Modern · Minimal · Luxury · Natural · Beauty · Baby · Pharmacy · Pop-up —
   바닥/벽 재질 + 3D 환경을 한 번에 변경. 좌측 **스타일** 탭에서 선택
 - **바닥 재질:** 콘크리트 · 우드 · 마블 · 스톤 · PVC · 카펫 · 화이트 · 블랙 · 체커 (2D 바닥 + 3D 바닥에 반영)
@@ -222,6 +235,20 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v0.9.9 — Product 3D Upgrade & Workspace Simplification (제품 3D 업그레이드 · 워크스페이스 단순화)**
+- **제품 3D 입체 표현:** GLB 없이 기존 Geometry Engine 기반으로 제품을 Depth 를 가진 오브젝트로 렌더.
+  **3D 형태**(Auto/Bottle/Tube/Box/Pouch/Jar/Can/Standee/Flat Card), Auto 는 비율로 자동 선택.
+  Bottle/Can/Jar/Tube → 원기둥(둘레 이미지 wrap), Box/Pouch → 박스, Standee/Flat Card → 얇은 판.
+- **두께(mm)·재질(Paper/Matte/Plastic/Glossy/Glass/Metal):** Glossy/Metal 은 스페큘러 반사. 실측 크기(폭/높이/깊이) 입력.
+- **배경 처리(Solid/Transparent):** Transparent(누끼)는 흰 배경을 만들지 않고 PNG alpha 를 2D·3D 모두 유지.
+- **제품 그림자·조명:** 집기와 동일하게 바닥/접지 그림자 + 조명·재질 영향. 집기 Top Face 스냅(집기 높이 변경 시 함께 이동).
+- **진열 패턴 추가:** Single / Grid / Row / Circle. **Hover 3D 미리보기**(제품 라이브러리 카드 hover).
+- **저장:** 3D 형태·두께·배경·재질·크기·회전 모두 Cloud/Auto Save·Undo/Redo.
+- **워크스페이스 단순화:** Style(스타일/재질/환경) 패널을 UI 에서 비활성(코드·데이터 구조 유지, 향후 재사용).
+  3D 미리보기의 환경/벽색 선택 UI 도 숨김(저장된 스타일은 내부 로직으로 계속 반영).
+- **확장 구조(Future Ready):** GLB 미사용(향후), Product Mirror/Flip·Front 따라가기 세부 옵션은 확장 지점으로 설계.
+- **기존 기능 유지 · Console Error 0 · Build 성공.**
 
 **v0.9.8 — Professional Styling & Decoration System (제안서 수준 스타일링)**
 - **스타일 · 재질 시스템:** 좌측 **스타일** 탭 신설. **Quick Style 프리셋** 8종(Modern/Minimal/Luxury/Natural/Beauty/Baby/

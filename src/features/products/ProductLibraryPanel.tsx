@@ -13,16 +13,22 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
+import Menu from '@mui/material/Menu';
+import Popover from '@mui/material/Popover';
+import CircularProgress from '@mui/material/CircularProgress';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import AddLocationAltRoundedIcon from '@mui/icons-material/AddLocationAltRounded';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
-import type { Product, ProductFacing } from '../../types';
+import type { Product, ProductFacing, ProductGeometryType, ProductMaterial, ProductBackgroundMode } from '../../types';
 import { useEditor } from '../editor/EditorContext';
 import { uploadDesignAsset, isSupportedDesignFile } from '../../firebase/storage';
 import { PRODUCT_FACINGS, DEFAULT_PRODUCT_COLOR } from './productModel';
+import { PRODUCT_GEOMETRY_TYPES, PRODUCT_MATERIALS, THICKNESS_PRESETS } from './productGeometry';
+import { renderProductPreview } from './productPreview';
+import { preloadImages } from '../export/download';
 import { generateId } from '../../utils/id';
 
 const emptyDraft = (): Product => ({
@@ -34,6 +40,9 @@ const emptyDraft = (): Product => ({
   displayColor: DEFAULT_PRODUCT_COLOR,
   displayDirection: 'front',
   recommendedSpacingMm: 10,
+  backgroundMode: 'solid',
+  geometryType: 'auto',
+  material: 'matte',
   createdAt: Date.now(),
 });
 
@@ -48,6 +57,28 @@ export default function ProductLibraryPanel() {
   const [editing, setEditing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [arrangeAnchor, setArrangeAnchor] = useState<{ el: HTMLElement; product: Product } | null>(null);
+  // Hover 3D 미리보기 (v0.9.9)
+  const [hoverPreview, setHoverPreview] = useState<{ el: HTMLElement; url: string | null } | null>(null);
+  const hoverIdRef = useRef<string | null>(null);
+
+  const handleHoverEnter = async (e: React.MouseEvent<HTMLElement>, p: Product) => {
+    const el = e.currentTarget;
+    hoverIdRef.current = p.id;
+    setHoverPreview({ el, url: null });
+    try {
+      const srcs = [p.thumbnailUrl, ...Object.values(p.images ?? {})].filter((s): s is string => !!s);
+      const els = await preloadImages(srcs);
+      if (hoverIdRef.current !== p.id) return; // 이미 다른 카드로 이동
+      setHoverPreview({ el, url: renderProductPreview(p, els) });
+    } catch {
+      if (hoverIdRef.current === p.id) setHoverPreview({ el, url: null });
+    }
+  };
+  const handleHoverLeave = () => {
+    hoverIdRef.current = null;
+    setHoverPreview(null);
+  };
 
   const openAdd = () => {
     setDraft(emptyDraft());
@@ -89,10 +120,12 @@ export default function ProductLibraryPanel() {
     deleteProduct(p.id);
   };
 
-  const handleGrid = (p: Product) => {
-    const n = Number(window.prompt('그리드로 배치할 개수를 입력하세요.', '8'));
+  const handleArrange = (p: Product, pattern: 'grid' | 'row' | 'circle') => {
+    const label = pattern === 'row' ? '한 줄(Row)' : pattern === 'circle' ? '원형(Circle)' : '그리드(Grid)';
+    const n = Number(window.prompt(`${label}로 배치할 개수를 입력하세요.`, '8'));
     if (!Number.isFinite(n) || n < 1) return;
-    gridArrangeProduct(p.id, Math.round(n), { spacingXMm: p.recommendedSpacingMm });
+    gridArrangeProduct(p.id, Math.round(n), { spacingXMm: p.recommendedSpacingMm, pattern });
+    setArrangeAnchor(null);
   };
 
   return (
@@ -110,7 +143,7 @@ export default function ProductLibraryPanel() {
 
       <Stack spacing={1} sx={{ overflowY: 'auto', pr: 0.5 }}>
         {products.map((p) => (
-          <Paper key={p.id} elevation={0} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+          <Paper key={p.id} elevation={0} onMouseEnter={(e) => void handleHoverEnter(e, p)} onMouseLeave={handleHoverLeave} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Box sx={{ width: 40, height: 40, flexShrink: 0, borderRadius: 0.75, overflow: 'hidden', bgcolor: p.displayColor || DEFAULT_PRODUCT_COLOR, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {p.thumbnailUrl && <img src={p.thumbnailUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
@@ -130,8 +163,8 @@ export default function ProductLibraryPanel() {
               <Button size="small" variant="contained" startIcon={<AddLocationAltRoundedIcon sx={{ fontSize: 15 }} />} onClick={() => placeProduct(p.id)} disabled={!canEdit} sx={{ py: 0.2, flex: 1 }}>
                 배치
               </Button>
-              <Button size="small" variant="outlined" startIcon={<GridViewRoundedIcon sx={{ fontSize: 15 }} />} onClick={() => handleGrid(p)} disabled={!canEdit} sx={{ py: 0.2 }}>
-                그리드
+              <Button size="small" variant="outlined" startIcon={<GridViewRoundedIcon sx={{ fontSize: 15 }} />} onClick={(e) => setArrangeAnchor({ el: e.currentTarget, product: p })} disabled={!canEdit} sx={{ py: 0.2 }}>
+                진열
               </Button>
             </Stack>
           </Paper>
@@ -142,6 +175,33 @@ export default function ProductLibraryPanel() {
           </Typography>
         )}
       </Stack>
+
+      {/* 진열 패턴 메뉴 (Single/Grid/Row/Circle, v0.9.9) */}
+      <Menu anchorEl={arrangeAnchor?.el ?? null} open={!!arrangeAnchor} onClose={() => setArrangeAnchor(null)}>
+        <MenuItem onClick={() => { if (arrangeAnchor) placeProduct(arrangeAnchor.product.id); setArrangeAnchor(null); }}>Single (1개)</MenuItem>
+        <MenuItem onClick={() => arrangeAnchor && handleArrange(arrangeAnchor.product, 'grid')}>Grid (그리드)</MenuItem>
+        <MenuItem onClick={() => arrangeAnchor && handleArrange(arrangeAnchor.product, 'row')}>Row (한 줄)</MenuItem>
+        <MenuItem onClick={() => arrangeAnchor && handleArrange(arrangeAnchor.product, 'circle')}>Circle (원형)</MenuItem>
+      </Menu>
+
+      {/* Hover 3D 미리보기 (v0.9.9) */}
+      <Popover
+        open={!!hoverPreview}
+        anchorEl={hoverPreview?.el ?? null}
+        onClose={handleHoverLeave}
+        anchorOrigin={{ vertical: 'center', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'center', horizontal: 'left' }}
+        disableRestoreFocus
+        sx={{ pointerEvents: 'none' }}
+      >
+        <Box sx={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#eef1f5' }}>
+          {hoverPreview?.url ? (
+            <img src={hoverPreview.url} alt="3D 미리보기" style={{ maxWidth: '100%', maxHeight: '100%' }} />
+          ) : (
+            <CircularProgress size={22} />
+          )}
+        </Box>
+      </Popover>
 
       {/* 제품 등록/수정 */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -184,6 +244,31 @@ export default function ProductLibraryPanel() {
                 {PRODUCT_FACINGS.map((f) => <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>)}
               </TextField>
               <TextField size="small" type="number" label="간격(mm)" value={draft.recommendedSpacingMm ?? ''} onChange={(e) => patch({ recommendedSpacingMm: Number(e.target.value) || undefined })} fullWidth />
+            </Stack>
+            {/* 3D 표현 (v0.9.9): 배경/지오메트리/두께/재질 */}
+            <Stack direction="row" spacing={1}>
+              <TextField size="small" select label="배경" value={draft.backgroundMode ?? 'solid'} onChange={(e) => patch({ backgroundMode: e.target.value as ProductBackgroundMode })} fullWidth>
+                <MenuItem value="solid">Solid Color</MenuItem>
+                <MenuItem value="transparent">Transparent (누끼)</MenuItem>
+              </TextField>
+              <TextField size="small" select label="3D 형태" value={draft.geometryType ?? 'auto'} onChange={(e) => patch({ geometryType: e.target.value as ProductGeometryType })} fullWidth>
+                {PRODUCT_GEOMETRY_TYPES.map((g) => <MenuItem key={g.value} value={g.value}>{g.label}</MenuItem>)}
+              </TextField>
+            </Stack>
+            <Stack direction="row" spacing={1}>
+              <TextField size="small" select label="재질" value={draft.material ?? 'matte'} onChange={(e) => patch({ material: e.target.value as ProductMaterial })} fullWidth>
+                {PRODUCT_MATERIALS.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
+              </TextField>
+              <TextField
+                size="small"
+                type="number"
+                label="두께(mm)"
+                value={draft.thicknessMm ?? ''}
+                onChange={(e) => patch({ thicknessMm: Number(e.target.value) || undefined })}
+                placeholder="자동"
+                fullWidth
+                helperText={`예: ${THICKNESS_PRESETS.join(' / ')}`}
+              />
             </Stack>
             <TextField size="small" label="메모" value={draft.memo ?? ''} onChange={(e) => patch({ memo: e.target.value })} multiline minRows={1} />
           </Stack>

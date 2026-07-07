@@ -37,7 +37,7 @@ import {
 import { preloadImages, buildBaseName, downloadDataURL } from '../export/download';
 import { WALL_SIDES } from '../wall/constants';
 import type { EnvironmentId } from '../../types';
-import { ENVIRONMENTS, environmentDef, floorMaterialDef, wallMaterialDef } from '../styling/styling';
+import { environmentDef, floorMaterialDef, wallMaterialDef } from '../styling/styling';
 import {
   type LightingConfig,
   type Light,
@@ -343,30 +343,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
 
           <Divider orientation="vertical" flexItem />
 
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <Typography variant="caption" color="text.secondary">
-              벽색
-            </Typography>
-            <input
-              type="color"
-              value={wallColor}
-              onChange={(e) => setWallColor(e.target.value)}
-              style={{ width: 32, height: 28, border: 'none', background: 'none', cursor: 'pointer' }}
-            />
-          </Stack>
-
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <Typography variant="caption" color="text.secondary">
-              환경
-            </Typography>
-            <Select size="small" value={environment} onChange={(e) => setEnvironment(e.target.value as EnvironmentId)}>
-              {ENVIRONMENTS.map((env) => (
-                <MenuItem key={env.id} value={env.id}>
-                  {env.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </Stack>
+          {/* 벽색·환경(Material/Environment Preset) 선택 UI 는 v0.9.9에서 숨김.
+              내부 로직(styling 시드 → 렌더 반영)은 유지되어 저장된 스타일은 계속 적용됩니다. */}
 
           <FormControlLabel
             control={<Switch size="small" checked={transparentBg} onChange={(e) => setTransparentBg(e.target.checked)} />}

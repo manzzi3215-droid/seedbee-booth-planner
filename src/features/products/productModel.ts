@@ -112,12 +112,25 @@ export function shelfCapacity(shelfWidthMm: number, productWidthMm: number, spac
   return Math.max(0, Math.floor((shelfWidthMm + spacingMm) / unit));
 }
 
-/** 균등 그리드 배열 (Grid Arrangement #7 + Spacing #8) */
+/** 진열 배열 패턴 (v0.9.9): Single/Grid/Row/Circle */
+export type ArrangePattern = 'single' | 'grid' | 'row' | 'circle';
+
+/** 균등 배열 (Grid/Row/Circle) — Grid Arrangement #7 + Spacing #8 + 패턴(v0.9.9) */
 export function gridArrange(
   productId: string,
   product: Product,
   count: number,
-  opts: { originXMm: number; originYMm: number; spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing },
+  opts: {
+    originXMm: number;
+    originYMm: number;
+    spacingXMm?: number;
+    spacingYMm?: number;
+    cols?: number;
+    scale?: number;
+    facing?: ProductFacing;
+    pattern?: ArrangePattern;
+    radiusMm?: number;
+  },
 ): PlacedProduct[] {
   if (count < 1) return [];
   const scale = opts.scale ?? 1;
@@ -125,21 +138,42 @@ export function gridArrange(
   const d = product.depthMm * scale;
   const sx = opts.spacingXMm ?? Math.round(w * 0.15);
   const sy = opts.spacingYMm ?? Math.round(d * 0.3);
-  // 2 x 4, 3 x 4 처럼 열 수 자동 계산(정사각형에 가깝게)
-  const cols = opts.cols ?? Math.max(1, Math.round(Math.sqrt(count)));
+  const facing = opts.facing ?? product.displayDirection ?? 'front';
+  const pattern = opts.pattern ?? 'grid';
+  const mk = (xMm: number, yMm: number, rotationDeg = 0): PlacedProduct => ({
+    id: generateId(),
+    productId,
+    xMm: Math.round(xMm),
+    yMm: Math.round(yMm),
+    rotationDeg,
+    scale,
+    facing,
+  });
+
+  // Circle: 원형으로 균등 배치 (반지름 기본 = 제품이 겹치지 않을 최소 반지름)
+  if (pattern === 'circle' && count > 1) {
+    const step = (Math.PI * 2) / count;
+    const minR = ((w + sx) * count) / (Math.PI * 2);
+    const radius = opts.radiusMm ?? Math.max(w + sx, minR);
+    const cxWorld = opts.originXMm + radius;
+    const cyWorld = opts.originYMm + radius;
+    const out: PlacedProduct[] = [];
+    for (let i = 0; i < count; i++) {
+      const a = i * step;
+      out.push(mk(cxWorld + Math.cos(a) * radius - w / 2, cyWorld + Math.sin(a) * radius - d / 2));
+    }
+    return out;
+  }
+
+  // Row: 한 줄. Grid: 정사각형에 가깝게 열 수 자동. Single: 1개.
+  const cols =
+    pattern === 'row' ? count : pattern === 'single' ? 1 : opts.cols ?? Math.max(1, Math.round(Math.sqrt(count)));
+  const n = pattern === 'single' ? 1 : count;
   const out: PlacedProduct[] = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < n; i++) {
     const c = i % cols;
     const r = Math.floor(i / cols);
-    out.push({
-      id: generateId(),
-      productId,
-      xMm: Math.round(opts.originXMm + c * (w + sx)),
-      yMm: Math.round(opts.originYMm + r * (d + sy)),
-      rotationDeg: 0,
-      scale,
-      facing: opts.facing ?? product.displayDirection ?? 'front',
-    });
+    out.push(mk(opts.originXMm + c * (w + sx), opts.originYMm + r * (d + sy)));
   }
   return out;
 }

@@ -434,6 +434,19 @@ export interface SvgDocument {
 /** 제품 진열 방향 */
 export type ProductFacing = 'front' | 'back' | 'left' | 'right';
 
+/**
+ * 제품 3D 지오메트리 타입 (v0.9.9). Auto 는 비율을 보고 자동 선택.
+ * GLB 없이 현재 Geometry Engine(footprint+extrude)로 가볍게 입체 표현.
+ */
+export type ProductGeometryType =
+  | 'auto' | 'bottle' | 'tube' | 'box' | 'pouch' | 'jar' | 'can' | 'standee' | 'flatCard';
+
+/** 제품 재질 (v0.9.9) */
+export type ProductMaterial = 'paper' | 'matte' | 'plastic' | 'glossy' | 'glass' | 'metal';
+
+/** 제품 배경 처리 (v0.9.9) — 이미지 뒤 배경색 채움 여부 */
+export type ProductBackgroundMode = 'solid' | 'transparent';
+
 /** 제품 정의 (Product Component). 프로젝트(행사) 단위 라이브러리에 저장 */
 export interface Product {
   id: string;
@@ -451,6 +464,14 @@ export interface Product {
   images?: Partial<Record<'front' | 'back' | 'left' | 'right' | 'top', string>>;
   /** 진열 색(이미지 없을 때) */
   displayColor?: string;
+  /** 배경 처리 (v0.9.9). 'transparent' 면 이미지 뒤 배경색을 채우지 않고 PNG alpha 유지 */
+  backgroundMode?: ProductBackgroundMode;
+  /** 3D 지오메트리 타입 (v0.9.9). 미지정 시 'auto' */
+  geometryType?: ProductGeometryType;
+  /** 두께/깊이(mm) 오버라이드 (v0.9.9). 미지정 시 depthMm 사용 */
+  thicknessMm?: number;
+  /** 3D 재질 (v0.9.9). 미지정 시 'matte' */
+  material?: ProductMaterial;
   /** 기본 진열 방향 */
   displayDirection?: ProductFacing;
   /** 권장 페이싱(정면 노출 개수) */

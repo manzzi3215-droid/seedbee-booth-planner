@@ -214,7 +214,7 @@ interface EditorContextValue {
   gridArrangeProduct: (
     productId: string,
     count: number,
-    opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing; fixtureId?: string },
+    opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing; fixtureId?: string; pattern?: import('../products/productModel').ArrangePattern; radiusMm?: number },
   ) => void;
 
   // Merchandising Preset System (v0.9.4)
@@ -1104,7 +1104,7 @@ export function EditorProvider({
     const gridArrangeProduct = (
       productId: string,
       count: number,
-      opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing; fixtureId?: string },
+      opts?: { spacingXMm?: number; spacingYMm?: number; cols?: number; scale?: number; facing?: ProductFacing; fixtureId?: string; pattern?: import('../products/productModel').ArrangePattern; radiusMm?: number },
     ) => {
       const prod = products.find((p) => p.id === productId);
       if (!prod) return;

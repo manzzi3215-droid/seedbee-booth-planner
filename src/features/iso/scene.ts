@@ -17,6 +17,7 @@ import { generateGeometry } from './geometry/GeometryGenerator';
 import { isWallEnabled } from '../wall/constants';
 import { planFaceMapping, resolveFaceMapping, assetById } from '../design/mapping';
 import { productImageUrl } from '../products/productModel';
+import { productGeometry, productMaterialToFixture } from '../products/productGeometry';
 
 /**
  * 아이소메트릭 3D 씬 데이터 (렌더러 비의존, mm 좌표).
@@ -197,22 +198,39 @@ export function buildIsoScene(
     const rad = (pp.rotationDeg * Math.PI) / 180;
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
-    const footprint: V3[] = [
-      [0, 0],
-      [w, 0],
-      [w, d],
-      [0, d],
-    ].map(([lx, ly]) => ({ x: pp.xMm + lx * cos - ly * sin, y: pp.yMm + lx * sin + ly * cos, z: baseZ }));
+    // 제품 3D 지오메트리 (Box/Cylinder/Flat) — v0.9.9
+    const geo = productGeometry(prod, w, d);
+    const footprint: V3[] = geo.polygon.map(({ lx, ly }) => ({
+      x: pp.xMm + lx * cos - ly * sin,
+      y: pp.yMm + lx * sin + ly * cos,
+      z: baseZ,
+    }));
     const img = productImageUrl(prod, pp.facing);
-    const faces: IsoBox['faces'] = img ? { top: { url: img, opacity: 1 }, front: { url: img, opacity: 1 } } : undefined;
+    // 배경 투명(transparent) 이면 이미지의 alpha 를 유지(면 텍스처만, 박스 채움색은 흰색 최소화 없음)
+    const transparent = prod.backgroundMode === 'transparent';
+    let faces: IsoBox['faces'];
+    let wrapTexture: IsoFaceTexture | undefined;
+    if (img) {
+      if (geo.curved) {
+        // 원기둥: 이미지를 둘레에 wrap + 상판
+        wrapTexture = { url: img, opacity: 1 };
+        faces = { top: { url: img, opacity: 1 } };
+      } else {
+        faces = { top: { url: img, opacity: 1 }, front: { url: img, opacity: 1 }, back: { url: img, opacity: 1 }, left: { url: img, opacity: 1 }, right: { url: img, opacity: 1 } };
+      }
+    }
     boxes.push({
       footprint,
       heightMm: h,
       baseZmm: baseZ,
+      // 투명 배경이면 박스 채움 없이 이미지(PNG alpha)만 표시(흰 배경 만들지 않음, §3)
       color: prod.displayColor ?? '#f59e0b',
-      opacity: 1,
+      opacity: transparent && img ? 0 : 1,
       name: prod.name,
       faces,
+      curved: geo.curved,
+      wrapTexture,
+      material: productMaterialToFixture(prod.material),
     });
   }
 
