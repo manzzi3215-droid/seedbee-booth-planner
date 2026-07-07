@@ -29,11 +29,16 @@ export default function ProductPanel() {
     duplicatePlacedProduct,
     replacePlacedProduct,
     replaceProductEverywhere,
+    arrangeProductsOnFixture,
   } = useEditor();
 
   const pp = placedProducts.find((p) => p.id === selectedProductId) ?? null;
   const prod = pp ? products.find((x) => x.id === pp.productId) : null;
   if (!pp || !prod) return null;
+
+  const arrange = (mode: 'center' | 'distributeH' | 'distributeV' | 'front') => {
+    if (pp.fixtureId) arrangeProductsOnFixture(pp.fixtureId, mode);
+  };
 
   return (
     <Box sx={{ p: 2, overflowY: 'auto' }}>
@@ -87,6 +92,23 @@ export default function ProductPanel() {
           sx={{ width: 80 }}
         />
       </Stack>
+
+      <Divider sx={{ my: 1 }} />
+
+      {/* 집기 위 정렬/균등 배치 (§4, v1.0.0-pre) */}
+      <Typography variant="caption" color="text.secondary">집기 위 정렬</Typography>
+      {pp.fixtureId ? (
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 0.5, mt: 0.5, mb: 1.5 }}>
+          <Button size="small" variant="outlined" onClick={() => arrange('center')} sx={{ py: 0.25 }}>가운데 정렬</Button>
+          <Button size="small" variant="outlined" onClick={() => arrange('front')} sx={{ py: 0.25 }}>앞쪽 정렬</Button>
+          <Button size="small" variant="outlined" onClick={() => arrange('distributeH')} sx={{ py: 0.25 }}>가로 균등</Button>
+          <Button size="small" variant="outlined" onClick={() => arrange('distributeV')} sx={{ py: 0.25 }}>세로 균등</Button>
+        </Box>
+      ) : (
+        <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5, mb: 1.5 }}>
+          제품이 연결된 집기가 없습니다. 집기를 선택해 제품을 올려주세요.
+        </Typography>
+      )}
 
       <Divider sx={{ my: 1 }} />
 

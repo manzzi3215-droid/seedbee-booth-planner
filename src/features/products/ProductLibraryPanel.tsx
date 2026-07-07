@@ -22,11 +22,11 @@ import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
-import type { Product, ProductFacing, ProductGeometryType, ProductMaterial, ProductBackgroundMode } from '../../types';
+import type { Product, ProductFacing, ProductMaterial, ProductBackgroundMode, ProductRenderMode } from '../../types';
 import { useEditor } from '../editor/EditorContext';
 import { uploadDesignAsset, isSupportedDesignFile } from '../../firebase/storage';
 import { PRODUCT_FACINGS, DEFAULT_PRODUCT_COLOR } from './productModel';
-import { PRODUCT_GEOMETRY_TYPES, PRODUCT_MATERIALS, THICKNESS_PRESETS } from './productGeometry';
+import { PRODUCT_RENDER_MODES, PRODUCT_MATERIALS, THICKNESS_PRESETS } from './productGeometry';
 import { renderProductPreview } from './productPreview';
 import { preloadImages } from '../export/download';
 import { generateId } from '../../utils/id';
@@ -40,8 +40,8 @@ const emptyDraft = (): Product => ({
   displayColor: DEFAULT_PRODUCT_COLOR,
   displayDirection: 'front',
   recommendedSpacingMm: 10,
-  backgroundMode: 'solid',
-  geometryType: 'auto',
+  backgroundMode: 'transparent',
+  renderMode: 'standingCard',
   material: 'matte',
   createdAt: Date.now(),
 });
@@ -251,8 +251,8 @@ export default function ProductLibraryPanel() {
                 <MenuItem value="solid">Solid Color</MenuItem>
                 <MenuItem value="transparent">Transparent (누끼)</MenuItem>
               </TextField>
-              <TextField size="small" select label="3D 형태" value={draft.geometryType ?? 'auto'} onChange={(e) => patch({ geometryType: e.target.value as ProductGeometryType })} fullWidth>
-                {PRODUCT_GEOMETRY_TYPES.map((g) => <MenuItem key={g.value} value={g.value}>{g.label}</MenuItem>)}
+              <TextField size="small" select label="렌더 모드" value={draft.renderMode ?? 'standingCard'} onChange={(e) => patch({ renderMode: e.target.value as ProductRenderMode })} fullWidth>
+                {PRODUCT_RENDER_MODES.map((g) => <MenuItem key={g.value} value={g.value}>{g.label}</MenuItem>)}
               </TextField>
             </Stack>
             <Stack direction="row" spacing={1}>

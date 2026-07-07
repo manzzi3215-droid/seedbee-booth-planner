@@ -444,6 +444,15 @@ export type ProductGeometryType =
 /** 제품 재질 (v0.9.9) */
 export type ProductMaterial = 'paper' | 'matte' | 'plastic' | 'glossy' | 'glass' | 'metal';
 
+/**
+ * 제품 렌더 모드 (v1.0.0-pre) — 누끼 PNG 가 잘 보이는 실무 방식 우선.
+ *  - standingCard: 상판 위에 세워둔 카드/패널(정면 PNG). 기본값
+ *  - flatCard: 상판 위에 눕힌 카드(위에서 PNG)
+ *  - simpleBox: 단순 박스(모든 면 PNG)
+ *  - cylinder: 원기둥(둘레 wrap)
+ */
+export type ProductRenderMode = 'flatCard' | 'standingCard' | 'simpleBox' | 'cylinder';
+
 /** 제품 배경 처리 (v0.9.9) — 이미지 뒤 배경색 채움 여부 */
 export type ProductBackgroundMode = 'solid' | 'transparent';
 
@@ -468,6 +477,8 @@ export interface Product {
   backgroundMode?: ProductBackgroundMode;
   /** 3D 지오메트리 타입 (v0.9.9). 미지정 시 'auto' */
   geometryType?: ProductGeometryType;
+  /** 제품 렌더 모드 (v1.0.0-pre). 미지정 시 'standingCard' */
+  renderMode?: ProductRenderMode;
   /** 두께/깊이(mm) 오버라이드 (v0.9.9). 미지정 시 depthMm 사용 */
   thicknessMm?: number;
   /** 3D 재질 (v0.9.9). 미지정 시 'matte' */

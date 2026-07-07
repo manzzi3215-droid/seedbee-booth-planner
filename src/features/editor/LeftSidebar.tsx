@@ -12,11 +12,13 @@ import ProductLibraryPanel from '../products/ProductLibraryPanel';
 import DisplayPresetsPanel from '../products/DisplayPresetsPanel';
 import DrawingsPanel from '../floorplan/DrawingsPanel';
 import AssetLibraryPanel from '../assets/AssetLibraryPanel';
+import { ENABLE_ASSET_LIBRARY } from '../../config/features';
 // NOTE: StylePanel(스타일/재질/환경)은 v0.9.9에서 UI만 숨김. 코드/데이터 구조는 유지(향후 재사용).
 // import StylePanel from '../styling/StylePanel';
 
 /**
  * 편집기 왼쪽 사이드바 — 집기(Furniture) / 제품(Products) 레이어 분리 (Merchandising Mode, v0.9.3).
+ * Asset 탭은 v1.0.0-pre 에서 ENABLE_ASSET_LIBRARY 로 숨김(코드/데이터 유지).
  */
 export default function LeftSidebar() {
   const [tab, setTab] = useState<'drawings' | 'furniture' | 'assets' | 'products' | 'presets'>('furniture');
@@ -30,7 +32,9 @@ export default function LeftSidebar() {
       >
         <Tab value="drawings" icon={<MapRoundedIcon fontSize="small" />} iconPosition="start" label="도면" sx={{ minHeight: 42, py: 0 }} />
         <Tab value="furniture" icon={<ChairRoundedIcon fontSize="small" />} iconPosition="start" label="집기" sx={{ minHeight: 42, py: 0 }} />
-        <Tab value="assets" icon={<CategoryRoundedIcon fontSize="small" />} iconPosition="start" label="에셋" sx={{ minHeight: 42, py: 0 }} />
+        {ENABLE_ASSET_LIBRARY && (
+          <Tab value="assets" icon={<CategoryRoundedIcon fontSize="small" />} iconPosition="start" label="에셋" sx={{ minHeight: 42, py: 0 }} />
+        )}
         <Tab value="products" icon={<ShoppingBagRoundedIcon fontSize="small" />} iconPosition="start" label="제품" sx={{ minHeight: 42, py: 0 }} />
         <Tab value="presets" icon={<BookmarksRoundedIcon fontSize="small" />} iconPosition="start" label="프리셋" sx={{ minHeight: 42, py: 0 }} />
       </Tabs>
@@ -40,9 +44,11 @@ export default function LeftSidebar() {
       <Box sx={{ flex: 1, minHeight: 0, display: tab === 'furniture' ? 'block' : 'none' }}>
         <FixtureLibraryPanel />
       </Box>
-      <Box sx={{ flex: 1, minHeight: 0, display: tab === 'assets' ? 'block' : 'none' }}>
-        <AssetLibraryPanel />
-      </Box>
+      {ENABLE_ASSET_LIBRARY && (
+        <Box sx={{ flex: 1, minHeight: 0, display: tab === 'assets' ? 'block' : 'none' }}>
+          <AssetLibraryPanel />
+        </Box>
+      )}
       <Box sx={{ flex: 1, minHeight: 0, display: tab === 'products' ? 'block' : 'none' }}>
         <ProductLibraryPanel />
       </Box>

@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.9 - Product 3D Upgrade & Workspace Simplification**
+> **v1.0.0-pre - Practical Render & Product Display Fix**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,17 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**실무 안정화 (v1.0.0-pre)**
+- **제품 배치 고정:** 제품은 항상 연결된 집기의 Top Surface 위에 배치(바닥에 떨어지지 않음).
+  집기를 이동/회전/복제하면 제품도 함께 이동, 집기를 삭제하면 제품도 함께 제거
+- **제품 렌더 모드:** Standing Card(기본·세움) / Flat Card(눕힘) / Simple Box / Cylinder.
+  누끼 PNG alpha 유지(흰 배경 강제 생성 금지), 정면 이미지가 잘 보이도록 렌더
+- **제품 정렬:** 선택 제품의 집기 위에서 가운데/앞쪽 정렬·가로/세로 균등 배치. 연결 집기 없으면 안내 표시
+- **Practical Render Mode(실무 시안):** 정면/아이소메트릭 · 배경 흰색/회색 · 사람 실루엣 · 바닥 매트 ·
+  라벨 · 제품 이미지 · 그림자 ON/OFF. 배경 투명 PNG 저장
+- **PDF 개선:** 도면 + 집기 리스트에 제품 진열 개수·집기 개수 요약 추가
+- **Asset Library UI 숨김:** feature flag(`ENABLE_ASSET_LIBRARY=false`)로 Asset 탭 비활성(코드/데이터 유지)
 
 **제품 3D 업그레이드 (v0.9.9)**
 - **입체 제품 오브젝트:** 제품을 얇은 판이 아니라 Depth 를 가진 3D 오브젝트로 표현.
@@ -235,6 +246,18 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.0.0-pre — Practical Render & Product Display Fix (실무 안정화)**
+- **제품 Display 위치 수정:** 제품을 항상 연결 집기의 Top Surface 위에 배치(집기 높이 기준 z 자동). 바닥 배치 방지.
+  집기 이동/회전/복제 시 제품 동반 이동·회전·복제, 집기 삭제 시 제품 동반 제거(잔여 방지).
+- **제품 렌더 모드(Standing Card 기본):** Flat Card/Standing Card/Simple Box/Cylinder. 누끼 PNG alpha 유지(흰 배경 미생성),
+  정면 이미지가 잘 보이는 카드/패널 방식 우선.
+- **제품 정렬 UI:** 선택 제품 패널에 가운데/앞쪽 정렬 · 가로/세로 균등 배치. 연결 집기 없으면 안내 메시지.
+- **Practical Render Mode:** 정면/아이소 · 배경 흰색/회색 · 사람 실루엣 · 바닥 매트 · 라벨 · 제품 이미지 · 그림자 ON/OFF.
+  실무 시안 이미지 저장(배경 투명 지원, 기존 Geometry Engine 기반 2.5D, GLB 미사용).
+- **Export/PDF:** 3D PNG 저장에 실무 시안 모드/투명 배경 반영, PDF 리포트에 제품 진열·집기 개수 요약 추가.
+- **Asset Library UI 숨김:** `ENABLE_ASSET_LIBRARY=false` feature flag 로 Asset 탭/패널 비활성(코드·데이터 구조 유지, 기존 프로젝트 무영향).
+- **기존 기능 유지 · Console Error 0 · Build 성공.**
 
 **v0.9.9 — Product 3D Upgrade & Workspace Simplification (제품 3D 업그레이드 · 워크스페이스 단순화)**
 - **제품 3D 입체 표현:** GLB 없이 기존 Geometry Engine 기반으로 제품을 Depth 를 가진 오브젝트로 렌더.

@@ -250,6 +250,13 @@ async function buildReportDataURL(input: ExportInput): Promise<string> {
     ty += rowH;
   }
 
+  // 제품 진열 요약 (v1.0.0-pre §8)
+  ty += 3;
+  ctx.textAlign = 'left';
+  ctx.font = font(3.4, true);
+  ctx.fillStyle = '#334155';
+  ctx.fillText(`제품 진열 ${placedProducts.length}개 · 집기 ${input.placed.length}개`, mm(tblX), mm(ty));
+
   return canvas.toDataURL('image/png');
 }
 

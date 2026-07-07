@@ -1,7 +1,7 @@
 import type { Product } from '../../types';
 import type { IsoScene, IsoBox, IsoFaceTexture } from '../iso/scene';
 import { renderIsoSceneToDataURL, DEFAULT_ISO_OPTIONS } from '../iso/renderIso';
-import { productGeometry, productMaterialToFixture } from './productGeometry';
+import { productRenderGeo, productMaterialToFixture } from './productGeometry';
 import { productImageUrl } from './productModel';
 
 /**
@@ -16,7 +16,7 @@ export function renderProductPreview(
   const w = Math.max(20, product.widthMm);
   const d = Math.max(20, product.depthMm);
   const h = Math.max(30, product.heightMm ?? Math.max(w, d));
-  const geo = productGeometry(product, w, d);
+  const geo = productRenderGeo(product, w, d, h);
 
   const footprint = geo.polygon.map(({ lx, ly }) => ({ x: lx, y: ly, z: 0 }));
   const img = productImageUrl(product, product.displayDirection ?? 'front');
@@ -25,9 +25,13 @@ export function renderProductPreview(
   let faces: IsoBox['faces'];
   let wrapTexture: IsoFaceTexture | undefined;
   if (img) {
-    if (geo.curved) {
+    if (geo.imageFaces === 'wrap') {
       wrapTexture = { url: img, opacity: 1 };
       faces = { top: { url: img, opacity: 1 } };
+    } else if (geo.imageFaces === 'top') {
+      faces = { top: { url: img, opacity: 1 } };
+    } else if (geo.imageFaces === 'frontBack') {
+      faces = { front: { url: img, opacity: 1 }, back: { url: img, opacity: 1 } };
     } else {
       faces = { top: { url: img, opacity: 1 }, front: { url: img, opacity: 1 }, back: { url: img, opacity: 1 }, left: { url: img, opacity: 1 }, right: { url: img, opacity: 1 } };
     }
@@ -55,7 +59,7 @@ export function renderProductPreview(
     boxes: [
       {
         footprint,
-        heightMm: h,
+        heightMm: geo.heightMm,
         color: product.displayColor ?? '#f59e0b',
         opacity: transparent && img ? 0 : 1,
         name: '',

@@ -17,7 +17,7 @@ import { generateGeometry } from './geometry/GeometryGenerator';
 import { isWallEnabled } from '../wall/constants';
 import { planFaceMapping, resolveFaceMapping, assetById } from '../design/mapping';
 import { productImageUrl } from '../products/productModel';
-import { productGeometry, productMaterialToFixture } from '../products/productGeometry';
+import { productRenderGeo, productMaterialToFixture } from '../products/productGeometry';
 
 /**
  * 아이소메트릭 3D 씬 데이터 (렌더러 비의존, mm 좌표).
@@ -85,6 +85,16 @@ export interface IsoScene {
   floorImages: IsoFloorImage[];
 }
 
+/** 실무 시안(Practical Render) 추가 요소 (v1.0.0-pre) */
+export interface RenderExtras {
+  /** 사람 실루엣(스케일용) 추가 */
+  humanSilhouette?: boolean;
+  /** 바닥 매트 추가 */
+  floorMat?: boolean;
+  /** 제품 이미지 숨김(단색 박스로 표시) */
+  hideProductImages?: boolean;
+}
+
 /** 집기 기본 높이 (heightMm 미지정 시) */
 export const DEFAULT_FIXTURE_HEIGHT_MM = 1000;
 /** 집기 높이 clamp 범위 (너무 낮거나 높은 값 보정) */
@@ -138,6 +148,7 @@ export function buildIsoScene(
   designAssets: DesignAsset[] = [],
   placedProducts: PlacedProduct[] = [],
   products: Product[] = [],
+  extras: RenderExtras = {},
 ): IsoScene {
   const floorPolygon: V3[] = getBoothPolygon(booth).map((p) => ({ x: p.xMm, y: p.yMm, z: 0 }));
 
@@ -187,41 +198,45 @@ export function buildIsoScene(
   for (const pp of placedProducts) {
     const prod = productById.get(pp.productId);
     if (!prod) continue;
-    // 소속 집기의 상판 높이(Display Surface) — 제품은 이 높이에서 시작 (바닥 아님)
-    let baseZ = 0;
+    // 소속 집기의 상판 높이(Display Surface) — 제품은 항상 이 높이에서 시작 (바닥 아님, §1)
+    // 집기가 없거나(미연결) 높이 미지정이면 기본 상판 높이(900)로 가정해 바닥에 떨어지지 않게 함.
     const pf = pp.fixtureId ? placedFixtureById.get(pp.fixtureId) : undefined;
     const fdef = pf ? fixturesById.get(pf.fixtureDefId) : undefined;
-    if (fdef) baseZ = Math.max(0, fdef.heightMm ?? 900);
+    const baseZ = fdef ? Math.max(0, fdef.heightMm ?? 900) : pf ? 900 : 0;
     const w = prod.widthMm * pp.scale;
     const d = prod.depthMm * pp.scale;
     const h = Math.max(30, (prod.heightMm ?? 300) * pp.scale);
     const rad = (pp.rotationDeg * Math.PI) / 180;
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
-    // 제품 3D 지오메트리 (Box/Cylinder/Flat) — v0.9.9
-    const geo = productGeometry(prod, w, d);
+    // 제품 렌더 모드 지오메트리 (Standing Card 기본, v1.0.0-pre)
+    const geo = productRenderGeo(prod, w, d, h);
     const footprint: V3[] = geo.polygon.map(({ lx, ly }) => ({
       x: pp.xMm + lx * cos - ly * sin,
       y: pp.yMm + lx * sin + ly * cos,
       z: baseZ,
     }));
-    const img = productImageUrl(prod, pp.facing);
-    // 배경 투명(transparent) 이면 이미지의 alpha 를 유지(면 텍스처만, 박스 채움색은 흰색 최소화 없음)
+    const img = extras.hideProductImages ? undefined : productImageUrl(prod, pp.facing);
+    // 배경 투명(transparent) 이면 이미지의 alpha 를 유지(흰 배경 만들지 않음, §3)
     const transparent = prod.backgroundMode === 'transparent';
     let faces: IsoBox['faces'];
     let wrapTexture: IsoFaceTexture | undefined;
     if (img) {
-      if (geo.curved) {
-        // 원기둥: 이미지를 둘레에 wrap + 상판
+      if (geo.imageFaces === 'wrap') {
         wrapTexture = { url: img, opacity: 1 };
         faces = { top: { url: img, opacity: 1 } };
+      } else if (geo.imageFaces === 'top') {
+        faces = { top: { url: img, opacity: 1 } };
+      } else if (geo.imageFaces === 'frontBack') {
+        // Standing Card: 정면/후면(넓은 면)에 PNG
+        faces = { front: { url: img, opacity: 1 }, back: { url: img, opacity: 1 } };
       } else {
         faces = { top: { url: img, opacity: 1 }, front: { url: img, opacity: 1 }, back: { url: img, opacity: 1 }, left: { url: img, opacity: 1 }, right: { url: img, opacity: 1 } };
       }
     }
     boxes.push({
       footprint,
-      heightMm: h,
+      heightMm: geo.heightMm,
       baseZmm: baseZ,
       // 투명 배경이면 박스 채움 없이 이미지(PNG alpha)만 표시(흰 배경 만들지 않음, §3)
       color: prod.displayColor ?? '#f59e0b',
@@ -231,6 +246,50 @@ export function buildIsoScene(
       curved: geo.curved,
       wrapTexture,
       material: productMaterialToFixture(prod.material),
+    });
+  }
+
+  // --- 실무 시안 추가 요소 (Practical Render, v1.0.0-pre) ---
+  const b = getBoothBounds(booth);
+  if (extras.floorMat) {
+    // 부스 안쪽에 얇은 매트(높이 8mm) — 바닥에 깔린 매트 느낌
+    const inset = Math.min(b.widthMm, b.depthMm) * 0.12;
+    const mx0 = b.minX + inset;
+    const my0 = b.minY + inset;
+    const mx1 = b.maxX - inset;
+    const my1 = b.maxY - inset;
+    boxes.unshift({
+      footprint: [
+        { x: mx0, y: my0, z: 0 },
+        { x: mx1, y: my0, z: 0 },
+        { x: mx1, y: my1, z: 0 },
+        { x: mx0, y: my1, z: 0 },
+      ],
+      heightMm: 8,
+      color: '#d9dee6',
+      opacity: 1,
+      name: '',
+      material: 'matte',
+    });
+  }
+  if (extras.humanSilhouette) {
+    // 스케일용 사람 실루엣(얇은 세움 카드, 1700mm) — 부스 앞쪽 좌측
+    const hw = 450;
+    const hd = 180;
+    const hx = b.minX + Math.min(700, b.widthMm * 0.15);
+    const hy = b.maxY - hd - Math.min(500, b.depthMm * 0.12);
+    boxes.push({
+      footprint: [
+        { x: hx, y: hy, z: 0 },
+        { x: hx + hw, y: hy, z: 0 },
+        { x: hx + hw, y: hy + hd, z: 0 },
+        { x: hx, y: hy + hd, z: 0 },
+      ],
+      heightMm: 1700,
+      color: '#94a3b8',
+      opacity: 0.9,
+      name: '',
+      material: 'matte',
     });
   }
 

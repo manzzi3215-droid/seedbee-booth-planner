@@ -211,6 +211,8 @@ interface EditorContextValue {
   replacePlacedProduct: (id: string, newProductId: string) => void;
   /** 한 번에 제품 교체(전체) */
   replaceProductEverywhere: (oldProductId: string, newProductId: string) => void;
+  /** 선택 집기 위 제품 정렬/균등 배치 (§4, v1.0.0-pre) */
+  arrangeProductsOnFixture: (fixtureId: string, mode: 'center' | 'distributeH' | 'distributeV' | 'front') => void;
   gridArrangeProduct: (
     productId: string,
     count: number,
@@ -794,17 +796,55 @@ export function EditorProvider({
       }
       setSelectedItem({ scope: 'plan', type: 'fixture', id });
     };
+    // 집기에 올려진 제품을 함께 이동/회전 (§1, v1.0.0-pre)
+    const shiftAttachedProducts = (fixtureId: string, dx: number, dy: number) => {
+      if (!dx && !dy) return;
+      setPlacedProducts((prev) => prev.map((pp) => (pp.fixtureId === fixtureId ? { ...pp, xMm: pp.xMm + dx, yMm: pp.yMm + dy } : pp)));
+    };
+    const rotateAttachedProducts = (fixtureId: string, deltaDeg: number) => {
+      if (!deltaDeg) return;
+      const pf = placed.find((p) => p.id === fixtureId);
+      const def = pf ? fixturesById.get(pf.fixtureDefId) : null;
+      if (!pf || !def) return;
+      const surf = getFixtureSurface(pf, def);
+      const rad = (deltaDeg * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      setPlacedProducts((prev) =>
+        prev.map((pp) => {
+          if (pp.fixtureId !== fixtureId) return pp;
+          const dx = pp.xMm - surf.centerX;
+          const dy = pp.yMm - surf.centerY;
+          return {
+            ...pp,
+            xMm: surf.centerX + dx * cos - dy * sin,
+            yMm: surf.centerY + dx * sin + dy * cos,
+            rotationDeg: (((pp.rotationDeg + deltaDeg) % 360) + 360) % 360,
+          };
+        }),
+      );
+    };
+
     const move = (id: string, xMm: number, yMm: number, snapToGrid = true) => {
       const doSnap = snapToGrid && snapEnabled;
       const nx = doSnap ? snapMmToGrid(xMm, gridSizeMm) : xMm;
       const ny = doSnap ? snapMmToGrid(yMm, gridSizeMm) : yMm;
+      const cur = placed.find((p) => p.id === id);
       setPlaced((prev) => prev.map((p) => (p.id === id ? { ...p, xMm: nx, yMm: ny } : p)));
+      if (cur) shiftAttachedProducts(id, nx - cur.xMm, ny - cur.yMm); // 집기 위 제품도 함께 이동
     };
     const setSelectedPosition = (xMm: number, yMm: number) => {
-      if (selectedFixtureId) setPlaced((prev) => prev.map((p) => (p.id === selectedFixtureId ? { ...p, xMm, yMm } : p)));
+      if (!selectedFixtureId) return;
+      const cur = placed.find((p) => p.id === selectedFixtureId);
+      setPlaced((prev) => prev.map((p) => (p.id === selectedFixtureId ? { ...p, xMm, yMm } : p)));
+      if (cur) shiftAttachedProducts(selectedFixtureId, xMm - cur.xMm, yMm - cur.yMm);
     };
     const setSelectedRotation = (deg: number) => {
-      if (selectedFixtureId) setPlaced((prev) => prev.map((p) => (p.id === selectedFixtureId ? { ...p, rotationDeg: ((deg % 360) + 360) % 360 } : p)));
+      if (!selectedFixtureId) return;
+      const cur = placed.find((p) => p.id === selectedFixtureId);
+      const nd = ((deg % 360) + 360) % 360;
+      setPlaced((prev) => prev.map((p) => (p.id === selectedFixtureId ? { ...p, rotationDeg: nd } : p)));
+      if (cur) rotateAttachedProducts(selectedFixtureId, nd - cur.rotationDeg);
     };
 
     // ---------- 텍스트/치수선 팩토리 ----------
@@ -1101,6 +1141,72 @@ export function EditorProvider({
     const replaceProductEverywhere = (oldProductId: string, newProductId: string) =>
       setPlacedProducts((prev) => prev.map((p) => (p.productId === oldProductId ? { ...p, productId: newProductId } : p)));
 
+    // 선택 집기 위 제품 정렬/균등 배치 (§4, v1.0.0-pre)
+    const arrangeProductsOnFixture = (fixtureId: string, mode: 'center' | 'distributeH' | 'distributeV' | 'front') => {
+      const pf = placed.find((p) => p.id === fixtureId);
+      const def = pf ? fixturesById.get(pf.fixtureDefId) : null;
+      if (!pf || !def) return;
+      const surf = getFixtureSurface(pf, def);
+      const kids = placedProducts.filter((pp) => pp.fixtureId === fixtureId);
+      if (kids.length === 0) return;
+      const sizeOf = (pp: PlacedProduct) => {
+        const prod = products.find((x) => x.id === pp.productId);
+        const s = pp.scale || 1;
+        return { w: (prod?.widthMm ?? 100) * s, d: (prod?.depthMm ?? 100) * s };
+      };
+      const patchMap = new Map<string, { xMm: number; yMm: number }>();
+
+      if (mode === 'center') {
+        // 그룹 바운딩 박스를 상판 중심에 정렬
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const pp of kids) {
+          const { w, d } = sizeOf(pp);
+          minX = Math.min(minX, pp.xMm); minY = Math.min(minY, pp.yMm);
+          maxX = Math.max(maxX, pp.xMm + w); maxY = Math.max(maxY, pp.yMm + d);
+        }
+        const dx = surf.centerX - (minX + maxX) / 2;
+        const dy = surf.centerY - (minY + maxY) / 2;
+        for (const pp of kids) patchMap.set(pp.id, { xMm: pp.xMm + dx, yMm: pp.yMm + dy });
+      } else if (mode === 'front') {
+        // 상판 앞쪽(+Y) 가장자리로 정렬
+        for (const pp of kids) {
+          const { d } = sizeOf(pp);
+          patchMap.set(pp.id, { xMm: pp.xMm, yMm: Math.max(surf.minY, surf.maxY - d - 20) });
+        }
+      } else if (mode === 'distributeH') {
+        const sorted = [...kids].sort((a, b) => a.xMm - b.xMm);
+        const totalW = sorted.reduce((s, pp) => s + sizeOf(pp).w, 0);
+        const gap = Math.max(0, (surf.maxX - surf.minX - totalW) / (sorted.length + 1));
+        let cx = surf.minX + gap;
+        for (const pp of sorted) {
+          const { w, d } = sizeOf(pp);
+          patchMap.set(pp.id, { xMm: cx, yMm: surf.centerY - d / 2 });
+          cx += w + gap;
+        }
+      } else {
+        // distributeV
+        const sorted = [...kids].sort((a, b) => a.yMm - b.yMm);
+        const totalD = sorted.reduce((s, pp) => s + sizeOf(pp).d, 0);
+        const gap = Math.max(0, (surf.maxY - surf.minY - totalD) / (sorted.length + 1));
+        let cy = surf.minY + gap;
+        for (const pp of sorted) {
+          const { w, d } = sizeOf(pp);
+          patchMap.set(pp.id, { xMm: surf.centerX - w / 2, yMm: cy });
+          cy += d + gap;
+        }
+      }
+
+      setPlacedProducts((prev) =>
+        prev.map((pp) => {
+          const patch = patchMap.get(pp.id);
+          if (!patch) return pp;
+          const prod = products.find((x) => x.id === pp.productId);
+          const clamped = prod ? clampToSurface(prod, { ...pp, ...patch }, surf) : patch;
+          return { ...pp, ...clamped };
+        }),
+      );
+    };
+
     const gridArrangeProduct = (
       productId: string,
       count: number,
@@ -1262,8 +1368,10 @@ export function EditorProvider({
     const rotateSelected = () => {
       const it = selectedItem;
       if (!it) return;
-      if (it.type === 'fixture') setPlaced((prev) => prev.map((p) => (p.id === it.id ? { ...p, rotationDeg: (p.rotationDeg + 90) % 360 } : p)));
-      else if (it.type === 'product') setPlacedProducts((prev) => prev.map((p) => (p.id === it.id ? { ...p, rotationDeg: (p.rotationDeg + 90) % 360 } : p)));
+      if (it.type === 'fixture') {
+        setPlaced((prev) => prev.map((p) => (p.id === it.id ? { ...p, rotationDeg: (p.rotationDeg + 90) % 360 } : p)));
+        rotateAttachedProducts(it.id, 90); // 집기 위 제품도 함께 회전 (§1)
+      } else if (it.type === 'product') setPlacedProducts((prev) => prev.map((p) => (p.id === it.id ? { ...p, rotationDeg: (p.rotationDeg + 90) % 360 } : p)));
       else if (it.type === 'text') mutateSelText((t) => ({ ...t, rotationDeg: (t.rotationDeg + 90) % 360 }));
       else if (it.type === 'dimension') mutateSelDim((d) => rotateDimensionBy(d, 90));
       else if (it.type === 'image') mutateSelImage((i) => ({ ...i, rotationDeg: (i.rotationDeg + 90) % 360 }));
@@ -1279,6 +1387,13 @@ export function EditorProvider({
           const src = prev.find((p) => p.id === it.id);
           if (!src) return prev;
           return [...prev, { ...src, id: newId, xMm: src.xMm + gridSizeMm, yMm: src.yMm + gridSizeMm }];
+        });
+        // 집기 위 제품도 함께 복사(새 집기에 연결) (§1)
+        setPlacedProducts((prev) => {
+          const kids = prev.filter((pp) => pp.fixtureId === it.id);
+          return kids.length
+            ? [...prev, ...kids.map((k) => ({ ...k, id: generateId(), fixtureId: newId, xMm: k.xMm + gridSizeMm, yMm: k.yMm + gridSizeMm }))]
+            : prev;
         });
         setSelectedItem({ scope: 'plan', type: 'fixture', id: newId });
       } else if (it.type === 'product') {
@@ -1321,8 +1436,11 @@ export function EditorProvider({
     const deleteSelected = () => {
       const it = selectedItem;
       if (!it) return;
-      if (it.type === 'fixture') setPlaced((prev) => prev.filter((p) => p.id !== it.id));
-      else if (it.type === 'product') setPlacedProducts((prev) => prev.filter((p) => p.id !== it.id));
+      if (it.type === 'fixture') {
+        setPlaced((prev) => prev.filter((p) => p.id !== it.id));
+        // 집기를 지우면 그 위 제품도 함께 제거(바닥에 남지 않도록, §1)
+        setPlacedProducts((prev) => prev.filter((pp) => pp.fixtureId !== it.id));
+      } else if (it.type === 'product') setPlacedProducts((prev) => prev.filter((p) => p.id !== it.id));
       else if (it.type === 'text') {
         if (it.scope === 'plan') setTexts((prev) => prev.filter((t) => t.id !== it.id));
         else updateWall(it.wall, (g) => ({ ...g, texts: g.texts.filter((t) => t.id !== it.id) }));
@@ -1344,8 +1462,10 @@ export function EditorProvider({
     const nudgeSelected = (dxMm: number, dyMm: number) => {
       const it = selectedItem;
       if (!it) return;
-      if (it.type === 'fixture') setPlaced((prev) => prev.map((p) => (p.id === it.id ? { ...p, xMm: p.xMm + dxMm, yMm: p.yMm + dyMm } : p)));
-      else if (it.type === 'product') setPlacedProducts((prev) => prev.map((p) => (p.id === it.id ? { ...p, xMm: p.xMm + dxMm, yMm: p.yMm + dyMm } : p)));
+      if (it.type === 'fixture') {
+        setPlaced((prev) => prev.map((p) => (p.id === it.id ? { ...p, xMm: p.xMm + dxMm, yMm: p.yMm + dyMm } : p)));
+        shiftAttachedProducts(it.id, dxMm, dyMm); // 집기 위 제품도 함께 이동 (§1)
+      } else if (it.type === 'product') setPlacedProducts((prev) => prev.map((p) => (p.id === it.id ? { ...p, xMm: p.xMm + dxMm, yMm: p.yMm + dyMm } : p)));
       else if (it.type === 'text') mutateSelText((t) => ({ ...t, xMm: t.xMm + dxMm, yMm: t.yMm + dyMm }));
       else if (it.type === 'dimension') mutateSelDim((d) => ({ ...d, startXMm: d.startXMm + dxMm, startYMm: d.startYMm + dyMm, endXMm: d.endXMm + dxMm, endYMm: d.endYMm + dyMm }));
       else if (it.type === 'image') mutateSelImage((i) => ({ ...i, xMm: i.xMm + dxMm, yMm: i.yMm + dyMm }));
@@ -1740,6 +1860,7 @@ export function EditorProvider({
       duplicatePlacedProduct,
       replacePlacedProduct,
       replaceProductEverywhere,
+      arrangeProductsOnFixture,
       gridArrangeProduct,
       productPresets,
       saveFixtureAsPreset,

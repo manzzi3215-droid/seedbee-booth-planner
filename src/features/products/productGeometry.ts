@@ -3,6 +3,7 @@ import type {
   Product,
   ProductGeometryType,
   ProductMaterial,
+  ProductRenderMode,
 } from '../../types';
 
 /**
@@ -101,6 +102,59 @@ export function productGeometry(product: Product, wMm: number, dMm: number): Pro
   }
 }
 
+/**
+ * --- Product Render Mode (v1.0.0-pre) ---
+ * 누끼 PNG 가 잘 보이는 실무 방식 우선. 기본값 standingCard(상판 위에 세워둔 카드).
+ * 어떤 면에 이미지를 붙일지(faces)까지 함께 반환해 renderIso 가 그대로 소비.
+ */
+export type ProductImageFaces = 'all' | 'top' | 'frontBack' | 'wrap';
+
+export interface ProductRenderGeo {
+  polygon: { lx: number; ly: number }[];
+  heightMm: number; // 실제 렌더 높이(모드에 따라 조정됨)
+  depthMm: number;
+  curved: boolean;
+  imageFaces: ProductImageFaces;
+}
+
+/** 렌더 모드 결정: renderMode 우선, 없으면 기본 standingCard */
+export function resolveRenderMode(product: Product): ProductRenderMode {
+  return product.renderMode ?? 'standingCard';
+}
+
+/**
+ * 제품 → 렌더 지오메트리(모드 반영). scale 반영된 w/d/h 입력.
+ * standingCard: 얇은 수직 패널(front/back 이미지), flatCard: 얇게 눕힘(top),
+ * simpleBox: 박스(all), cylinder: 원기둥(wrap).
+ */
+export function productRenderGeo(product: Product, wMm: number, dMm: number, hMm: number): ProductRenderGeo {
+  const mode = resolveRenderMode(product);
+  const scaleFromBase = product.depthMm > 0 ? dMm / product.depthMm : 1;
+  const thickness = product.thicknessMm != null ? Math.max(2, product.thicknessMm * scaleFromBase) : null;
+
+  switch (mode) {
+    case 'flatCard': {
+      const depth = dMm;
+      const flatH = thickness ?? Math.max(3, Math.min(hMm, wMm * 0.04));
+      return { polygon: rectPolygon(wMm, depth), heightMm: flatH, depthMm: depth, curved: false, imageFaces: 'top' };
+    }
+    case 'simpleBox': {
+      const depth = thickness ?? dMm;
+      return { polygon: rectPolygon(wMm, depth), heightMm: hMm, depthMm: depth, curved: false, imageFaces: 'all' };
+    }
+    case 'cylinder': {
+      const diameter = wMm;
+      return { polygon: circlePolygon(wMm / 2, diameter / 2, diameter), heightMm: hMm, depthMm: diameter, curved: true, imageFaces: 'wrap' };
+    }
+    case 'standingCard':
+    default: {
+      // 상판 위에 세워둔 얇은 카드: 깊이(두께)는 얇게, 높이는 제품 높이 그대로. 정면 PNG.
+      const depth = thickness ?? Math.max(12, Math.min(dMm, wMm * 0.06));
+      return { polygon: rectPolygon(wMm, depth), heightMm: hMm, depthMm: depth, curved: false, imageFaces: 'frontBack' };
+    }
+  }
+}
+
 /** 제품 재질 → 렌더러(FixtureMaterial) 매핑 (v0.9.9) */
 export function productMaterialToFixture(m: ProductMaterial | undefined): FixtureMaterial {
   switch (m) {
@@ -141,3 +195,10 @@ export const PRODUCT_MATERIALS: { value: ProductMaterial; label: string }[] = [
 ];
 
 export const THICKNESS_PRESETS = [5, 20, 40, 80, 120];
+
+export const PRODUCT_RENDER_MODES: { value: ProductRenderMode; label: string }[] = [
+  { value: 'standingCard', label: 'Standing Card (세움)' },
+  { value: 'flatCard', label: 'Flat Card (눕힘)' },
+  { value: 'simpleBox', label: 'Simple Box (박스)' },
+  { value: 'cylinder', label: 'Cylinder (원기둥)' },
+];

@@ -83,6 +83,17 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const [wallColor, setWallColor] = useState('#c3ccd8');
   const [transparentBg, setTransparentBg] = useState(false);
 
+  // Practical Render Mode (실무 시안, v1.0.0-pre)
+  const [practical, setPractical] = useState({
+    on: false,
+    view: 'iso' as 'iso' | 'front',
+    bg: 'white' as 'white' | 'gray',
+    human: false,
+    mat: false,
+    productImages: true,
+  });
+  const setPrac = (patch: Partial<typeof practical>) => setPractical((p) => ({ ...p, ...patch }));
+
   // 조명 (v0.9.2)
   const [lighting, setLighting] = useState<LightingConfig>(defaultLighting);
   const amb = lighting.lights.find((l) => l.type === 'ambient');
@@ -110,6 +121,36 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
 
   const setOpt = <K extends keyof IsoRenderOptions>(key: K, value: IsoRenderOptions[K]) =>
     setOpts((o) => ({ ...o, [key]: value }));
+
+  // Practical Render Mode 를 반영한 렌더 옵션 (프리뷰/내보내기 공용, v1.0.0-pre)
+  const practicalRenderOpts = (forExport: boolean): IsoRenderOptions => {
+    const env = environmentDef(environment);
+    let az = azimuthDeg;
+    let el = elevationDeg;
+    let envTop = env.bgTop;
+    let envBot = env.bgBottom;
+    if (practical.on) {
+      if (practical.view === 'front') { az = 0; el = 22; } // 정면 시안
+      if (practical.bg === 'white') { envTop = '#ffffff'; envBot = '#f3f5f8'; }
+      else { envTop = '#e8ebef'; envBot = '#d3d8df'; }
+    }
+    return {
+      ...opts,
+      wallColor,
+      envBgTop: envTop,
+      envBgBottom: envBot,
+      transparentBg: forExport ? transparentBg || !!env.transparent : false,
+      azimuthDeg: az,
+      elevationDeg: el,
+      lighting,
+      targetPx: forExport ? quality : PREVIEW_PX,
+    };
+  };
+  const practicalExtras = () => ({
+    humanSilhouette: practical.human,
+    floorMat: practical.mat,
+    hideProductImages: practical.on && !practical.productImages,
+  });
 
   // 열릴 때 프로젝트 스타일링(바닥/벽 재질·환경)을 미리보기 옵션으로 시드 (v0.9.8)
   useEffect(() => {
@@ -157,14 +198,11 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   // 옵션/카메라/데이터 변경 시 미리보기 재렌더 (동기, 로드된 이미지 재사용)
   useEffect(() => {
     if (!open || !project || !ready) return;
-    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products);
-    const env = environmentDef(environment);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, {
-      ...opts, wallColor, envBgTop: env.bgTop, envBgBottom: env.bgBottom, transparentBg: false,
-      azimuthDeg, elevationDeg, lighting, targetPx: PREVIEW_PX,
-    });
+    const extras = { humanSilhouette: practical.human, floorMat: practical.mat, hideProductImages: practical.on && !practical.productImages };
+    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, extras);
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(false));
     setDataUrl(url);
-  }, [open, ready, opts, environment, wallColor, azimuthDeg, elevationDeg, lighting, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
+  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
 
   // 자동 회전(Auto Orbit) — 360° 연속 회전
   useEffect(() => {
@@ -178,14 +216,10 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
 
   const handleExport = () => {
     if (!project || !ready) return;
-    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products);
-    const env = environmentDef(environment);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, {
-      ...opts, wallColor, envBgTop: env.bgTop, envBgBottom: env.bgBottom,
-      transparentBg: transparentBg || !!env.transparent,
-      azimuthDeg, elevationDeg, lighting, targetPx: quality,
-    });
-    downloadDataURL(url, `${buildBaseName(project.name, layoutName)}_isometric.png`);
+    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, practicalExtras());
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(true));
+    const suffix = practical.on ? 'practical' : 'isometric';
+    downloadDataURL(url, `${buildBaseName(project.name, layoutName)}_${suffix}.png`);
   };
 
   const clampZoom = (z: number) => Math.max(0.4, Math.min(4, z));
@@ -454,6 +488,37 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
             <Typography variant="caption" color="text.secondary">바닥반사 {Math.round(lighting.groundReflection * 100)}%</Typography>
             <Slider size="small" min={0} max={1} step={0.05} value={lighting.groundReflection} onChange={(_, v) => setLighting((cfg) => ({ ...cfg, groundReflection: v as number }))} />
           </Box>
+        </Stack>
+
+        {/* 실무 시안 (Practical Render Mode, v1.0.0-pre) */}
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{ mb: 1.5, p: 1, alignItems: 'center', flexWrap: 'wrap', gap: 1, bgcolor: practical.on ? 'primary.50' : 'action.hover', borderRadius: 1, border: '1px solid', borderColor: practical.on ? 'primary.light' : 'transparent' }}
+        >
+          <FormControlLabel
+            control={<Switch size="small" checked={practical.on} onChange={(e) => setPrac({ on: e.target.checked })} />}
+            label={<Typography variant="caption" sx={{ fontWeight: 800 }}>실무 시안</Typography>}
+            sx={{ ml: 0 }}
+          />
+          {practical.on && (
+            <>
+              <ToggleButtonGroup exclusive size="small" value={practical.view} onChange={(_, v) => v && setPrac({ view: v })}>
+                <ToggleButton value="front" sx={{ px: 1, py: 0.25 }}>정면</ToggleButton>
+                <ToggleButton value="iso" sx={{ px: 1, py: 0.25 }}>아이소</ToggleButton>
+              </ToggleButtonGroup>
+              <ToggleButtonGroup exclusive size="small" value={practical.bg} onChange={(_, v) => v && setPrac({ bg: v })}>
+                <ToggleButton value="white" sx={{ px: 1, py: 0.25 }}>흰색</ToggleButton>
+                <ToggleButton value="gray" sx={{ px: 1, py: 0.25 }}>회색</ToggleButton>
+              </ToggleButtonGroup>
+              <Divider orientation="vertical" flexItem />
+              <FormControlLabel control={<Switch size="small" checked={practical.human} onChange={(e) => setPrac({ human: e.target.checked })} />} label={<Typography variant="caption">사람</Typography>} sx={{ ml: 0 }} />
+              <FormControlLabel control={<Switch size="small" checked={practical.mat} onChange={(e) => setPrac({ mat: e.target.checked })} />} label={<Typography variant="caption">바닥매트</Typography>} sx={{ ml: 0 }} />
+              <FormControlLabel control={<Switch size="small" checked={practical.productImages} onChange={(e) => setPrac({ productImages: e.target.checked })} />} label={<Typography variant="caption">제품이미지</Typography>} sx={{ ml: 0 }} />
+              <FormControlLabel control={<Switch size="small" checked={opts.showNames} onChange={(e) => setOpt('showNames', e.target.checked)} />} label={<Typography variant="caption">라벨</Typography>} sx={{ ml: 0 }} />
+              <FormControlLabel control={<Switch size="small" checked={opts.showShadows} onChange={(e) => setOpt('showShadows', e.target.checked)} />} label={<Typography variant="caption">그림자</Typography>} sx={{ ml: 0 }} />
+            </>
+          )}
         </Stack>
 
         {/* 미리보기 영역 — 드래그: 궤도 회전 / Shift+드래그: 이동 / 휠: 확대·축소 */}
