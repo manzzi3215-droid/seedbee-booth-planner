@@ -1,3 +1,3 @@
 /** 앱 버전 (README / 헤더에 표시) */
-export const APP_VERSION = 'v1.0.0-pre';
-export const APP_VERSION_LABEL = 'v1.0.0-pre - Practical Render & Product Display Fix';
+export const APP_VERSION = 'v1.0.1';
+export const APP_VERSION_LABEL = 'v1.0.1 - VMD Board Workspace';

@@ -52,6 +52,8 @@ import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
+import DashboardCustomizeRoundedIcon from '@mui/icons-material/DashboardCustomizeRounded';
+import { useNavigate } from 'react-router-dom';
 import { useEditor } from './EditorContext';
 import { parseSvgDocument } from '../svg/SvgParser';
 import {
@@ -166,6 +168,7 @@ export default function EditorToolbar({
   const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
   const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
 
+  const navigate = useNavigate();
   const currentLayout = layouts.find((l) => l.id === currentLayoutId) ?? null;
 
   /** 현재 화면(placed) 기준 export 입력 구성 */
@@ -778,6 +781,21 @@ export default function EditorToolbar({
             disabled={!project}
           >
             진열 관리
+          </Button>
+        </span>
+      </Tooltip>
+
+      <Tooltip title="VMD 시안 — 제품 누끼컷·POP·QR·텍스트로 진열 보드 시안 제작(2D)">
+        <span>
+          <Button
+            variant="outlined"
+            size="small"
+            color="primary"
+            startIcon={<DashboardCustomizeRoundedIcon />}
+            onClick={() => project && navigate(`/projects/${project.id}/vmd`)}
+            disabled={!project}
+          >
+            VMD 시안
           </Button>
         </span>
       </Tooltip>

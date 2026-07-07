@@ -562,6 +562,83 @@ export interface ProductTemplate {
   createdAt: number;
 }
 
+/**
+ * --- VMD Board Workspace (v1.0.1) ---
+ * 부스 3D 편집과 분리된 독립 2D VMD 시안 보드. 제품 PNG 누끼컷·POP·QR·텍스트·도형을
+ * 자유 배치해 현장 DP 시안을 빠르게 제작. 좌표/크기는 mm 기준. 프로젝트에 임베드 저장.
+ */
+export type VmdElementType = 'product' | 'image' | 'text' | 'shape' | 'line';
+export type VmdShapeKind = 'rect' | 'circle';
+export type VmdBackgroundMode = 'solid' | 'transparent' | 'image';
+
+export interface VmdBackground {
+  mode: VmdBackgroundMode;
+  color?: string;
+  imageSrc?: string; // dataURL
+  outline?: boolean;
+  outlineColor?: string;
+  radiusMm?: number;
+  shadow?: boolean;
+  /** 받침대/스탠드 스타일(하단 받침 그림자) */
+  pedestal?: boolean;
+}
+
+export interface VmdElement {
+  id: string;
+  type: VmdElementType;
+  name: string;
+  xMm: number; // 좌상단 X (line 은 시작점)
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+  rotationDeg: number;
+  opacity: number;
+  hidden?: boolean;
+  locked?: boolean;
+  // product
+  productId?: string;
+  // image / qr / pop / logo
+  src?: string; // dataURL (PNG alpha 유지)
+  // text
+  text?: string;
+  fontSizeMm?: number;
+  color?: string;
+  bold?: boolean;
+  align?: TextAlign;
+  bgColor?: string;
+  // shape
+  shape?: VmdShapeKind;
+  fill?: string;
+  stroke?: string;
+  strokeWidthMm?: number;
+  // line (x/y = 시작, x2/y2 = 끝)
+  x2Mm?: number;
+  y2Mm?: number;
+  arrow?: boolean;
+}
+
+export interface VmdBoard {
+  id: string;
+  name: string;
+  widthMm: number;
+  heightMm: number;
+  background: VmdBackground;
+  elements: VmdElement[];
+  memo?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Booth 집기에서 생성된 경우 원본 집기명(참고용) */
+  sourceFixtureName?: string;
+}
+
+/** VMD 프리셋 (다음 행사에서 다시 불러오기) */
+export interface VmdPreset {
+  id: string;
+  name: string;
+  board: Omit<VmdBoard, 'id' | 'createdAt' | 'updatedAt'>;
+  createdAt: number;
+}
+
 /** 벽면 구분 */
 export type WallSide = 'frontWall' | 'leftWall' | 'rightWall' | 'backWall';
 
@@ -630,6 +707,12 @@ export interface Project extends BaseEntity {
   productTemplates?: ProductTemplate[];
   /** 진열 프리셋 (v0.9.4) — 집기에 적용하면 진열 자동 완성 */
   productPresets?: ProductPreset[];
+
+  // --- VMD Board Workspace (v1.0.1) — 독립 2D VMD 시안 보드 ---
+  /** VMD 보드 목록 */
+  vmdBoards?: VmdBoard[];
+  /** VMD 프리셋(다음 행사 재사용) */
+  vmdPresets?: VmdPreset[];
 
   // --- 공유 (v0.8.2). 누락 시 owner 전용/비공개로 취급(하위 호환) ---
   /** Firestore 소유자 uid (읽을 때 채워짐) */

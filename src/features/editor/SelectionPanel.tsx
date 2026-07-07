@@ -14,6 +14,8 @@ import Rotate90DegreesCwRoundedIcon from '@mui/icons-material/Rotate90DegreesCwR
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import DashboardCustomizeRoundedIcon from '@mui/icons-material/DashboardCustomizeRounded';
+import { useNavigate } from 'react-router-dom';
 import { useEditor } from './EditorContext';
 import { getShapeLabel } from '../fixtures/shapes';
 import { isFixtureOutOfBounds } from '../canvas/fixtureGeometry';
@@ -91,6 +93,7 @@ function FixtureInfoPanel() {
     setSelectedRotation,
     updateFixtureMaterial,
   } = useEditor();
+  const navigate = useNavigate();
 
   const selected = placed.find((p) => p.id === selectedFixtureId) ?? null;
   const def = selected ? fixturesById.get(selected.fixtureDefId) : null;
@@ -223,6 +226,20 @@ function FixtureInfoPanel() {
 
       {/* 디자인 매핑 (Color 아래) */}
       <DesignPanel fixture={selected} />
+
+      <Divider sx={{ my: 1 }} />
+
+      {/* 이 집기 상판 사이즈로 VMD 시안 만들기 (§12, v1.0.1) */}
+      <Button
+        variant="outlined"
+        size="small"
+        fullWidth
+        startIcon={<DashboardCustomizeRoundedIcon />}
+        onClick={() => project && navigate(`/projects/${project.id}/vmd?w=${def.widthMm}&h=${def.depthMm}&name=${encodeURIComponent(def.name)}`)}
+        sx={{ mb: 1 }}
+      >
+        이 집기로 VMD 시안 만들기
+      </Button>
 
       <Divider sx={{ my: 1 }} />
 
