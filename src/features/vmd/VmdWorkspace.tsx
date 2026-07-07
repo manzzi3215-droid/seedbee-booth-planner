@@ -19,6 +19,7 @@ import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ImageRoundedIcon from '@mui/icons-material/ImageRounded';
 import PictureAsPdfRoundedIcon from '@mui/icons-material/PictureAsPdfRounded';
+import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import LockRoundedIcon from '@mui/icons-material/LockRounded';
@@ -33,6 +34,7 @@ import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import type { VmdElement } from '../../types';
 import { useVmd } from './useVmd';
 import VmdCanvas from './VmdCanvas';
+import VmdPreviewDialog from './VmdPreviewDialog';
 import { BOARD_SIZE_PRESETS, BOARD_TEMPLATES, boardFromTemplate, countProducts, createBoard, makeElement } from './vmdModel';
 import { uploadDesignAsset, isSupportedDesignFile } from '../../firebase/storage';
 import { productImageUrl } from '../products/productModel';
@@ -60,6 +62,7 @@ export default function VmdWorkspace() {
   const [customW, setCustomW] = useState('900');
   const [customH, setCustomH] = useState('450');
   const [presetQuery, setPresetQuery] = useState('');
+  const [preview3dOpen, setPreview3dOpen] = useState(false);
 
   // §12: Booth 집기에서 넘어온 경우(?w&h&name) 자동으로 보드 생성 (1회)
   const consumedQuery = useRef(false);
@@ -207,10 +210,13 @@ export default function VmdWorkspace() {
         <Typography variant="caption" color="text.secondary" sx={{ minWidth: 56, textAlign: 'center' }}>
           {saveState === 'saving' ? '저장 중…' : saveState === 'saved' ? '저장됨' : ''}
         </Typography>
+        <Button size="small" variant="contained" color="secondary" startIcon={<ViewInArRoundedIcon />} onClick={() => setPreview3dOpen(true)} disabled={!board}>3D 미리보기</Button>
         <Button size="small" variant="outlined" startIcon={<ImageRoundedIcon />} onClick={() => exportPng(false)} disabled={!board}>PNG</Button>
         <Button size="small" variant="outlined" onClick={() => exportPng(true)} disabled={!board}>투명 PNG</Button>
         <Button size="small" variant="outlined" startIcon={<PictureAsPdfRoundedIcon />} onClick={exportPdf} disabled={!board}>PDF</Button>
       </Stack>
+
+      <VmdPreviewDialog open={preview3dOpen} board={board} products={products} onClose={() => setPreview3dOpen(false)} />
 
       <Box sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
         {/* 좌측: 보드/요소/제품 */}

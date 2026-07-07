@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.0.2 - VMD Workspace Integration & Library UX**
+> **v1.0.3 - Professional VMD 3D Mockup System**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,13 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**VMD 3D Mockup (v1.0.3)**
+- **VMD 3D 미리보기:** 2D VMD 보드를 실무 DP 시안 3D Mockup으로 렌더(기존 Booth 3D 렌더러 재사용).
+  정면 · 좌/우 사선 · Top 시점, 흰색/연회색 배경, 그림자, PNG · 투명 PNG · PDF 저장
+- **제품 입체 표현:** 제품이 상판 위에 서 있는 카드/입체(Standing Card·Box·Bottle·Cylinder), 높이·두께·접지 그림자 반영
+- **DP 요소:** POP/QR/가격표/설명카드는 상판 위 카드/사인으로 함께 표현
+- **보드 clamp:** VMD 요소가 보드 밖으로 벗어나지 않도록 자동 보정
 
 **워크스페이스 통합 & 라이브러리 UX (v1.0.2)**
 - **VMD 시안 탭 통합:** 평면도 | 정면벽 | 좌측벽 | 우측벽 | 후면벽 | **VMD 시안** — 같은 워크스페이스 탭 줄에서 진입(작업 흐름 유지)
@@ -263,6 +270,20 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.0.3 — Professional VMD 3D Mockup System (VMD 3D 시안)**
+- **VMD 3D 미리보기(§1, 최우선):** 2D VMD 보드 → 3D DP Mockup. **기존 Booth 3D 렌더러(renderIso)를 그대로 재사용**
+  (새 렌더러 없음, 구조 공유). 시점 정면/좌·우 사선/Top, 배경 흰색/연회색, 그림자 ON/OFF, PNG·투명 PNG·PDF 저장.
+- **제품 입체 표현(§2):** 제품이 상판 위에 서 있는 오브젝트(Standing Card·Box·Bottle·Tube·Jar·Cylinder)로 표현 —
+  기존 productRenderGeo 재사용, 높이·두께·접지 그림자 적용(평면 카드 → 실제 진열 느낌).
+- **상판 위 요소(§3/§7):** product·POP·QR·이미지·로고는 상판 위 세움 카드, 가격표·설명카드·도형은 상판 위 얇은 카드로 렌더.
+- **보드 clamp(§4):** VMD 요소가 보드 밖으로 나가지 않도록 드래그 시 자동 보정.
+- **VMD 전용 렌더 스타일(§10/§11):** 흰/연회색 배경 · Ambient/Directional · Contact Shadow · 약한 Reflection —
+  패키지팀 Mockup 느낌(Blender급 리얼 렌더 없이 가볍게).
+- **완성된 흐름:** 도면 가져오기 → 부스 설계 → 집기 배치 → 디자인 매핑 → VMD 시안 → **VMD 3D Mockup** → PNG/PDF 출력.
+- **staged(다음 단계):** 원클릭 진열 패턴 확장(§5)·스마트 충돌 자동 밀림(§6)·레이어 폴더/색상 태그(§8)·최근 배치/대형 썸네일(§9)·
+  전체 UX 재정비(§12)는 구조를 유지하며 단계적으로 진행. (다음: 실측 모드·설치 가이드)
+- **기존 기능 유지 · 기존 프로젝트 호환 · Console Error 0 · Build 성공 · Undo/Redo·Cloud/Auto Save 유지.**
 
 **v1.0.2 — VMD Workspace Integration & Library UX (워크스페이스 통합)**
 - **VMD 워크스페이스 탭 통합(§2):** 보기 모드 탭 줄에 **VMD 시안** 추가 — 평면도/벽면과 같은 위치에서 진입.

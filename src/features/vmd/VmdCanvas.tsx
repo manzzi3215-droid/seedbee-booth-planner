@@ -122,7 +122,15 @@ export default function VmdCanvas({
 
   const handleDragEnd = (el: VmdElement, e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
-    onChange(el.id, { xMm: Math.round(node.x()), yMm: Math.round(node.y()) });
+    // 보드 밖으로 나가지 않도록 clamp (§4/§6) — 라인은 예외
+    let xMm = Math.round(node.x());
+    let yMm = Math.round(node.y());
+    if (el.type !== 'line') {
+      xMm = Math.max(-el.widthMm * 0.5, Math.min(board.widthMm - el.widthMm * 0.5, xMm));
+      yMm = Math.max(-el.heightMm * 0.5, Math.min(board.heightMm - el.heightMm * 0.5, yMm));
+      node.position({ x: xMm, y: yMm });
+    }
+    onChange(el.id, { xMm, yMm });
     onCommit();
   };
 
