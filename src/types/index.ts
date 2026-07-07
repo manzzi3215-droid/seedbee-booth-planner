@@ -48,6 +48,31 @@ export interface BoothConfig {
    * OFF 벽면은 벽면 탭/출력/3D 미리보기에서 제외됩니다.
    */
   usedWalls?: Partial<Record<WallSide, boolean>>;
+
+  /** --- Professional Styling System (v0.9.8) --- 바닥/벽 재질·3D 환경·스타일 프리셋 */
+  styling?: BoothStyling;
+}
+
+/**
+ * --- Professional Styling & Decoration System (v0.9.8) ---
+ * 실제 제안서 수준의 팝업스토어 시안을 위한 바닥/벽 재질, 3D 환경, 원클릭 스타일 프리셋.
+ * 데이터는 boothConfig 에 임베드되어 자동 저장/Undo/공유가 그대로 동작합니다.
+ */
+export type FloorMaterialId =
+  | 'concrete' | 'wood' | 'marble' | 'stone' | 'pvc' | 'carpet' | 'white' | 'black' | 'checker';
+export type WallMaterialId =
+  | 'paint' | 'wood' | 'fabric' | 'curtain' | 'stone' | 'concrete' | 'ledwall' | 'acrylic';
+export type EnvironmentId =
+  | 'studioWhite' | 'studioGray' | 'studioBlack' | 'mall' | 'exhibition' | 'transparent';
+export type StylePresetId =
+  | 'modern' | 'minimal' | 'luxury' | 'natural' | 'beauty' | 'baby' | 'pharmacy' | 'popup';
+
+export interface BoothStyling {
+  floorMaterial?: FloorMaterialId;
+  wallMaterial?: WallMaterialId;
+  environment?: EnvironmentId;
+  /** 마지막으로 적용한 스타일 프리셋(표시용) */
+  stylePreset?: StylePresetId;
 }
 
 /**
@@ -117,6 +142,8 @@ export interface Asset {
   version?: number;
   /** 즐겨찾기 */
   favorite?: boolean;
+  /** 핀 고정 (목록 상단 고정, v0.9.8) */
+  pinned?: boolean;
 }
 
 /** 2D 좌표 (mm 기준). Canvas 내부 좌표는 항상 mm 로 관리합니다. */

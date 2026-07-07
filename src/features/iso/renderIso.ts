@@ -51,6 +51,13 @@ export interface IsoRenderOptions {
   targetPx: number;
   /** 배경 테마 (기본 light). Presentation Dark 모드에서 dark (v0.8.8) */
   background?: 'light' | 'dark';
+  /** 벽 재질 색 (v0.9.8). 미지정 시 기본 콘크리트 톤 */
+  wallColor?: string;
+  /** 3D 환경 배경 그라디언트 상/하 색 (v0.9.8). 지정 시 background 대신 사용 */
+  envBgTop?: string;
+  envBgBottom?: string;
+  /** 배경 투명(Presentation Quality, v0.9.8) — PNG 저장 시 배경 제거 */
+  transparentBg?: boolean;
   /** 자유 궤도 카메라 방위각(°). 지정 시 viewpoint 대신 사용 (v0.9.1) */
   azimuthDeg?: number;
   /** 자유 궤도 카메라 고도(°) 20~90. 지정 시 viewpoint 대신 사용 (v0.9.1) */
@@ -230,17 +237,23 @@ export function renderIsoSceneToDataURL(
     ctx.imageSmoothingQuality = 'high';
   };
 
-  // 배경 (부드러운 그라디언트). Dark 테마면 어두운 톤
-  const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  if (options.background === 'dark') {
-    bg.addColorStop(0, '#1e293b');
-    bg.addColorStop(1, '#0b1220');
-  } else {
-    bg.addColorStop(0, '#fbfcfe');
-    bg.addColorStop(1, '#e9edf3');
+  // 배경 (부드러운 그라디언트). 환경(Environment) 색 우선 → Dark 테마 → 기본 라이트.
+  // transparentBg 면 배경을 채우지 않음(Presentation Quality: 배경 투명 PNG, v0.9.8).
+  if (!options.transparentBg) {
+    const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    if (options.envBgTop && options.envBgBottom) {
+      bg.addColorStop(0, options.envBgTop);
+      bg.addColorStop(1, options.envBgBottom);
+    } else if (options.background === 'dark') {
+      bg.addColorStop(0, '#1e293b');
+      bg.addColorStop(1, '#0b1220');
+    } else {
+      bg.addColorStop(0, '#fbfcfe');
+      bg.addColorStop(1, '#e9edf3');
+    }
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const polygon = (pts: V3[], fill: string, stroke?: string, alpha = 1) => {
     const sp = pts.map(P);
@@ -447,7 +460,7 @@ export function renderIsoSceneToDataURL(
       y: (w.baseStart.y + w.baseEnd.y) / 2,
       z: w.heightMm / 2,
     };
-    const wallFill = shadeFace(lighting, '#c3ccd8', { x: nx, y: ny, z: 0 }, wallCenter);
+    const wallFill = shadeFace(lighting, options.wallColor ?? '#c3ccd8', { x: nx, y: ny, z: 0 }, wallCenter);
     wallUnits.push({
       depth: depthOf(quad),
       draw: () => {

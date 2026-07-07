@@ -11,6 +11,8 @@ import { useParams } from 'react-router-dom';
 import type {
   Asset,
   BoothConfig,
+  BoothStyling,
+  StylePresetId,
   DesignAsset,
   DesignMapping,
   FixtureDef,
@@ -37,6 +39,7 @@ import { useFixtures } from '../fixtures/useFixtures';
 import { useAssets } from '../assets/useAssets';
 import { fixtureDefFromAsset } from '../assets/assetModel';
 import { DEFAULT_TEXTURE_TRANSFORM } from '../../types';
+import { stylingFromPreset } from '../styling/styling';
 import { snapMmToGrid } from '../canvas/coords';
 import { DEFAULT_GRID_SIZE_MM } from '../canvas/constants';
 import { computeFixtureAABB } from '../canvas/fixtureGeometry';
@@ -127,6 +130,10 @@ interface EditorContextValue {
   setShapeEditMode: (v: boolean) => void;
   /** 부스 외곽 폴리곤(mm) 갱신 → boothShape=polygon + bbox 저장(디바운스 저장) */
   updateBoothShape: (points: PointMm[]) => void;
+  /** 부스 스타일링(바닥/벽 재질·환경) 갱신 (v0.9.8) */
+  updateBoothStyling: (patch: Partial<BoothStyling>) => void;
+  /** 스타일 프리셋 원클릭 적용 (v0.9.8) */
+  applyStylePreset: (id: StylePresetId) => void;
 
   // 배치안(Layout)
   layouts: Layout[];
@@ -158,6 +165,8 @@ interface EditorContextValue {
   saveAsset: (a: Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
   toggleAssetFavorite: (id: string) => Promise<void>;
+  /** 핀 고정 토글 (v0.9.8) */
+  toggleAssetPin: (id: string) => Promise<void>;
   /** 최근 사용 에셋 id (최신순) */
   recentAssetIds: string[];
   /** 에셋을 부스에 배치 (집기+디자인 매핑 파이프라인 재사용 → 2D/3D 자동 반영) */
@@ -451,6 +460,7 @@ export function EditorProvider({
     saveAsset,
     deleteAsset,
     toggleFavorite: toggleAssetFavorite,
+    togglePin: toggleAssetPin,
     recentIds: recentAssetIds,
     markRecent: markRecentAsset,
   } = useAssets();
@@ -664,6 +674,21 @@ export function EditorProvider({
       if (!enabled && viewMode === side) setViewMode('plan');
       await storage.saveProject(updated);
     };
+
+    // 부스 스타일링(바닥/벽 재질·환경) 갱신 (v0.9.8) → boothConfig 에 임베드(자동 저장/Undo/공유)
+    const updateBoothStyling = (patch: Partial<BoothStyling>) => {
+      if (!project) return;
+      const styling = { ...(project.boothConfig.styling ?? {}), ...patch };
+      const updated: Project = {
+        ...project,
+        boothConfig: { ...project.boothConfig, styling },
+        updatedAt: Date.now(),
+      };
+      setProject(updated);
+      if (shapeSaveTimer.current) clearTimeout(shapeSaveTimer.current);
+      shapeSaveTimer.current = setTimeout(() => void storage.saveProject(updated), 800);
+    };
+    const applyStylePreset = (id: StylePresetId) => updateBoothStyling(stylingFromPreset(id));
 
     // 부스 외곽 폴리곤 갱신 (드래그 중 자주 호출) → 상태 즉시, 저장은 디바운스
     const updateBoothShape = (points: PointMm[]) => {
@@ -1662,6 +1687,8 @@ export function EditorProvider({
       shapeEditMode,
       setShapeEditMode,
       updateBoothShape,
+      updateBoothStyling,
+      applyStylePreset,
       layouts,
       currentLayoutId,
       dirty,
@@ -1685,6 +1712,7 @@ export function EditorProvider({
       saveAsset,
       deleteAsset,
       toggleAssetFavorite,
+      toggleAssetPin,
       recentAssetIds,
       placeAsset,
       createAssetFromFixture,
@@ -1814,6 +1842,7 @@ export function EditorProvider({
     saveAsset,
     deleteAsset,
     toggleAssetFavorite,
+    toggleAssetPin,
     recentAssetIds,
     placed,
     texts,

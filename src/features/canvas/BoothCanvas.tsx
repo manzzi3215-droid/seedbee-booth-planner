@@ -25,6 +25,7 @@ import type {
   SvgDocument,
 } from '../../types';
 import { planFaceMapping, assetById } from '../design/mapping';
+import { floorMaterialDef } from '../styling/styling';
 import ProductNode from '../products/ProductNode';
 import { productById as findProduct, productImageUrl } from '../products/productModel';
 import SvgHighlightOverlay from '../svg/SvgRenderer';
@@ -439,11 +440,11 @@ export default function BoothCanvas({
         >
           {/* 배경 레이어: 바닥/그리드/벽체/치수 (이벤트 비수신) */}
           <Layer listening={false} {...layerRot}>
-            {/* 바닥 (폴리곤) */}
+            {/* 바닥 (폴리곤) — 재질 지정 시 재질 색, 아니면 기본 (v0.9.8) */}
             <Line
               points={flattenPolygon(polygon)}
               closed
-              fill={CANVAS_COLORS.floorFill}
+              fill={booth.styling?.floorMaterial ? floorMaterialDef(booth.styling.floorMaterial).color : CANVAS_COLORS.floorFill}
               stroke="#cbd5e1"
               strokeWidth={1}
               strokeScaleEnabled={false}

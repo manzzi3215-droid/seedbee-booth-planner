@@ -12,13 +12,37 @@ import { DEFAULT_ASSETS } from './defaults';
  */
 let seedingPromise: Promise<void> | null = null;
 
+/**
+ * 시드 버전 플래그 (기기 단위). 버전을 올리면 기존 라이브러리에 "이름 기준으로 없는" 기본 에셋을
+ * 한 번만 top-up 합니다. (삭제한 에셋을 매번 되살리지 않도록 버전 플래그로 1회만 실행)
+ *   v2: v0.9.8 Furniture/Decoration 에셋 확장
+ */
+const SEED_VERSION_KEY = 'blp:assetSeedVersion';
+const SEED_VERSION = 2;
+
 async function seedIfEmpty(): Promise<void> {
   const existing = await storage.getAssets();
-  if (existing.length > 0) return;
   const now = Date.now();
-  for (const seed of DEFAULT_ASSETS) {
-    await storage.saveAsset({ ...seed, id: generateId(), createdAt: now, updatedAt: now });
+
+  if (existing.length === 0) {
+    for (const seed of DEFAULT_ASSETS) {
+      await storage.saveAsset({ ...seed, id: generateId(), createdAt: now, updatedAt: now });
+    }
+    try { localStorage.setItem(SEED_VERSION_KEY, String(SEED_VERSION)); } catch { /* 무시 */ }
+    return;
   }
+
+  // 기존 라이브러리 top-up (1회): 새로 추가된 기본 에셋을 이름 기준으로 보충
+  let done = 1;
+  try { done = Number(localStorage.getItem(SEED_VERSION_KEY) || '1'); } catch { /* 무시 */ }
+  if (done >= SEED_VERSION) return;
+  const names = new Set(existing.map((a) => a.name));
+  for (const seed of DEFAULT_ASSETS) {
+    if (!names.has(seed.name)) {
+      await storage.saveAsset({ ...seed, id: generateId(), createdAt: now, updatedAt: now });
+    }
+  }
+  try { localStorage.setItem(SEED_VERSION_KEY, String(SEED_VERSION)); } catch { /* 무시 */ }
 }
 
 export async function ensureDefaultAssets(): Promise<Asset[]> {

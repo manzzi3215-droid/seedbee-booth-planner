@@ -24,6 +24,8 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import StarBorderRoundedIcon from '@mui/icons-material/StarBorderRounded';
+import PushPinRoundedIcon from '@mui/icons-material/PushPinRounded';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import type { Asset, AssetCategory, AssetVisibility } from '../../types';
 import { useEditor } from '../editor/EditorContext';
 import { uploadDesignAsset, isSupportedDesignFile } from '../../firebase/storage';
@@ -93,6 +95,7 @@ export default function AssetLibraryPanel() {
     saveAsset,
     deleteAsset,
     toggleAssetFavorite,
+    toggleAssetPin,
     recentAssetIds,
     placeAsset,
     createAssetFromFixture,
@@ -186,7 +189,8 @@ export default function AssetLibraryPanel() {
       // 최근순 유지
       return [...list].sort((x, y) => recentAssetIds.indexOf(x.id) - recentAssetIds.indexOf(y.id));
     }
-    return list;
+    // 핀 고정 항목을 상단으로
+    return [...list].sort((x, y) => Number(!!y.pinned) - Number(!!x.pinned));
   }, [assets, scope, cat, q, recentAssetIds]);
 
   return (
@@ -268,6 +272,11 @@ export default function AssetLibraryPanel() {
                 color={a.visibility === 'company' ? 'info' : 'default'}
                 sx={{ height: 18, fontSize: 10 }}
               />
+              <Tooltip title={a.pinned ? '핀 해제' : '핀 고정'}>
+                <IconButton size="small" onClick={() => void toggleAssetPin(a.id)}>
+                  {a.pinned ? <PushPinRoundedIcon sx={{ fontSize: 17, color: '#2563eb' }} /> : <PushPinOutlinedIcon sx={{ fontSize: 17 }} />}
+                </IconButton>
+              </Tooltip>
               <Tooltip title={a.favorite ? '즐겨찾기 해제' : '즐겨찾기'}>
                 <IconButton size="small" onClick={() => void toggleAssetFavorite(a.id)}>
                   {a.favorite ? <StarRoundedIcon sx={{ fontSize: 18, color: '#f5b400' }} /> : <StarBorderRoundedIcon sx={{ fontSize: 18 }} />}

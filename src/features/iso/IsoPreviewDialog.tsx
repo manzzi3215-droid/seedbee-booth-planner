@@ -36,6 +36,8 @@ import {
 } from './renderIso';
 import { preloadImages, buildBaseName, downloadDataURL } from '../export/download';
 import { WALL_SIDES } from '../wall/constants';
+import type { EnvironmentId } from '../../types';
+import { ENVIRONMENTS, environmentDef, floorMaterialDef, wallMaterialDef } from '../styling/styling';
 import {
   type LightingConfig,
   type Light,
@@ -76,6 +78,11 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const [orbitSpeed, setOrbitSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
   const dragRef = useRef<{ mode: 'orbit' | 'pan'; x: number; y: number } | null>(null);
 
+  // Styling: 환경/벽색/투명배경 (v0.9.8)
+  const [environment, setEnvironment] = useState<EnvironmentId>('studioWhite');
+  const [wallColor, setWallColor] = useState('#c3ccd8');
+  const [transparentBg, setTransparentBg] = useState(false);
+
   // 조명 (v0.9.2)
   const [lighting, setLighting] = useState<LightingConfig>(defaultLighting);
   const amb = lighting.lights.find((l) => l.type === 'ambient');
@@ -103,6 +110,17 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
 
   const setOpt = <K extends keyof IsoRenderOptions>(key: K, value: IsoRenderOptions[K]) =>
     setOpts((o) => ({ ...o, [key]: value }));
+
+  // 열릴 때 프로젝트 스타일링(바닥/벽 재질·환경)을 미리보기 옵션으로 시드 (v0.9.8)
+  useEffect(() => {
+    if (!open || !project) return;
+    const s = project.boothConfig.styling ?? {};
+    const fm = floorMaterialDef(s.floorMaterial);
+    setOpts((o) => ({ ...o, floorColor: fm.color, floorChecker: fm.checker }));
+    setWallColor(wallMaterialDef(s.wallMaterial).color);
+    setEnvironment(s.environment ?? 'studioWhite');
+    setTransparentBg(false);
+  }, [open, project]);
 
   // 열릴 때 이미지 preload → ready. 닫힐 때 정리.
   useEffect(() => {
@@ -140,9 +158,13 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   useEffect(() => {
     if (!open || !project || !ready) return;
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, azimuthDeg, elevationDeg, lighting, targetPx: PREVIEW_PX });
+    const env = environmentDef(environment);
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, {
+      ...opts, wallColor, envBgTop: env.bgTop, envBgBottom: env.bgBottom, transparentBg: false,
+      azimuthDeg, elevationDeg, lighting, targetPx: PREVIEW_PX,
+    });
     setDataUrl(url);
-  }, [open, ready, opts, azimuthDeg, elevationDeg, lighting, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
+  }, [open, ready, opts, environment, wallColor, azimuthDeg, elevationDeg, lighting, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
 
   // 자동 회전(Auto Orbit) — 360° 연속 회전
   useEffect(() => {
@@ -157,7 +179,12 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const handleExport = () => {
     if (!project || !ready) return;
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, { ...opts, azimuthDeg, elevationDeg, lighting, targetPx: quality });
+    const env = environmentDef(environment);
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, {
+      ...opts, wallColor, envBgTop: env.bgTop, envBgBottom: env.bgBottom,
+      transparentBg: transparentBg || !!env.transparent,
+      azimuthDeg, elevationDeg, lighting, targetPx: quality,
+    });
     downloadDataURL(url, `${buildBaseName(project.name, layoutName)}_isometric.png`);
   };
 
@@ -311,6 +338,39 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
               />
             }
             label={<Typography variant="caption">집기명</Typography>}
+            sx={{ ml: 0 }}
+          />
+
+          <Divider orientation="vertical" flexItem />
+
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              벽색
+            </Typography>
+            <input
+              type="color"
+              value={wallColor}
+              onChange={(e) => setWallColor(e.target.value)}
+              style={{ width: 32, height: 28, border: 'none', background: 'none', cursor: 'pointer' }}
+            />
+          </Stack>
+
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              환경
+            </Typography>
+            <Select size="small" value={environment} onChange={(e) => setEnvironment(e.target.value as EnvironmentId)}>
+              {ENVIRONMENTS.map((env) => (
+                <MenuItem key={env.id} value={env.id}>
+                  {env.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </Stack>
+
+          <FormControlLabel
+            control={<Switch size="small" checked={transparentBg} onChange={(e) => setTransparentBg(e.target.checked)} />}
+            label={<Typography variant="caption">배경 투명(저장)</Typography>}
             sx={{ ml: 0 }}
           />
 

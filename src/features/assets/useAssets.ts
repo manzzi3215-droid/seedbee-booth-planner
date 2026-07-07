@@ -78,6 +78,15 @@ export function useAssets() {
     [assets, saveAsset],
   );
 
+  const togglePin = useCallback(
+    async (id: string) => {
+      const target = assets.find((a) => a.id === id);
+      if (!target) return;
+      await saveAsset({ ...target, pinned: !target.pinned, updatedAt: Date.now() });
+    },
+    [assets, saveAsset],
+  );
+
   const markRecent = useCallback((id: string) => {
     setRecentIds((prev) => {
       const next = [id, ...prev.filter((x) => x !== id)].slice(0, RECENT_MAX);
@@ -90,5 +99,5 @@ export function useAssets() {
     });
   }, []);
 
-  return { assets, loading, reload, saveAsset, deleteAsset, toggleFavorite, recentIds, markRecent };
+  return { assets, loading, reload, saveAsset, deleteAsset, toggleFavorite, togglePin, recentIds, markRecent };
 }

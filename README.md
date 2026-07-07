@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v0.9.7 - Professional Asset Library 2.0**
+> **v0.9.8 - Professional Styling & Decoration System**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,18 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**스타일 · 재질 시스템 (v0.9.8)**
+- **Quick Style 프리셋(원클릭 스타일링):** Modern · Minimal · Luxury · Natural · Beauty · Baby · Pharmacy · Pop-up —
+  바닥/벽 재질 + 3D 환경을 한 번에 변경. 좌측 **스타일** 탭에서 선택
+- **바닥 재질:** 콘크리트 · 우드 · 마블 · 스톤 · PVC · 카펫 · 화이트 · 블랙 · 체커 (2D 바닥 + 3D 바닥에 반영)
+- **벽 재질:** 페인트 · 우드 · 패브릭 · 커튼 · 스톤 · 콘크리트 · LED 월 · 아크릴 (3D 벽에 반영)
+- **3D 환경(Environment):** Studio White/Gray/Black · Mall · Exhibition Hall · Transparent (3D 미리보기 배경)
+- **Presentation Quality:** 3D 미리보기 배경 투명 PNG 저장(Transparent 환경 또는 "배경 투명" 토글) — 제안서 합성용
+- **Professional Render:** Soft/Contact 그림자 · 바닥 반사 · 스페큘러 하이라이트 · 재질(무광~아크릴)로 실사 느낌(실시간 성능 유지)
+- **Furniture/Decoration 에셋 확장:** Chair·Table·Sofa·Shelf·Plant·Lamp·Mirror·TV·Monitor·Laptop·Tablet·Vase·
+  Curtain·Frame·Sign·Poster Stand·Roll Banner 등 30여 종 기본 에셋 추가
+- **에셋 핀 고정(Pin):** 자주 쓰는 에셋을 목록 상단에 고정 (즐겨찾기·최근 사용과 함께)
 
 **에셋 라이브러리 2.0 (v0.9.7)**
 - **통합 에셋 라이브러리** — 자주 쓰는 가구·진열집기·제품·POP·포스터·배너·장식·식물·사람·
@@ -210,6 +222,23 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v0.9.8 — Professional Styling & Decoration System (제안서 수준 스타일링)**
+- **스타일 · 재질 시스템:** 좌측 **스타일** 탭 신설. **Quick Style 프리셋** 8종(Modern/Minimal/Luxury/Natural/Beauty/Baby/
+  Pharmacy/Pop-up)으로 바닥/벽 재질 + 3D 환경을 원클릭 변경.
+- **Floor Material(9종)·Wall Material(8종):** 스와치로 선택. 2D 바닥 + 3D 바닥/벽에 반영. `boothConfig.styling` 에 저장되어
+  Auto/Cloud Save · Undo/Redo · Share 자동 지원.
+- **Environment Style(6종):** Studio White/Gray/Black · Mall · Exhibition Hall · Transparent. 3D 미리보기 배경에 반영.
+- **Presentation Quality:** 3D PNG 저장 시 **배경 투명**(Transparent 환경 또는 "배경 투명" 토글) 지원 — 제안서 합성용.
+- **Professional Render:** 기존 렌더러의 Soft/Contact 그림자 · 바닥 반사 · 스페큘러 · 재질을 스타일링과 연동(실시간 성능 유지).
+- **Furniture/Decoration 에셋 확장:** Chair·Round Chair·Table·Round Table·Side Table·Sofa·Bench·Shelf·Rack·Plant·Tall Plant·
+  Lamp·Floor Lamp·Mirror·TV·Monitor·Laptop·Tablet·Leaflet·Vase·Trash Bin·Curtain·Frame·Sign·Poster Stand·Roll Banner·
+  Counter Decoration 등 30여 종 기본 에셋 추가(에셋 라이브러리 파이프라인 재사용 → 2D/3D 자동 반영).
+- **Asset Pin(핀 고정):** 즐겨찾기·최근 사용에 더해 핀 고정으로 목록 상단 고정.
+- **확장 구조(Future Ready):** 실제 3D Mesh(GLB) 없이 현재 Geometry Engine + 색/패턴/그라디언트로 가볍고 빠르게 구현.
+  전용 Decoration Layer(집기 Top Face 스냅/부착·자동 높이 추적), Smart Display 패턴(Row/Circle/Pyramid/Zigzag), 그룹핑,
+  에셋 Drag&Drop·일괄 교체·GLB 에셋은 확장 지점으로 설계(향후 버전).
+- **기존 기능 유지 · Console Error 0 · Build 성공.**
 
 **v0.9.7 — Professional Asset Library 2.0 (전문 에셋 라이브러리)**
 - **통합 에셋 라이브러리(에셋 탭):** 좌측 사이드바에 **에셋** 탭 추가. 가구·진열집기·제품·POP·포스터·배너·
