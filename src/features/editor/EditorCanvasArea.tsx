@@ -246,7 +246,14 @@ export default function EditorCanvasArea() {
       >
         <Tabs
           value={effectiveMode}
-          onChange={(_, v) => setViewMode(v as ViewMode)}
+          onChange={(_, v) => {
+            // 'vmd' 탭은 별도 2D VMD 워크스페이스로 이동(동일 프로젝트, 데이터 충돌 없음)
+            if (v === 'vmd') {
+              navigate(`/projects/${project.id}/vmd`);
+              return;
+            }
+            setViewMode(v as ViewMode);
+          }}
           variant="scrollable"
           scrollButtons="auto"
           sx={{ minHeight: 40, flex: 1 }}
@@ -263,6 +270,8 @@ export default function EditorCanvasArea() {
               sx={{ minHeight: 40, py: 0 }}
             />
           ))}
+          {/* VMD 시안 탭 (§2, v1.0.2) — 평면도·벽면과 같은 줄에 배치 */}
+          <Tab value="vmd" label="VMD 시안" sx={{ minHeight: 40, py: 0, fontWeight: 700 }} />
         </Tabs>
         <Tooltip title="사용할 벽면 설정">
           <IconButton size="small" onClick={(e) => setWallMenuAnchor(e.currentTarget)} sx={{ ml: 0.5 }}>

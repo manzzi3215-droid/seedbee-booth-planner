@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
+import InputAdornment from '@mui/material/InputAdornment';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
@@ -22,6 +23,9 @@ import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
+import StarBorderRoundedIcon from '@mui/icons-material/StarBorderRounded';
 import type { Product, ProductFacing, ProductMaterial, ProductBackgroundMode, ProductRenderMode } from '../../types';
 import { useEditor } from '../editor/EditorContext';
 import { uploadDesignAsset, isSupportedDesignFile } from '../../firebase/storage';
@@ -52,6 +56,8 @@ const emptyDraft = (): Product => ({
  */
 export default function ProductLibraryPanel() {
   const { products, addProduct, updateProduct, deleteProduct, placeProduct, gridArrangeProduct, canEdit } = useEditor();
+  const [query, setQuery] = useState('');
+  const [catFilter, setCatFilter] = useState<string>('all'); // 'all' | 'favorite' | <category>
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<Product>(emptyDraft());
   const [editing, setEditing] = useState(false);
@@ -128,6 +134,28 @@ export default function ProductLibraryPanel() {
     setArrangeAnchor(null);
   };
 
+  const toggleFavorite = (p: Product) => updateProduct(p.id, { favorite: !p.favorite });
+
+  // 카테고리 목록 (제품에서 자동 수집, §4)
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) if (p.category) set.add(p.category);
+    return [...set].sort();
+  }, [products]);
+
+  // 검색 + 카테고리/즐겨찾기 필터 (§5, 실시간)
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return products.filter((p) => {
+      if (catFilter === 'favorite' && !p.favorite) return false;
+      if (catFilter !== 'all' && catFilter !== 'favorite' && p.category !== catFilter) return false;
+      if (!q) return true;
+      return [p.name, p.brand, p.sku, p.category, p.displayGroup, ...(p.tags ?? [])]
+        .filter(Boolean)
+        .some((s) => s!.toLowerCase().includes(q));
+    });
+  }, [products, query, catFilter]);
+
   return (
     <Box sx={{ p: 1.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
@@ -141,8 +169,27 @@ export default function ProductLibraryPanel() {
         제품 추가
       </Button>
 
-      <Stack spacing={1} sx={{ overflowY: 'auto', pr: 0.5 }}>
-        {products.map((p) => (
+      {/* 검색 (§5) */}
+      <TextField
+        size="small"
+        placeholder="제품명·태그·SKU·카테고리"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        sx={{ mb: 1 }}
+        slotProps={{ input: { startAdornment: (<InputAdornment position="start"><SearchRoundedIcon sx={{ fontSize: 18 }} /></InputAdornment>) } }}
+      />
+
+      {/* 카테고리 필터 (§4) */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+        <Chip label="전체" size="small" color={catFilter === 'all' ? 'primary' : 'default'} variant={catFilter === 'all' ? 'filled' : 'outlined'} onClick={() => setCatFilter('all')} sx={{ height: 22, fontSize: 11 }} />
+        <Chip label="⭐ 즐겨찾기" size="small" color={catFilter === 'favorite' ? 'primary' : 'default'} variant={catFilter === 'favorite' ? 'filled' : 'outlined'} onClick={() => setCatFilter('favorite')} sx={{ height: 22, fontSize: 11 }} />
+        {categories.map((c) => (
+          <Chip key={c} label={c} size="small" color={catFilter === c ? 'primary' : 'default'} variant={catFilter === c ? 'filled' : 'outlined'} onClick={() => setCatFilter(c)} sx={{ height: 22, fontSize: 11 }} />
+        ))}
+      </Box>
+
+      <Stack spacing={1} sx={{ overflowY: 'auto', pr: 0.5, flex: 1, minHeight: 0 }}>
+        {filtered.map((p) => (
           <Paper key={p.id} elevation={0} onMouseEnter={(e) => void handleHoverEnter(e, p)} onMouseLeave={handleHoverLeave} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Box sx={{ width: 40, height: 40, flexShrink: 0, borderRadius: 0.75, overflow: 'hidden', bgcolor: p.displayColor || DEFAULT_PRODUCT_COLOR, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -156,6 +203,7 @@ export default function ProductLibraryPanel() {
                   {[p.brand, p.category].filter(Boolean).join(' · ') || '—'} · {p.widthMm}×{p.depthMm}mm
                 </Typography>
               </Box>
+              <Tooltip title={p.favorite ? '즐겨찾기 해제' : '즐겨찾기'}><IconButton size="small" onClick={() => toggleFavorite(p)}>{p.favorite ? <StarRoundedIcon sx={{ fontSize: 17, color: '#f5b400' }} /> : <StarBorderRoundedIcon sx={{ fontSize: 17 }} />}</IconButton></Tooltip>
               <Tooltip title="수정"><IconButton size="small" onClick={() => openEdit(p)}><EditRoundedIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
               <Tooltip title="삭제"><IconButton size="small" color="error" onClick={() => handleDelete(p)}><DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
             </Stack>
@@ -233,6 +281,7 @@ export default function ProductLibraryPanel() {
               <TextField size="small" label="SKU" value={draft.sku ?? ''} onChange={(e) => patch({ sku: e.target.value })} fullWidth />
               <TextField size="small" label="진열그룹" value={draft.displayGroup ?? ''} onChange={(e) => patch({ displayGroup: e.target.value })} fullWidth />
             </Stack>
+            <TextField size="small" label="태그 (쉼표 구분)" value={(draft.tags ?? []).join(', ')} onChange={(e) => patch({ tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })} fullWidth />
             <Stack direction="row" spacing={1}>
               <TextField size="small" type="number" label="가로(mm)" value={draft.widthMm} onChange={(e) => patch({ widthMm: Math.max(1, Number(e.target.value) || 0) })} />
               <TextField size="small" type="number" label="세로(mm)" value={draft.depthMm} onChange={(e) => patch({ depthMm: Math.max(1, Number(e.target.value) || 0) })} />

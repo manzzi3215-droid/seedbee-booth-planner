@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import AppHeader from './AppHeader';
 
@@ -13,16 +13,125 @@ interface AppLayoutProps {
   padded?: boolean;
 }
 
-const LEFT_WIDTH = 240;
-const RIGHT_WIDTH = 300;
+const LEFT_WIDTH = 260;
+const RIGHT_WIDTH = 320;
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 560;
+
+function clampW(w: number) {
+  return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, w));
+}
+function readW(key: string, fallback: number): number {
+  try {
+    const v = Number(localStorage.getItem(key));
+    return v ? clampW(v) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * 크기 조절 가능한 사이드 패널 (v1.0.2 §6).
+ * 드래그 핸들로 너비 조절 · localStorage 에 마지막 크기 저장 · 더블클릭 시 기본폭 복원.
+ */
+function ResizableAside({
+  side,
+  storageKey,
+  defaultWidth,
+  children,
+}: {
+  side: 'left' | 'right';
+  storageKey: string;
+  defaultWidth: number;
+  children: ReactNode;
+}) {
+  const [width, setWidth] = useState(() => readW(storageKey, defaultWidth));
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, String(width));
+    } catch {
+      /* 무시 */
+    }
+  }, [storageKey, width]);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = true;
+      const startX = e.clientX;
+      const startW = width;
+      const onMove = (ev: MouseEvent) => {
+        if (!dragging.current) return;
+        const delta = side === 'left' ? ev.clientX - startX : startX - ev.clientX;
+        setWidth(clampW(startW + delta));
+      };
+      const onUp = () => {
+        dragging.current = false;
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    },
+    [side, width],
+  );
+
+  const handle = (
+    <Box
+      onMouseDown={onMouseDown}
+      onDoubleClick={() => setWidth(defaultWidth)}
+      title="드래그로 너비 조절 · 더블클릭 시 기본폭"
+      sx={{
+        width: 6,
+        flexShrink: 0,
+        cursor: 'col-resize',
+        bgcolor: 'transparent',
+        transition: 'background-color 0.15s',
+        '&:hover': { bgcolor: 'primary.main', opacity: 0.4 },
+      }}
+    />
+  );
+
+  const panel = (
+    <Box
+      component="aside"
+      sx={{
+        width,
+        flexShrink: 0,
+        [side === 'left' ? 'borderRight' : 'borderLeft']: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+        overflowY: 'auto',
+      }}
+    >
+      {children}
+    </Box>
+  );
+
+  return side === 'left' ? (
+    <>
+      {panel}
+      {handle}
+    </>
+  ) : (
+    <>
+      {handle}
+      {panel}
+    </>
+  );
+}
 
 /**
  * 앱 전체 레이아웃 셸.
  *
  * 구조: [상단 헤더] + [왼쪽 사이드바 | 메인 | 오른쪽 정보 패널]
- * 각 사이드/패널 영역은 슬롯(prop)으로 주입하므로 페이지마다 다르게 재사용됩니다.
- *   - 일반 페이지: leftSidebar = 네비게이션
- *   - 편집기: leftSidebar = 집기 라이브러리, rightPanel = 선택 정보
+ * 사이드 패널은 크기 조절 가능(v1.0.2). 페이지마다 슬롯(prop)으로 주입해 재사용합니다.
  */
 export default function AppLayout({
   leftSidebar,
@@ -36,19 +145,9 @@ export default function AppLayout({
 
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {leftSidebar && (
-          <Box
-            component="aside"
-            sx={{
-              width: LEFT_WIDTH,
-              flexShrink: 0,
-              borderRight: '1px solid',
-              borderColor: 'divider',
-              bgcolor: 'background.paper',
-              overflowY: 'auto',
-            }}
-          >
+          <ResizableAside side="left" storageKey="blp:leftPanelWidth" defaultWidth={LEFT_WIDTH}>
             {leftSidebar}
-          </Box>
+          </ResizableAside>
         )}
 
         <Box
@@ -64,19 +163,9 @@ export default function AppLayout({
         </Box>
 
         {rightPanel && (
-          <Box
-            component="aside"
-            sx={{
-              width: RIGHT_WIDTH,
-              flexShrink: 0,
-              borderLeft: '1px solid',
-              borderColor: 'divider',
-              bgcolor: 'background.paper',
-              overflowY: 'auto',
-            }}
-          >
+          <ResizableAside side="right" storageKey="blp:rightPanelWidth" defaultWidth={RIGHT_WIDTH}>
             {rightPanel}
-          </Box>
+          </ResizableAside>
         )}
       </Box>
     </Box>

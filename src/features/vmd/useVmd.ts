@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Product, Project, VmdBoard, VmdElement, VmdPreset } from '../../types';
+import type { Product, Project, VmdBoard, VmdElement, VmdPreset, VmdTemplate } from '../../types';
 import { storage } from '../../storage';
 import { generateId } from '../../utils/id';
 import { createBoard } from './vmdModel';
@@ -14,6 +14,7 @@ export function useVmd(projectId: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [boards, setBoards] = useState<VmdBoard[]>([]);
   const [presets, setPresets] = useState<VmdPreset[]>([]);
+  const [templates, setTemplates] = useState<VmdTemplate[]>([]);
   const [currentBoardId, setCurrentBoardId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -36,6 +37,7 @@ export function useVmd(projectId: string | undefined) {
       const bs = p?.vmdBoards ?? [];
       setBoards(bs);
       setPresets(p?.vmdPresets ?? []);
+      setTemplates(p?.vmdTemplates ?? []);
       setCurrentBoardId(bs[0]?.id ?? null);
       setLoading(false);
     })();
@@ -47,15 +49,21 @@ export function useVmd(projectId: string | undefined) {
   const products: Product[] = project?.products ?? [];
   const currentBoard = useMemo(() => boards.find((b) => b.id === currentBoardId) ?? null, [boards, currentBoardId]);
 
-  // 저장 (디바운스 2초)
+  // 저장 (디바운스 2초). 미지정 인자는 현재 상태를 사용.
   const scheduleSave = useCallback(
-    (nextBoards: VmdBoard[], nextPresets: VmdPreset[]) => {
+    (nextBoards?: VmdBoard[], nextPresets?: VmdPreset[], nextTemplates?: VmdTemplate[]) => {
       if (!project) return;
       dirty.current = true;
       setSaveState('saving');
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
-        const updated: Project = { ...project, vmdBoards: nextBoards, vmdPresets: nextPresets, updatedAt: Date.now() };
+        const updated: Project = {
+          ...project,
+          vmdBoards: nextBoards ?? boards,
+          vmdPresets: nextPresets ?? presets,
+          vmdTemplates: nextTemplates ?? templates,
+          updatedAt: Date.now(),
+        };
         try {
           await storage.saveProject(updated);
           setProject(updated);
@@ -66,7 +74,7 @@ export function useVmd(projectId: string | undefined) {
         }
       }, 2000);
     },
-    [project],
+    [project, boards, presets, templates],
   );
 
   // 히스토리 커밋 후 boards 반영 + 저장
@@ -227,6 +235,54 @@ export function useVmd(projectId: string | undefined) {
     },
     [presets, boards, scheduleSave],
   );
+  const togglePresetFavorite = useCallback(
+    (presetId: string) => {
+      const next = presets.map((x) => (x.id === presetId ? { ...x, favorite: !x.favorite } : x));
+      setPresets(next);
+      scheduleSave(boards, next);
+    },
+    [presets, boards, scheduleSave],
+  );
+
+  // ----- Template (사용자 보드 템플릿, §1) -----
+  const persistTemplates = useCallback(
+    (next: VmdTemplate[]) => { setTemplates(next); scheduleSave(undefined, undefined, next); },
+    [scheduleSave],
+  );
+  const saveTemplate = useCallback(
+    (name: string) => {
+      if (!currentBoard) return;
+      const t: VmdTemplate = { id: generateId(), name, widthMm: currentBoard.widthMm, heightMm: currentBoard.heightMm, background: structuredClone(currentBoard.background), createdAt: Date.now() };
+      persistTemplates([...templates, t]);
+    },
+    [currentBoard, templates, persistTemplates],
+  );
+  const renameTemplate = useCallback(
+    (id: string, name: string) => persistTemplates(templates.map((t) => (t.id === id ? { ...t, name } : t))),
+    [templates, persistTemplates],
+  );
+  const deleteTemplate = useCallback(
+    (id: string) => persistTemplates(templates.filter((t) => t.id !== id)),
+    [templates, persistTemplates],
+  );
+  const duplicateTemplate = useCallback(
+    (id: string) => {
+      const t = templates.find((x) => x.id === id);
+      if (t) persistTemplates([...templates, { ...structuredClone(t), id: generateId(), name: `${t.name} 복사`, createdAt: Date.now() }]);
+    },
+    [templates, persistTemplates],
+  );
+  const toggleTemplateFavorite = useCallback(
+    (id: string) => persistTemplates(templates.map((t) => (t.id === id ? { ...t, favorite: !t.favorite } : t))),
+    [templates, persistTemplates],
+  );
+  const applyTemplate = useCallback(
+    (id: string) => {
+      const t = templates.find((x) => x.id === id);
+      if (t) addBoard(createBoard({ name: t.name, widthMm: t.widthMm, heightMm: t.heightMm, background: structuredClone(t.background) }));
+    },
+    [templates, addBoard],
+  );
 
   return {
     loading,
@@ -262,5 +318,14 @@ export function useVmd(projectId: string | undefined) {
     savePreset,
     loadPreset,
     deletePreset,
+    togglePresetFavorite,
+    // template (§1)
+    templates,
+    saveTemplate,
+    renameTemplate,
+    deleteTemplate,
+    duplicateTemplate,
+    toggleTemplateFavorite,
+    applyTemplate,
   };
 }

@@ -491,6 +491,10 @@ export interface Product {
   recommendedSpacingMm?: number;
   /** 진열 그룹(브랜드/시리즈) */
   displayGroup?: string;
+  /** 검색용 태그 (v1.0.2) */
+  tags?: string[];
+  /** 즐겨찾기 (v1.0.2) */
+  favorite?: boolean;
   memo?: string;
   createdAt: number;
   /** 확장 지점 — ERP/재고/판매/AI 연동용(가격, 재고, 판매순위 등) */
@@ -636,6 +640,21 @@ export interface VmdPreset {
   id: string;
   name: string;
   board: Omit<VmdBoard, 'id' | 'createdAt' | 'updatedAt'>;
+  /** 즐겨찾기 (v1.0.2) */
+  favorite?: boolean;
+  /** 태그 (v1.0.2) */
+  tags?: string[];
+  createdAt: number;
+}
+
+/** VMD 사용자 보드 템플릿 (사이즈·배경만, v1.0.2) */
+export interface VmdTemplate {
+  id: string;
+  name: string;
+  widthMm: number;
+  heightMm: number;
+  background: VmdBackground;
+  favorite?: boolean;
   createdAt: number;
 }
 
@@ -713,6 +732,8 @@ export interface Project extends BaseEntity {
   vmdBoards?: VmdBoard[];
   /** VMD 프리셋(다음 행사 재사용) */
   vmdPresets?: VmdPreset[];
+  /** VMD 사용자 보드 템플릿 (v1.0.2) */
+  vmdTemplates?: VmdTemplate[];
 
   // --- 공유 (v0.8.2). 누락 시 owner 전용/비공개로 취급(하위 호환) ---
   /** Firestore 소유자 uid (읽을 때 채워짐) */

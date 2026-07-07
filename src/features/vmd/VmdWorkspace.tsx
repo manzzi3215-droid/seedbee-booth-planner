@@ -26,6 +26,10 @@ import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ArrowUpwardRoundedIcon from '@mui/icons-material/ArrowUpwardRounded';
 import ArrowDownwardRoundedIcon from '@mui/icons-material/ArrowDownwardRounded';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
+import StarBorderRoundedIcon from '@mui/icons-material/StarBorderRounded';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import type { VmdElement } from '../../types';
 import { useVmd } from './useVmd';
 import VmdCanvas from './VmdCanvas';
@@ -45,7 +49,8 @@ export default function VmdWorkspace() {
     loading, project, products, boards, presets, currentBoard, currentBoardId, setCurrentBoardId,
     selectedIds, setSelectedIds, saveState, addBoard, deleteBoard, patchCurrentBoard,
     addElement, updateElement, removeElements, duplicateElements, reorderElement, setElements,
-    undo, redo, canUndo, canRedo, savePreset, loadPreset, deletePreset,
+    undo, redo, canUndo, canRedo, savePreset, loadPreset, deletePreset, togglePresetFavorite,
+    templates, saveTemplate, renameTemplate, deleteTemplate, duplicateTemplate, toggleTemplateFavorite, applyTemplate,
   } = vmd;
 
   const exportRef = useRef<((opts: { transparent: boolean; pixelRatio?: number }) => string | null) | null>(null);
@@ -54,6 +59,7 @@ export default function VmdWorkspace() {
   const uploadKind = useRef<'image' | 'qr' | 'pop' | 'logo'>('image');
   const [customW, setCustomW] = useState('900');
   const [customH, setCustomH] = useState('450');
+  const [presetQuery, setPresetQuery] = useState('');
 
   // §12: Booth 집기에서 넘어온 경우(?w&h&name) 자동으로 보드 생성 (1회)
   const consumedQuery = useRef(false);
@@ -231,12 +237,30 @@ export default function VmdWorkspace() {
             <TextField size="small" type="number" label="H" value={board?.heightMm ?? customH} onChange={(e) => { const v = Math.max(50, Number(e.target.value) || 0); setCustomH(String(v)); board && patchCurrentBoard({ heightMm: v }); }} sx={{ width: 90 }} />
           </Stack>
 
-          <Typography variant="caption" sx={{ fontWeight: 800 }}>템플릿</Typography>
+          <Typography variant="caption" sx={{ fontWeight: 800 }}>기본 템플릿</Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 0.5, my: 0.5, mb: 1 }}>
             {BOARD_TEMPLATES.map((t) => (
               <Button key={t.key} size="small" variant="outlined" onClick={() => addBoard(boardFromTemplate(t))} sx={{ py: 0.25, fontSize: 11 }}>{t.label}</Button>
             ))}
           </Box>
+
+          {/* 사용자 템플릿 (§1) */}
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="caption" sx={{ fontWeight: 800 }}>내 템플릿</Typography>
+            <Button size="small" disabled={!board} onClick={() => { const n = window.prompt('템플릿 이름', board ? `${board.widthMm}×${board.heightMm}` : ''); if (n) saveTemplate(n); }} sx={{ fontSize: 10, minWidth: 0, py: 0 }}>+ 저장</Button>
+          </Stack>
+          <Stack spacing={0.25} sx={{ my: 0.5, mb: 1 }}>
+            {templates.length === 0 && <Typography variant="caption" color="text.secondary">현재 보드를 템플릿으로 저장하세요.</Typography>}
+            {[...templates].sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite)).map((t) => (
+              <Paper key={t.id} variant="outlined" sx={{ px: 0.5, py: 0.25, display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                <IconButton size="small" onClick={() => toggleTemplateFavorite(t.id)}>{t.favorite ? <StarRoundedIcon sx={{ fontSize: 15, color: '#f5b400' }} /> : <StarBorderRoundedIcon sx={{ fontSize: 15 }} />}</IconButton>
+                <Typography variant="caption" noWrap sx={{ flex: 1, cursor: 'pointer' }} onClick={() => applyTemplate(t.id)} title={`${t.widthMm}×${t.heightMm}`}>{t.name}</Typography>
+                <IconButton size="small" onClick={() => { const n = window.prompt('이름 변경', t.name); if (n) renameTemplate(t.id, n); }}><EditRoundedIcon sx={{ fontSize: 14 }} /></IconButton>
+                <IconButton size="small" onClick={() => duplicateTemplate(t.id)}><ContentCopyRoundedIcon sx={{ fontSize: 14 }} /></IconButton>
+                <IconButton size="small" color="error" onClick={() => deleteTemplate(t.id)}><DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} /></IconButton>
+              </Paper>
+            ))}
+          </Stack>
 
           {board && (
             <>
@@ -384,9 +408,16 @@ export default function VmdWorkspace() {
             onClick={() => { const n = window.prompt('프리셋 이름', board?.name ?? 'VMD 프리셋'); if (n) savePreset(n); }}>
             현재 보드 프리셋 저장
           </Button>
+          {presets.length > 3 && (
+            <TextField size="small" fullWidth placeholder="프리셋 검색" value={presetQuery} onChange={(e) => setPresetQuery(e.target.value)} sx={{ mb: 0.5 }} />
+          )}
           <Stack spacing={0.25}>
-            {presets.map((p) => (
-              <Paper key={p.id} variant="outlined" sx={{ px: 0.5, py: 0.25, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            {[...presets]
+              .filter((p) => !presetQuery.trim() || p.name.toLowerCase().includes(presetQuery.trim().toLowerCase()))
+              .sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite))
+              .map((p) => (
+              <Paper key={p.id} variant="outlined" sx={{ px: 0.5, py: 0.25, display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                <IconButton size="small" onClick={() => togglePresetFavorite(p.id)}>{p.favorite ? <StarRoundedIcon sx={{ fontSize: 15, color: '#f5b400' }} /> : <StarBorderRoundedIcon sx={{ fontSize: 15 }} />}</IconButton>
                 <Typography variant="caption" noWrap sx={{ flex: 1 }}>{p.name}</Typography>
                 <Button size="small" onClick={() => loadPreset(p.id)}>불러오기</Button>
                 <IconButton size="small" color="error" onClick={() => deletePreset(p.id)}><DeleteOutlineRoundedIcon sx={{ fontSize: 15 }} /></IconButton>
