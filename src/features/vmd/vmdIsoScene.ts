@@ -34,10 +34,16 @@ export function collectVmdImageSrcs(board: VmdBoard, products: Product[]): strin
   return out;
 }
 
+/**
+ * 면 텍스처 구성. front 면은 좌우 반전(flipH)해 3D 정면에서 라벨이 뒤집히지 않게 함(§5, v1.0.4).
+ * (footprint 감김 방향상 front 면은 우→좌로 그려져 이미지가 반전되므로 보정)
+ */
 function facesFromImage(imageFaces: string, url: string): IsoBox['faces'] {
+  const front = { url, opacity: 1, flipH: true };
+  const back = { url, opacity: 1 };
   if (imageFaces === 'top') return { top: { url, opacity: 1 } };
-  if (imageFaces === 'frontBack') return { front: { url, opacity: 1 }, back: { url, opacity: 1 } };
-  return { top: { url, opacity: 1 }, front: { url, opacity: 1 }, back: { url, opacity: 1 }, left: { url, opacity: 1 }, right: { url, opacity: 1 } };
+  if (imageFaces === 'frontBack') return { front, back };
+  return { top: { url, opacity: 1 }, front, back, left: { url, opacity: 1, flipH: true }, right: { url, opacity: 1 } };
 }
 
 export function vmdBoardToIsoScene(board: VmdBoard, products: Product[]): IsoScene {
@@ -59,18 +65,18 @@ export function vmdBoardToIsoScene(board: VmdBoard, products: Product[]): IsoSce
       const nominalDepth = Math.max(20, el.widthMm * 0.4);
       const geo = productRenderGeo(prod, el.widthMm, nominalDepth, el.heightMm);
       const img = productImageUrl(prod, prod.displayDirection ?? 'front');
-      const transparent = prod.backgroundMode === 'transparent';
       let faces: IsoBox['faces'];
       let wrapTexture: IsoFaceTexture | undefined;
       if (img) {
-        if (geo.imageFaces === 'wrap') { wrapTexture = { url: img, opacity: 1 }; faces = { top: { url: img, opacity: 1 } }; }
+        if (geo.imageFaces === 'wrap') { wrapTexture = { url: img, opacity: 1, flipH: true }; faces = { top: { url: img, opacity: 1 } }; }
         else faces = facesFromImage(geo.imageFaces, img);
       }
+      // §6: 항상 solid 카드(두께/측면 색/접지 그림자) — 정면 이미지 + 측면 대표색
       boxes.push({
         footprint: place(geo.polygon),
         heightMm: geo.heightMm,
-        color: prod.displayColor ?? '#f59e0b',
-        opacity: transparent && img ? 0 : 1,
+        color: prod.displayColor ?? '#eef1f5',
+        opacity: 1,
         name: '',
         faces,
         curved: geo.curved,
@@ -88,10 +94,10 @@ export function vmdBoardToIsoScene(board: VmdBoard, products: Product[]): IsoSce
       boxes.push({
         footprint: place(poly),
         heightMm: Math.max(20, el.heightMm),
-        color: '#f8fafc',
-        opacity: 0,
+        color: '#ffffff',
+        opacity: 1,
         name: '',
-        faces: { front: { url: el.src, opacity: 1 }, back: { url: el.src, opacity: 1 } },
+        faces: { front: { url: el.src, opacity: 1, flipH: true }, back: { url: el.src, opacity: 1 } },
         material: 'matte',
       });
     } else if (el.type === 'shape' || el.type === 'text') {

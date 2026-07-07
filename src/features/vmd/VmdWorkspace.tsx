@@ -9,6 +9,7 @@ import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
+import Menu from '@mui/material/Menu';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Chip from '@mui/material/Chip';
@@ -35,7 +36,7 @@ import type { VmdElement } from '../../types';
 import { useVmd } from './useVmd';
 import VmdCanvas from './VmdCanvas';
 import VmdPreviewDialog from './VmdPreviewDialog';
-import { BOARD_SIZE_PRESETS, BOARD_TEMPLATES, boardFromTemplate, countProducts, createBoard, makeElement } from './vmdModel';
+import { countProducts, createBoard, makeElement } from './vmdModel';
 import { uploadDesignAsset, isSupportedDesignFile } from '../../firebase/storage';
 import { productImageUrl } from '../products/productModel';
 import { downloadDataURL } from '../export/download';
@@ -63,6 +64,7 @@ export default function VmdWorkspace() {
   const [customH, setCustomH] = useState('450');
   const [presetQuery, setPresetQuery] = useState('');
   const [preview3dOpen, setPreview3dOpen] = useState(false);
+  const [elMenuAnchor, setElMenuAnchor] = useState<null | HTMLElement>(null);
 
   // §12: Booth 집기에서 넘어온 경우(?w&h&name) 자동으로 보드 생성 (1회)
   const consumedQuery = useRef(false);
@@ -85,6 +87,38 @@ export default function VmdWorkspace() {
     setSelectedIds((prev) => (additive ? (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]) : [id]));
   }, [setSelectedIds]);
   const onCommit = useCallback(() => { /* drag/transform 은 이미 commit 됨 */ }, []);
+
+  // ---- 키보드 단축키 (Booth 편집기 수준, §7/§10) — 모든 훅은 early return 이전에 호출 ----
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (!currentBoard) return;
+      const meta = e.ctrlKey || e.metaKey;
+      const ids = new Set(selectedIds);
+      if (meta && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+      if (meta && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); return; }
+      if (meta && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); if (selectedIds.length) duplicateElements(selectedIds); return; }
+      if (meta && e.key === ']') { e.preventDefault(); selectedIds.forEach((id) => reorderElement(id, e.shiftKey ? 'top' : 'up')); return; }
+      if (meta && e.key === '[') { e.preventDefault(); selectedIds.forEach((id) => reorderElement(id, e.shiftKey ? 'bottom' : 'down')); return; }
+      if (meta) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') { if (selectedIds.length) { e.preventDefault(); removeElements(selectedIds); } return; }
+      if (e.key === 'r' || e.key === 'R') { if (selectedIds.length) { e.preventDefault(); setElements((els) => els.map((el) => (ids.has(el.id) && !el.locked ? { ...el, rotationDeg: (el.rotationDeg + 90) % 360 } : el))); } return; }
+      if (e.key === 'Escape') { setSelectedIds([]); return; }
+      if (!selectedIds.length) return;
+      const step = e.shiftKey ? 500 : 100;
+      let dx = 0, dy = 0;
+      if (e.key === 'ArrowLeft') dx = -step;
+      else if (e.key === 'ArrowRight') dx = step;
+      else if (e.key === 'ArrowUp') dy = -step;
+      else if (e.key === 'ArrowDown') dy = step;
+      else return;
+      e.preventDefault();
+      setElements((els) => els.map((el) => (ids.has(el.id) && !el.locked ? { ...el, xMm: el.xMm + dx, yMm: el.yMm + dy } : el)));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedIds, currentBoard, setElements, removeElements, duplicateElements, reorderElement, undo, redo, setSelectedIds]);
 
   if (loading) {
     return <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>;
@@ -162,6 +196,23 @@ export default function VmdWorkspace() {
     setElements((els) => els.map((e) => (posMap.has(e.id) ? { ...e, [axis === 'h' ? 'xMm' : 'yMm']: Math.round(posMap.get(e.id)!) } : e)));
   };
 
+  // ---- 선택 요소 일괄 조작 (§14) ----
+  const centerOnBoard = () => {
+    if (!board || selectedIds.length === 0) return;
+    const ids = new Set(selectedIds);
+    setElements((els) => els.map((e) => (ids.has(e.id) ? { ...e, xMm: Math.round(board.widthMm / 2 - e.widthMm / 2), yMm: Math.round(board.heightMm / 2 - e.heightMm / 2) } : e)));
+  };
+  const fitToBoard = () => {
+    if (!board || selectedIds.length !== 1) return;
+    const el = board.elements.find((e) => e.id === selectedIds[0]);
+    if (!el) return;
+    const m = Math.min(board.widthMm, board.heightMm) * 0.06;
+    const scale = Math.min((board.widthMm - m * 2) / el.widthMm, (board.heightMm - m * 2) / el.heightMm);
+    const w = Math.round(el.widthMm * scale);
+    const h = Math.round(el.heightMm * scale);
+    updateElement(el.id, { widthMm: w, heightMm: h, xMm: Math.round(board.widthMm / 2 - w / 2), yMm: Math.round(board.heightMm / 2 - h / 2) });
+  };
+
   // ---- Export ----
   const baseName = `${project.name}_${board?.name ?? 'VMD'}`.replace(/[\\/:*?"<>|]/g, '_');
   const exportPng = (transparent: boolean) => {
@@ -218,6 +269,25 @@ export default function VmdWorkspace() {
 
       <VmdPreviewDialog open={preview3dOpen} board={board} products={products} onClose={() => setPreview3dOpen(false)} />
 
+      {/* 요소 추가 메뉴 (§4) */}
+      <Menu anchorEl={elMenuAnchor} open={!!elMenuAnchor} onClose={() => setElMenuAnchor(null)}>
+        {[
+          { label: '텍스트', fn: addText },
+          { label: '가격표', fn: addPrice },
+          { label: '설명 카드', fn: addCard },
+          { label: 'POP 이미지', fn: () => onPickFile('pop') },
+          { label: 'QR 이미지', fn: () => onPickFile('qr') },
+          { label: '로고', fn: () => onPickFile('logo') },
+          { label: '이미지', fn: () => onPickFile('image') },
+          { label: '사각형', fn: () => addShape('rect') },
+          { label: '원형', fn: () => addShape('circle') },
+          { label: '라인', fn: () => addLine(false) },
+          { label: '화살표', fn: () => addLine(true) },
+        ].map((it) => (
+          <MenuItem key={it.label} onClick={() => { it.fn(); setElMenuAnchor(null); }}>{it.label}</MenuItem>
+        ))}
+      </Menu>
+
       <Box sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
         {/* 좌측: 보드/요소/제품 */}
         <Box sx={{ width: 260, flexShrink: 0, borderRight: '1px solid', borderColor: 'divider', overflowY: 'auto', p: 1.5 }}>
@@ -231,24 +301,12 @@ export default function VmdWorkspace() {
             {board && <Button size="small" color="error" onClick={() => deleteBoard(board.id)}>삭제</Button>}
           </Stack>
 
-          <Typography variant="caption" sx={{ fontWeight: 800 }}>사이즈 (mm)</Typography>
-          <Stack direction="row" spacing={0.5} sx={{ my: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
-            {BOARD_SIZE_PRESETS.map((s) => (
-              <Chip key={s.label} label={s.label} size="small" variant="outlined" onClick={() => board && patchCurrentBoard({ widthMm: s.widthMm, heightMm: s.heightMm })} />
-            ))}
-          </Stack>
-          <Stack direction="row" spacing={0.5} sx={{ mb: 1, alignItems: 'center' }}>
+          <Typography variant="caption" sx={{ fontWeight: 800 }}>사이즈 (mm, 자유 입력)</Typography>
+          <Stack direction="row" spacing={0.5} sx={{ mb: 1, mt: 0.5, alignItems: 'center' }}>
             <TextField size="small" type="number" label="W" value={board?.widthMm ?? customW} onChange={(e) => { const v = Math.max(50, Number(e.target.value) || 0); setCustomW(String(v)); board && patchCurrentBoard({ widthMm: v }); }} sx={{ width: 90 }} />
             <Typography variant="caption">×</Typography>
             <TextField size="small" type="number" label="H" value={board?.heightMm ?? customH} onChange={(e) => { const v = Math.max(50, Number(e.target.value) || 0); setCustomH(String(v)); board && patchCurrentBoard({ heightMm: v }); }} sx={{ width: 90 }} />
           </Stack>
-
-          <Typography variant="caption" sx={{ fontWeight: 800 }}>기본 템플릿</Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 0.5, my: 0.5, mb: 1 }}>
-            {BOARD_TEMPLATES.map((t) => (
-              <Button key={t.key} size="small" variant="outlined" onClick={() => addBoard(boardFromTemplate(t))} sx={{ py: 0.25, fontSize: 11 }}>{t.label}</Button>
-            ))}
-          </Box>
 
           {/* 사용자 템플릿 (§1) */}
           <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
@@ -290,20 +348,8 @@ export default function VmdWorkspace() {
               </Stack>
 
               <Divider sx={{ my: 1 }} />
-              <Typography variant="caption" sx={{ fontWeight: 800 }}>요소 추가</Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 0.5, my: 0.5, mb: 1 }}>
-                <Button size="small" variant="outlined" onClick={addText} sx={{ fontSize: 11 }}>텍스트</Button>
-                <Button size="small" variant="outlined" onClick={addPrice} sx={{ fontSize: 11 }}>가격표</Button>
-                <Button size="small" variant="outlined" onClick={addCard} sx={{ fontSize: 11 }}>설명카드</Button>
-                <Button size="small" variant="outlined" onClick={() => onPickFile('pop')} sx={{ fontSize: 11 }}>POP</Button>
-                <Button size="small" variant="outlined" onClick={() => onPickFile('qr')} sx={{ fontSize: 11 }}>QR</Button>
-                <Button size="small" variant="outlined" onClick={() => onPickFile('logo')} sx={{ fontSize: 11 }}>로고</Button>
-                <Button size="small" variant="outlined" onClick={() => onPickFile('image')} sx={{ fontSize: 11 }}>이미지</Button>
-                <Button size="small" variant="outlined" onClick={() => addShape('rect')} sx={{ fontSize: 11 }}>사각</Button>
-                <Button size="small" variant="outlined" onClick={() => addShape('circle')} sx={{ fontSize: 11 }}>원형</Button>
-                <Button size="small" variant="outlined" onClick={() => addLine(false)} sx={{ fontSize: 11 }}>라인</Button>
-                <Button size="small" variant="outlined" onClick={() => addLine(true)} sx={{ fontSize: 11 }}>화살표</Button>
-              </Box>
+              {/* 요소 추가는 필요할 때만 (+ 버튼 메뉴, §4/§13) */}
+              <Button size="small" variant="outlined" fullWidth startIcon={<AddRoundedIcon />} onClick={(e) => setElMenuAnchor(e.currentTarget)} sx={{ mb: 1 }}>+ 요소 추가</Button>
 
               <Divider sx={{ my: 1 }} />
               <Typography variant="caption" sx={{ fontWeight: 800 }}>제품 (클릭해 배치)</Typography>
@@ -337,11 +383,14 @@ export default function VmdWorkspace() {
                 <Divider orientation="vertical" flexItem />
                 <Button size="small" onClick={() => distribute('h')} disabled={selectedIds.length < 3}>가로 균등</Button>
                 <Button size="small" onClick={() => distribute('v')} disabled={selectedIds.length < 3}>세로 균등</Button>
+                <Divider orientation="vertical" flexItem />
+                <Button size="small" onClick={centerOnBoard} disabled={selectedIds.length === 0}>보드 중앙</Button>
+                <Button size="small" onClick={fitToBoard} disabled={selectedIds.length !== 1}>보드 맞춤</Button>
                 <Box sx={{ flex: 1 }} />
                 {selectedIds.length > 0 && (
                   <>
-                    <Button size="small" onClick={() => duplicateElements(selectedIds)}>복제</Button>
-                    <Button size="small" color="error" onClick={() => removeElements(selectedIds)}>삭제</Button>
+                    <Button size="small" onClick={() => duplicateElements(selectedIds)}>복제 (Ctrl+D)</Button>
+                    <Button size="small" color="error" onClick={() => removeElements(selectedIds)}>삭제 (Del)</Button>
                   </>
                 )}
               </Stack>

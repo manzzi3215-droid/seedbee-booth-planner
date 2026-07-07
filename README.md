@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.0.3 - Professional VMD 3D Mockup System**
+> **v1.0.4 - VMD Workflow Simplification & 3D Product Fix**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,13 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**VMD 워크플로우 단순화 & 3D 제품 수정 (v1.0.4)**
+- **VMD 3D 제품 이미지 반전 수정:** 2D 방향과 3D 방향 일치(정면 라벨이 뒤집히지 않음), PNG alpha 유지
+- **VMD 3D 제품 입체감:** 상판 위 solid 카드(정면 이미지 + 측면 대표색 + 접지 그림자)로 두께 있는 진열 표현
+- **VMD UX 단순화:** 기본 템플릿 UI 제거, 사이즈 자유 입력, "요소 추가"는 항상 보이는 패널 대신 **+ 요소 추가 메뉴**로 호출
+- **Booth 수준 편집 단축키:** Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 100mm/Shift 500mm 이동 · Ctrl+Z/Y Undo/Redo · Ctrl+]/[ Z-order
+- **정렬 추가:** 보드 중앙 정렬 · 보드 맞춤(Fit)
 
 **VMD 3D Mockup (v1.0.3)**
 - **VMD 3D 미리보기:** 2D VMD 보드를 실무 DP 시안 3D Mockup으로 렌더(기존 Booth 3D 렌더러 재사용).
@@ -270,6 +277,18 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.0.4 — VMD Workflow Simplification & 3D Product Fix (VMD 워크플로우 단순화)**
+- **§5 3D 제품 이미지 반전 수정:** 렌더러에 면별 `flipH`(좌우 반전) 추가 — VMD 3D 정면 카드의 라벨/로고가 뒤집히지 않게 보정.
+  2D 방향과 3D 방향 일치, PNG alpha 유지, 모든 시점에서 정상 방향(기존 Booth 3D 렌더러 공유, 하위 호환).
+- **§6 3D 제품 입체감:** VMD 제품을 항상 solid 카드로 렌더(정면 이미지 + 측면 대표색 + thickness + Contact Shadow) → 평면 카드 → 실제 진열.
+- **§1/§3/§4 UX 단순화:** 기본 템플릿/사이즈 프리셋 UI 제거, W/H 자유 입력, "요소 추가"를 항상 보이는 그리드 → **+ 요소 추가 팝업 메뉴**로 전환.
+- **§7/§10 편집 단축키(Booth 수준):** Delete/Backspace 삭제 · R 90° 회전 · Ctrl+D 복제 · 방향키 100mm · Shift+방향키 500mm ·
+  Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y Undo·Redo · Ctrl+] / Ctrl+[ (Shift=맨앞/맨뒤) Z-order · Esc 선택 해제.
+- **§9/§14 정렬:** 다중 선택 Align/Distribute(기존) + **보드 중앙 정렬 · 보드 맞춤(Fit to Board)**.
+- **staged(다음 단계):** Shift-드래그 Smart Snap 가이드라인(§8)·드래그 영역 선택·Copy/Paste·레이어 그룹/색상 태그·
+  보드 자체 3D 두께/받침대(§11)·Duplicate in Grid·Apply to Another Board·배경 잠금(§14 3~7).
+- **기존 기능 유지 · 기존 프로젝트 호환 · Console Error 0 · Build 성공 · Undo/Redo·Cloud/Auto Save 유지.**
 
 **v1.0.3 — Professional VMD 3D Mockup System (VMD 3D 시안)**
 - **VMD 3D 미리보기(§1, 최우선):** 2D VMD 보드 → 3D DP Mockup. **기존 Booth 3D 렌더러(renderIso)를 그대로 재사용**

@@ -534,7 +534,7 @@ export function renderIsoSceneToDataURL(
                 const tex = fp.length === 4 ? box.faces?.[SIDE_FACE_ORDER[i % 4]] : undefined;
                 const el = tex && imageElements.get(tex.url);
                 if (tex && el) {
-                  drawAffineImage(ctx, el, P(topA), P(topB), P(a), el.naturalWidth || el.width, el.naturalHeight || el.height, tex.opacity);
+                  drawAffineImage(ctx, el, P(topA), P(topB), P(a), el.naturalWidth || el.width, el.naturalHeight || el.height, tex.opacity, tex.flipH);
                   reset();
                 }
               }
@@ -549,7 +549,7 @@ export function renderIsoSceneToDataURL(
         const topTex = box.faces?.top;
         const topEl = topTex && imageElements.get(topTex.url);
         if (topTex && topEl) {
-          drawAffineImage(ctx, topEl, P(top[0]), P(top[1]), P(top[3]), topEl.naturalWidth || topEl.width, topEl.naturalHeight || topEl.height, topTex.opacity);
+          drawAffineImage(ctx, topEl, P(top[0]), P(top[1]), P(top[3]), topEl.naturalWidth || topEl.width, topEl.naturalHeight || topEl.height, topTex.opacity, topTex.flipH);
           reset();
         }
       },
@@ -611,7 +611,7 @@ function drawName(ctx: CanvasRenderingContext2D, at: Pt, text: string, fontPx: n
   ctx.restore();
 }
 
-/** 소스 이미지 사각형을 (p00,p10,p01) 평행사변형에 어파인 매핑 */
+/** 소스 이미지 사각형을 (p00,p10,p01) 평행사변형에 어파인 매핑. flipH 면 좌우 반전(v1.0.4) */
 function drawAffineImage(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -621,6 +621,7 @@ function drawAffineImage(
   localW: number,
   localH: number,
   opacity: number,
+  flipH = false,
 ) {
   const a = (sp10.x - sp00.x) / localW;
   const b = (sp10.y - sp00.y) / localW;
@@ -629,6 +630,11 @@ function drawAffineImage(
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.transform(a, b, c, d, sp00.x, sp00.y);
+  if (flipH) {
+    // 평행사변형 내에서 이미지를 좌우 반전
+    ctx.translate(localW, 0);
+    ctx.scale(-1, 1);
+  }
   ctx.drawImage(img, 0, 0, localW, localH);
   ctx.restore();
 }

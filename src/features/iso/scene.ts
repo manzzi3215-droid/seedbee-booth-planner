@@ -51,6 +51,8 @@ export interface IsoWall {
 export interface IsoFaceTexture {
   url: string;
   opacity: number;
+  /** 좌우 반전 렌더 (v1.0.4) — VMD 정면 카드 라벨이 뒤집히지 않도록 */
+  flipH?: boolean;
 }
 
 /** 집기 프리즘 (바닥 footprint 폴리곤 + 높이 extrude) */
