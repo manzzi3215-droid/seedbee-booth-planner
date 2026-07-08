@@ -6,19 +6,16 @@ import TextField from '@mui/material/TextField';
 import Slider from '@mui/material/Slider';
 import Tooltip from '@mui/material/Tooltip';
 import {
-  BASIC_COLORS,
-  BRAND_COLORS,
   getRecentColors,
   addRecentColor,
   isValidHex,
   normalizeHex,
   hexToRgba,
-  type PaletteColor,
 } from './palette';
 
 /**
- * 고급 색상 선택기 (v0.8.5).
- * 순서: 브랜드 컬러 → 최근 사용 → HEX → Color Picker → Opacity.
+ * 색상 선택기 (v0.8.5, v1.0.5 단순화).
+ * 순서: 최근 사용 → HEX → Color Picker → Opacity. (브랜드 컬러/기본 팔레트 UI 제거)
  */
 export default function ColorPicker({
   color,
@@ -92,28 +89,8 @@ export default function ColorPicker({
     </Tooltip>
   );
 
-  const swatchRow = (colors: PaletteColor[]) => (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-      {colors.map((p) => (
-        <Swatch key={p.name} c={p.hex} label={`${p.name} · ${p.hex}`} />
-      ))}
-    </Box>
-  );
-
   return (
     <Stack spacing={1.25}>
-      {/* 브랜드 컬러 */}
-      <Box>
-        <Label>브랜드 컬러</Label>
-        {swatchRow(BRAND_COLORS)}
-      </Box>
-
-      {/* 기본 팔레트 */}
-      <Box>
-        <Label>기본 팔레트</Label>
-        {swatchRow(BASIC_COLORS)}
-      </Box>
-
       {/* 최근 사용 */}
       <Box>
         <Label>최근 사용</Label>
