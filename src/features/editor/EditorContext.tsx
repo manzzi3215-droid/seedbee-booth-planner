@@ -1047,8 +1047,20 @@ export function EditorProvider({
               changed = true;
             }
           }
+          // 추가 레이어(overlays)에서도 해당 에셋 제거 (v1.0.6)
+          let overlays = p.design.overlays;
+          if (overlays) {
+            const nextOv: NonNullable<typeof overlays> = {};
+            for (const k of Object.keys(overlays) as (keyof typeof overlays)[]) {
+              const kept = (overlays[k] ?? []).filter((m) => m.assetId !== assetId);
+              if (kept.length !== (overlays[k] ?? []).length) changed = true;
+              if (kept.length) nextOv[k] = kept;
+            }
+            overlays = Object.keys(nextOv).length > 0 ? nextOv : undefined;
+          }
           if (!changed) return p;
-          return Object.keys(faces).length > 0 ? { ...p, design: { ...p.design, faces } } : { ...p, design: undefined };
+          const hasAny = Object.keys(faces).length > 0 || (overlays && Object.keys(overlays).length > 0);
+          return hasAny ? { ...p, design: { ...p.design, faces, overlays } } : { ...p, design: undefined };
         }),
       );
     };

@@ -44,6 +44,17 @@ export function assetById(assets: DesignAsset[] | undefined, id: string): Design
   return assets?.find((a) => a.id === id) ?? null;
 }
 
+/**
+ * 한 면의 전체 레이어 스택(아래→위): [base(faces[face]), ...overlays[face]] (v1.0.6).
+ * 기존 저장파일(overlays 없음)은 base 하나만 반환 → 하위 호환.
+ */
+export function faceLayers(design: DesignMapping | undefined, face: BoxFace): FaceMapping[] {
+  if (!design) return [];
+  const base = design.faces[face];
+  const extra = design.overlays?.[face] ?? [];
+  return base ? [base, ...extra] : [...extra];
+}
+
 /** 디자인이 하나라도 매핑되어 있는지 */
 export function hasAnyMapping(design: DesignMapping | undefined): boolean {
   return !!design && Object.keys(design.faces).length > 0;
@@ -86,6 +97,7 @@ export function countAssetUsage(
     for (const f of BOX_FACES) {
       const m = p.design.faces[f.value];
       if (m) ids.add(m.assetId);
+      for (const ov of p.design.overlays?.[f.value] ?? []) ids.add(ov.assetId); // 추가 레이어(v1.0.6)
     }
     for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
   }

@@ -26,11 +26,11 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import StarBorderRoundedIcon from '@mui/icons-material/StarBorderRounded';
-import type { Product, ProductFacing, ProductMaterial, ProductBackgroundMode, ProductRenderMode } from '../../types';
+import type { Product, ProductFacing, ProductBackgroundMode, ProductRenderMode } from '../../types';
 import { useEditor } from '../editor/EditorContext';
 import { uploadDesignAsset, isSupportedDesignFile } from '../../firebase/storage';
 import { PRODUCT_FACINGS, DEFAULT_PRODUCT_COLOR } from './productModel';
-import { PRODUCT_RENDER_MODES, PRODUCT_MATERIALS, THICKNESS_PRESETS } from './productGeometry';
+import { PRODUCT_RENDER_MODES, THICKNESS_PRESETS } from './productGeometry';
 import { renderProductPreview } from './productPreview';
 import { preloadImages } from '../export/download';
 import { generateId } from '../../utils/id';
@@ -304,10 +304,8 @@ export default function ProductLibraryPanel() {
                 {PRODUCT_RENDER_MODES.map((g) => <MenuItem key={g.value} value={g.value}>{g.label}</MenuItem>)}
               </TextField>
             </Stack>
+            {/* 3D 재질 편집 UI 제거(v1.0.6). 내부 material 값/렌더링은 유지. */}
             <Stack direction="row" spacing={1}>
-              <TextField size="small" select label="재질" value={draft.material ?? 'matte'} onChange={(e) => patch({ material: e.target.value as ProductMaterial })} fullWidth>
-                {PRODUCT_MATERIALS.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
-              </TextField>
               <TextField
                 size="small"
                 type="number"

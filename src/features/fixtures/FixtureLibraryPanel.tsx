@@ -13,6 +13,7 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import AddLocationAltRoundedIcon from '@mui/icons-material/AddLocationAltRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import type { FixtureDef } from '../../types';
 import { getShapeLabel } from './shapes';
 import FixtureFormDialog from './FixtureFormDialog';
@@ -124,11 +125,28 @@ function FixtureCard({
  * 집기 라이브러리 패널 (편집기 왼쪽 사이드바).
  * 라이브러리 CRUD, [배치](캔버스에 추가), 다중 선택/일괄 삭제를 제공합니다.
  */
+/** 접기/펼치기 그룹 헤더 (v1.0.6) */
+function GroupHeader({ title, count, open, onToggle }: { title: string; count: number; open: boolean; onToggle: () => void }) {
+  return (
+    <Stack
+      direction="row"
+      onClick={onToggle}
+      sx={{ alignItems: 'center', gap: 0.5, py: 0.75, cursor: 'pointer', userSelect: 'none', '&:hover': { color: 'primary.main' } }}
+    >
+      <ExpandMoreRoundedIcon sx={{ fontSize: 20, transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{title}</Typography>
+      <Chip label={`${count}개`} size="small" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+    </Stack>
+  );
+}
+
 export default function FixtureLibraryPanel() {
-  const { fixtures, fixturesLoading, saveFixture, deleteFixture, place, canEdit } = useEditor();
+  const { fixtures, fixturesLoading, saveFixture, deleteFixture, place, canEdit, designAssets } = useEditor();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<FixtureDef | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [fixOpen, setFixOpen] = useState(true);
+  const [assetOpen, setAssetOpen] = useState(false);
 
   const openAdd = () => {
     setEditing(null);
@@ -179,93 +197,71 @@ export default function FixtureLibraryPanel() {
   const selectedCount = selectedIds.size;
 
   return (
-    <Box sx={{ p: 1.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-          집기 라이브러리
-        </Typography>
-        <Chip label={`${fixtures.length}개`} size="small" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
-      </Stack>
+    <Box sx={{ p: 1.5, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* 그룹 1: 집기 라이브러리 (접기/펼치기) */}
+      <GroupHeader title="집기 라이브러리" count={fixtures.length} open={fixOpen} onToggle={() => setFixOpen((v) => !v)} />
+      {fixOpen && (
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', mb: 1 }}>
+          <Button variant="contained" size="small" fullWidth startIcon={<AddRoundedIcon />} onClick={openAdd} sx={{ mb: 1, flexShrink: 0 }}>
+            집기 추가
+          </Button>
 
-      <Button
-        variant="contained"
-        size="small"
-        fullWidth
-        startIcon={<AddRoundedIcon />}
-        onClick={openAdd}
-        sx={{ mb: 1 }}
-      >
-        집기 추가
-      </Button>
-
-      {/* 다중 선택 컨트롤 */}
-      {!fixturesLoading && fixtures.length > 0 && (
-        <Stack
-          direction="row"
-          sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1, pl: 0.25 }}
-        >
-          <Stack direction="row" sx={{ alignItems: 'center' }}>
-            <Checkbox
-              size="small"
-              checked={allSelected}
-              indeterminate={selectedCount > 0 && !allSelected}
-              onChange={toggleAll}
-              sx={{ p: 0.25 }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              {selectedCount > 0 ? `${selectedCount}개 선택` : '전체 선택'}
-            </Typography>
-          </Stack>
-          {selectedCount > 0 && (
-            <Button
-              size="small"
-              color="error"
-              variant="outlined"
-              startIcon={<DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />}
-              onClick={handleBulkDelete}
-              sx={{ py: 0.1, px: 1 }}
-            >
-              선택 삭제
-            </Button>
+          {/* 다중 선택 컨트롤 */}
+          {!fixturesLoading && fixtures.length > 0 && (
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1, pl: 0.25, flexShrink: 0 }}>
+              <Stack direction="row" sx={{ alignItems: 'center' }}>
+                <Checkbox size="small" checked={allSelected} indeterminate={selectedCount > 0 && !allSelected} onChange={toggleAll} sx={{ p: 0.25 }} />
+                <Typography variant="caption" color="text.secondary">
+                  {selectedCount > 0 ? `${selectedCount}개 선택` : '전체 선택'}
+                </Typography>
+              </Stack>
+              {selectedCount > 0 && (
+                <Button size="small" color="error" variant="outlined" startIcon={<DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />} onClick={handleBulkDelete} sx={{ py: 0.1, px: 1 }}>
+                  선택 삭제
+                </Button>
+              )}
+            </Stack>
           )}
-        </Stack>
-      )}
 
-      {fixturesLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress size={24} />
+          {fixturesLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : (
+            <Stack spacing={1} sx={{ flex: 1, minHeight: 0, overflowY: 'auto', pr: 0.5 }}>
+              {fixtures.map((f) => (
+                <FixtureCard
+                  key={f.id}
+                  fixture={f}
+                  selected={selectedIds.has(f.id)}
+                  canEdit={canEdit}
+                  onToggleSelect={() => toggleOne(f.id)}
+                  onPlace={() => place(f)}
+                  onEdit={() => openEdit(f)}
+                  onDelete={() => handleDelete(f)}
+                />
+              ))}
+              {fixtures.length === 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                  등록된 집기가 없습니다.
+                </Typography>
+              )}
+            </Stack>
+          )}
         </Box>
-      ) : (
-        <Stack spacing={1} sx={{ overflowY: 'auto', pr: 0.5 }}>
-          {fixtures.map((f) => (
-            <FixtureCard
-              key={f.id}
-              fixture={f}
-              selected={selectedIds.has(f.id)}
-              canEdit={canEdit}
-              onToggleSelect={() => toggleOne(f.id)}
-              onPlace={() => place(f)}
-              onEdit={() => openEdit(f)}
-              onDelete={() => handleDelete(f)}
-            />
-          ))}
-          {fixtures.length === 0 && (
-            <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-              등록된 집기가 없습니다.
-            </Typography>
-          )}
-        </Stack>
       )}
 
-      {/* 디자인 에셋 관리 (v0.8.7) */}
-      <AssetManagerPanel />
+      {/* 그룹 2: 디자인 에셋 (접기/펼치기) */}
+      <Box sx={{ flexShrink: 0, borderTop: '1px solid', borderColor: 'divider', pt: 0.5 }}>
+        <GroupHeader title="디자인 에셋" count={designAssets.length} open={assetOpen} onToggle={() => setAssetOpen((v) => !v)} />
+        {assetOpen && (
+          <Box sx={{ maxHeight: '45vh', overflowY: 'auto', pr: 0.5 }}>
+            <AssetManagerPanel embedded />
+          </Box>
+        )}
+      </Box>
 
-      <FixtureFormDialog
-        open={dialogOpen}
-        fixture={editing}
-        onClose={() => setDialogOpen(false)}
-        onSubmit={saveFixture}
-      />
+      <FixtureFormDialog open={dialogOpen} fixture={editing} onClose={() => setDialogOpen(false)} onSubmit={saveFixture} />
     </Box>
   );
 }

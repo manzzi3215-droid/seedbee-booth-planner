@@ -237,6 +237,15 @@ export function renderIsoSceneToDataURL(
     ctx.imageSmoothingQuality = 'high';
   };
 
+  /** 면 텍스처(디자인 매핑 base/overlay) 한 장 그리기 — scale/offset(레이어 배치) + flipH 적용 (v1.0.6) */
+  const drawFaceTex = (tex: import('./scene').IsoFaceTexture, sp00: Pt, sp10: Pt, sp01: Pt) => {
+    const el = imageElements.get(tex.url);
+    if (!el) return;
+    const [c00, c10, c01] = insetFaceCorners(sp00, sp10, sp01, tex.scale ?? 1, tex.offsetX ?? 0, tex.offsetY ?? 0);
+    drawAffineImage(ctx, el, c00, c10, c01, el.naturalWidth || el.width, el.naturalHeight || el.height, tex.opacity, tex.flipH);
+    reset();
+  };
+
   // 배경 (부드러운 그라디언트). 환경(Environment) 색 우선 → Dark 테마 → 기본 라이트.
   // transparentBg 면 배경을 채우지 않음(Presentation Quality: 배경 투명 PNG, v0.9.8).
   if (!options.transparentBg) {
@@ -529,14 +538,11 @@ export function renderIsoSceneToDataURL(
                 const u1 = (cum[i] + Math.hypot(dx, dy)) / perim;
                 drawAffineImageRegion(ctx, wrapEl, u0 * iw, 0, Math.max(1, (u1 - u0) * iw), ih, P(topA), P(topB), P(a), box.wrapTexture.opacity);
                 reset();
-              } else {
-                // 사각형(4면): 면별 매핑 (front/back/left/right)
-                const tex = fp.length === 4 ? box.faces?.[SIDE_FACE_ORDER[i % 4]] : undefined;
-                const el = tex && imageElements.get(tex.url);
-                if (tex && el) {
-                  drawAffineImage(ctx, el, P(topA), P(topB), P(a), el.naturalWidth || el.width, el.naturalHeight || el.height, tex.opacity, tex.flipH);
-                  reset();
-                }
+              } else if (fp.length === 4) {
+                // 사각형(4면): base 매핑 + 추가 레이어(overlays) 순서대로 (v1.0.6)
+                const sideKey = SIDE_FACE_ORDER[i % 4];
+                if (box.faces?.[sideKey]) drawFaceTex(box.faces[sideKey]!, P(topA), P(topB), P(a));
+                for (const ov of box.faceOverlays?.[sideKey] ?? []) drawFaceTex(ov, P(topA), P(topB), P(a));
               }
             }
           }
@@ -546,12 +552,9 @@ export function renderIsoSceneToDataURL(
         polygon(top, shadeFace(lighting, box.color, topNormal, { x: bcx, y: bcy, z: topZ }), 'rgba(0,0,0,0.3)', boxAlpha);
         const topSpec = specularAt(topNormal, mat);
         if (topSpec > 0.02) polygon(top, '#ffffff', undefined, Math.min(0.55, topSpec) * boxAlpha);
-        const topTex = box.faces?.top;
-        const topEl = topTex && imageElements.get(topTex.url);
-        if (topTex && topEl) {
-          drawAffineImage(ctx, topEl, P(top[0]), P(top[1]), P(top[3]), topEl.naturalWidth || topEl.width, topEl.naturalHeight || topEl.height, topTex.opacity, topTex.flipH);
-          reset();
-        }
+        // 윗면 텍스처: base + 추가 레이어(overlays) (v1.0.6)
+        if (box.faces?.top) drawFaceTex(box.faces.top, P(top[0]), P(top[1]), P(top[3]));
+        for (const ov of box.faceOverlays?.top ?? []) drawFaceTex(ov, P(top[0]), P(top[1]), P(top[3]));
       },
     });
     if (options.showNames) {
@@ -609,6 +612,22 @@ function drawName(ctx: CanvasRenderingContext2D, at: Pt, text: string, fontPx: n
   ctx.fillStyle = '#0f172a';
   ctx.fillText(text, at.x, at.y);
   ctx.restore();
+}
+
+/** 면(sp00,sp10,sp01) 안에서 레이어 배치(scale/offset) 적용한 3점 반환 (v1.0.6). 기본값이면 면 전체. */
+function insetFaceCorners(sp00: Pt, sp10: Pt, sp01: Pt, s: number, ox: number, oy: number): [Pt, Pt, Pt] {
+  if (s === 1 && ox === 0 && oy === 0) return [sp00, sp10, sp01];
+  const ux = sp10.x - sp00.x;
+  const uy = sp10.y - sp00.y;
+  const vx = sp01.x - sp00.x;
+  const vy = sp01.y - sp00.y;
+  const uc = 0.5 + ox * 0.5;
+  const vc = 0.5 + oy * 0.5;
+  const h = s / 2;
+  const u0 = uc - h;
+  const v0 = vc - h;
+  const at = (fu: number, fv: number): Pt => ({ x: sp00.x + ux * fu + vx * fv, y: sp00.y + uy * fu + vy * fv });
+  return [at(u0, v0), at(u0 + s, v0), at(u0, v0 + s)];
 }
 
 /** 소스 이미지 사각형을 (p00,p10,p01) 평행사변형에 어파인 매핑. flipH 면 좌우 반전(v1.0.4) */

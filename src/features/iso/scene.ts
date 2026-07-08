@@ -2,6 +2,7 @@ import type {
   BoothConfig,
   BoxFace,
   DesignAsset,
+  FaceMapping,
   FixtureDef,
   PlacedDimension,
   PlacedFixture,
@@ -53,6 +54,10 @@ export interface IsoFaceTexture {
   opacity: number;
   /** 좌우 반전 렌더 (v1.0.4) — VMD 정면 카드 라벨이 뒤집히지 않도록 */
   flipH?: boolean;
+  /** 면 내 배치(레이어, v1.0.6). 미지정 시 면 전체. scale 1=면 전체, offset -1~1 */
+  scale?: number;
+  offsetX?: number;
+  offsetY?: number;
 }
 
 /** 집기 프리즘 (바닥 footprint 폴리곤 + 높이 extrude) */
@@ -63,8 +68,10 @@ export interface IsoBox {
   /** 채움 투명도 0~1 (v0.8.5) */
   opacity: number;
   name: string;
-  /** 면별 디자인 텍스처 (v0.8.7). top + front/back/left/right */
+  /** 면별 디자인 텍스처 (v0.8.7). top + front/back/left/right — base(맨 아래) 레이어 */
   faces?: Partial<Record<'top' | BoxFace, IsoFaceTexture>>;
+  /** 면별 추가 레이어 (v1.0.6). base 위에 순서대로 겹쳐 렌더 */
+  faceOverlays?: Partial<Record<'top' | BoxFace, IsoFaceTexture[]>>;
   /** 곡면(라운드/원기둥/커스텀) — 측면 텍스처를 둘레 UV wrap 으로 처리 (v0.9.1) */
   curved?: boolean;
   /** 곡면 측면 wrap 용 텍스처 (v0.9.1) */
@@ -160,25 +167,37 @@ export function buildIsoScene(
     if (!def) continue;
     // 2D Shape → 3D extrude 지오메트리
     const geo = generateGeometry(p, def);
-    // 면별 디자인 텍스처 해석
+    // 면별 디자인 텍스처 해석 (base + 추가 레이어 overlays, v1.0.6)
     let faces: IsoBox['faces'];
+    let faceOverlays: IsoBox['faceOverlays'];
     let wrapTexture: IsoFaceTexture | undefined;
     if (p.design) {
+      const design = p.design;
+      const toTex = (m: FaceMapping): IsoFaceTexture | null => {
+        const a = assetById(designAssets, m.assetId);
+        if (!a) return null;
+        const t = m.transform;
+        return { url: a.url, opacity: t.opacity, flipH: t.flipH, scale: t.scale, offsetX: t.offsetX, offsetY: t.offsetY };
+      };
+      const overlaysFor = (face: BoxFace): FaceMapping[] =>
+        (design.applyAll ? design.overlays?.front : design.overlays?.[face]) ?? [];
       const f: NonNullable<IsoBox['faces']> = {};
-      const top = planFaceMapping(p.design);
-      const topAsset = top ? assetById(designAssets, top.assetId) : null;
-      if (top && topAsset) f.top = { url: topAsset.url, opacity: top.transform.opacity };
-      for (const side of ['front', 'back', 'left', 'right'] as BoxFace[]) {
-        const m = resolveFaceMapping(p.design, side);
-        const a = m ? assetById(designAssets, m.assetId) : null;
-        if (m && a) f[side] = { url: a.url, opacity: m.transform.opacity };
-      }
+      const fov: NonNullable<IsoBox['faceOverlays']> = {};
+      const buildFace = (key: 'top' | BoxFace, base: FaceMapping | null, ovFace: BoxFace) => {
+        const bt = base ? toTex(base) : null;
+        if (bt) f[key] = bt;
+        const ovs = overlaysFor(ovFace).map(toTex).filter((x): x is IsoFaceTexture => !!x);
+        if (ovs.length) fov[key] = ovs;
+      };
+      buildFace('top', planFaceMapping(design), 'top');
+      for (const side of ['front', 'back', 'left', 'right'] as BoxFace[]) buildFace(side, resolveFaceMapping(design, side), side);
       if (Object.keys(f).length > 0) faces = f;
+      if (Object.keys(fov).length > 0) faceOverlays = fov;
       // 곡면 측면 wrap: 대표 면(front/applyAll/첫 면) 텍스처를 둘레에 감쌈
       if (geo.curved) {
-        const wm = resolveFaceMapping(p.design, 'front');
-        const wa = wm ? assetById(designAssets, wm.assetId) : null;
-        if (wm && wa) wrapTexture = { url: wa.url, opacity: wm.transform.opacity };
+        const wm = resolveFaceMapping(design, 'front');
+        const wt = wm ? toTex(wm) : null;
+        if (wt) wrapTexture = wt;
       }
     }
     boxes.push({
@@ -188,6 +207,7 @@ export function buildIsoScene(
       opacity: def.opacity ?? 1,
       name: def.name,
       faces,
+      faceOverlays,
       curved: geo.curved,
       wrapTexture,
       material: def.material,

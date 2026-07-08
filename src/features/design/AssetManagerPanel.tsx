@@ -17,13 +17,20 @@ import { uploadDesignAsset, deleteDesignAssetFile, isSupportedDesignFile } from 
  * 현재 배치안의 디자인 목록: 썸네일 · 파일명 · 사용 집기 수 · 교체 · 삭제.
  * 교체 시 같은 assetId 를 유지하므로 사용 중인 모든 집기가 자동 반영됩니다.
  */
-export default function AssetManagerPanel() {
+export default function AssetManagerPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { designAssets, placed, replaceDesignAsset, deleteDesignAsset } = useEditor();
   const usage = countAssetUsage(placed);
   const fileRef = useRef<HTMLInputElement>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
 
-  if (designAssets.length === 0) return null;
+  // 그룹(embedded) 안에서는 0개여도 안내 문구를 표시(그룹 헤더가 개수를 보여줌)
+  if (designAssets.length === 0) {
+    return embedded ? (
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', py: 1 }}>
+        디자인 에셋이 없습니다. 집기에 이미지를 매핑하면 여기에 표시됩니다.
+      </Typography>
+    ) : null;
+  }
 
   const startReplace = (id: string) => {
     setReplacingId(id);
@@ -65,10 +72,12 @@ export default function AssetManagerPanel() {
   };
 
   return (
-    <Box sx={{ mt: 2 }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-        디자인 에셋 <Chip label={designAssets.length} size="small" variant="outlined" sx={{ height: 18, fontSize: 11 }} />
-      </Typography>
+    <Box sx={{ mt: embedded ? 0 : 2 }}>
+      {!embedded && (
+        <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
+          디자인 에셋 <Chip label={designAssets.length} size="small" variant="outlined" sx={{ height: 18, fontSize: 11 }} />
+        </Typography>
+      )}
       <Stack spacing={1}>
         {designAssets.map((a) => (
           <Paper key={a.id} elevation={0} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>

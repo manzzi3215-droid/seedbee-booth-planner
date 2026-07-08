@@ -265,7 +265,13 @@ export interface FaceMapping {
 export interface DesignMapping {
   /** 모든 면 동일 적용 (true 면 faces.front 를 모든 면에 사용) */
   applyAll: boolean;
+  /** 각 면의 기본(맨 아래) 레이어. (하위 호환 — 기존 구조 그대로) */
   faces: Partial<Record<BoxFace, FaceMapping>>;
+  /**
+   * 추가 이미지 레이어 (v1.0.6). 같은 면의 base(faces) 위에 순서대로 겹쳐 렌더됩니다(마지막이 최상단).
+   * 미지정(기존 저장파일)이면 base 레이어만 있는 것으로 취급 → 100% 하위 호환.
+   */
+  overlays?: Partial<Record<BoxFace, FaceMapping[]>>;
 }
 
 /** 기본 텍스처 변형 */
