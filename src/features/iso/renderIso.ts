@@ -553,8 +553,25 @@ export function renderIsoSceneToDataURL(
         const topSpec = specularAt(topNormal, mat);
         if (topSpec > 0.02) polygon(top, '#ffffff', undefined, Math.min(0.55, topSpec) * boxAlpha);
         // 윗면 텍스처: base + 추가 레이어(overlays) (v1.0.6)
-        if (box.faces?.top) drawFaceTex(box.faces.top, P(top[0]), P(top[1]), P(top[3]));
-        for (const ov of box.faceOverlays?.top ?? []) drawFaceTex(ov, P(top[0]), P(top[1]), P(top[3]));
+        // 곡면/customPath 는 footprint 점이 많아 top[0/1/3] 이 부정확 → topFrame(방향성 사각형)으로 매핑 (v1.0.7)
+        const topTexs = [box.faces?.top, ...(box.faceOverlays?.top ?? [])].filter((t): t is import('./scene').IsoFaceTexture => !!t);
+        if (topTexs.length) {
+          const tf = box.topFrame;
+          const [ts00, ts10, ts01] = tf
+            ? [P({ ...tf[0], z: topZ }), P({ ...tf[1], z: topZ }), P({ ...tf[3], z: topZ })]
+            : [P(top[0]), P(top[1]), P(top[3])];
+          // 윗면 폴리곤으로 클립(곡면 상단에서 이미지가 외곽을 넘지 않도록)
+          ctx.save();
+          const sp = top.map(P);
+          ctx.beginPath();
+          ctx.moveTo(sp[0].x, sp[0].y);
+          for (let k = 1; k < sp.length; k++) ctx.lineTo(sp[k].x, sp[k].y);
+          ctx.closePath();
+          ctx.clip();
+          for (const t of topTexs) drawFaceTex(t, ts00, ts10, ts01);
+          ctx.restore();
+          reset();
+        }
       },
     });
     if (options.showNames) {

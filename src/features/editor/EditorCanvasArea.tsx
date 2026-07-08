@@ -192,7 +192,7 @@ export default function EditorCanvasArea() {
     { id: 'addText', label: '텍스트 추가', group: '추가', keywords: 'text add', disabled: !canEdit, run: addText },
     { id: 'addDim', label: '치수선 추가', group: '추가', keywords: 'dimension', disabled: !canEdit, run: addDimension },
     { id: '3d', label: '3D 미리보기 열기', group: '보기', keywords: '3d preview iso lighting', run: () => setIsoOpen(true) },
-    { id: 'print', label: '출력물 제작 열기', group: '보기', keywords: 'print pdf', run: () => setPrintOpen(true) },
+    // 출력물 제작 커맨드는 v1.0.7 에서 숨김(기능/코드 유지)
     { id: 'merch', label: '진열 관리 열기', group: '보기', keywords: 'merchandising display guide', run: () => setMerchOpen(true) },
     { id: 'import', label: '도면 가져오기 (Floorplan)', group: '도면', keywords: 'import floorplan pdf drawing 도면', disabled: !canEdit, run: openImportWizard },
     { id: 'settings', label: '설정 열기', group: '보기', keywords: 'settings grid snap', run: () => setSettingsOpen(true) },

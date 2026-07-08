@@ -30,7 +30,6 @@ import StraightenRoundedIcon from '@mui/icons-material/StraightenRounded';
 import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import WallpaperRoundedIcon from '@mui/icons-material/WallpaperRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
-import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
 import RedoRoundedIcon from '@mui/icons-material/RedoRounded';
@@ -76,7 +75,7 @@ import { hasBoothHeight } from '../../constants/booth';
  *  - [다른 이름으로 저장]: 새 배치안으로 저장
  */
 export default function EditorToolbar({
-  onOpenPrint,
+  // onOpenPrint 은 v1.0.7 에서 미사용(출력물 제작 버튼 숨김). prop 타입은 유지(호출부 호환).
   onOpenMerchandising,
   onOpen3D,
   onOpenSettings,
@@ -800,20 +799,7 @@ export default function EditorToolbar({
         </span>
       </Tooltip>
 
-      <Tooltip title="출력물 제작 — 실제 출력용 PDF 작업 공간(면별 사이즈/블리드/재단선/DPI)">
-        <span>
-          <Button
-            variant="outlined"
-            size="small"
-            color="secondary"
-            startIcon={<PrintRoundedIcon />}
-            onClick={() => onOpenPrint?.()}
-            disabled={!project || placed.length === 0}
-          >
-            출력물 제작
-          </Button>
-        </span>
-      </Tooltip>
+      {/* 출력물 제작 버튼은 v1.0.7 에서 UI 숨김. 기능/데이터/PrintWorkspace 코드는 유지(향후 사용). */}
 
       <FixtureUsageDialog
         open={usageOpen}

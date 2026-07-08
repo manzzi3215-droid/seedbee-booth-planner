@@ -14,6 +14,7 @@ import type {
   WallSide,
 } from '../../types';
 import { getBoothPolygon, getBoothBounds } from '../canvas/boothGeometry';
+import { getFixtureCorners } from '../canvas/fixtureGeometry';
 import { generateGeometry } from './geometry/GeometryGenerator';
 import { isWallEnabled } from '../wall/constants';
 import { planFaceMapping, resolveFaceMapping, assetById } from '../design/mapping';
@@ -72,6 +73,12 @@ export interface IsoBox {
   faces?: Partial<Record<'top' | BoxFace, IsoFaceTexture>>;
   /** 면별 추가 레이어 (v1.0.6). base 위에 순서대로 겹쳐 렌더 */
   faceOverlays?: Partial<Record<'top' | BoxFace, IsoFaceTexture[]>>;
+  /**
+   * 윗면 텍스처 매핑 프레임 (v1.0.7) — 집기의 방향성 바운딩 사각형 4점 [TL,TR,BR,BL] (z=0).
+   * 곡면/customPath 처럼 footprint 점이 많은 경우, 윗면 이미지를 이 사각형에 매핑해 정상 출력.
+   * 미지정 시 footprint 상단 폴리곤의 앞 3점을 사용(사각형은 동일).
+   */
+  topFrame?: V3[];
   /** 곡면(라운드/원기둥/커스텀) — 측면 텍스처를 둘레 UV wrap 으로 처리 (v0.9.1) */
   curved?: boolean;
   /** 곡면 측면 wrap 용 텍스처 (v0.9.1) */
@@ -208,6 +215,8 @@ export function buildIsoScene(
       name: def.name,
       faces,
       faceOverlays,
+      // 윗면 이미지 매핑용 방향성 사각형(곡면/customPath 상단 매핑 정상화, v1.0.7)
+      topFrame: getFixtureCorners(p, def).map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
       curved: geo.curved,
       wrapTexture,
       material: def.material,

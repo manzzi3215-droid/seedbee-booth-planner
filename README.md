@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.0.6 - Layered Design Mapping, Collapsible Panels & Material UI Removal**
+> **v1.0.7 - SVG Top-Face Mapping Fix & Print UI Hidden**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,11 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**SVG 집기 상단 매핑 수정 · 출력물 제작 UI 숨김 (v1.0.7)**
+- **SVG(customPath) 집기 상단 면 디자인 매핑 수정:** 곡면/커스텀 경로 집기의 윗면에 디자인이 3D에서 정상 출력(기존엔 흰색).
+  윗면 이미지를 집기의 방향성 바운딩 사각형에 매핑하고 윗면 폴리곤으로 클립. 사각형 집기에는 영향 없음.
+- **출력물 제작 UI 숨김:** 상단 툴바 버튼·커맨드 팔레트 항목 제거(기능·데이터·PrintWorkspace 코드는 유지)
 
 **레이어 매핑 · 접이식 패널 · 재질 UI 제거 (v1.0.6)**
 - **한 면에 이미지 레이어 겹치기:** 같은 면(전면/측면/상단 등)에 여러 디자인 에셋을 레이어처럼 쌓음(나중 추가가 위).
@@ -289,6 +294,14 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.0.7 — SVG Top-Face Mapping Fix & Print UI Hidden**
+- **[수정1] SVG 집기 상단 매핑 오류 수정:** customPath/곡면 집기의 footprint 는 점이 많아, renderIso 가 윗면 이미지를 `top[0/1/3]`
+  (곡선 위 인접 3점)에 매핑 → 축소/왜곡되어 흰색으로 보였음. **집기 방향성 바운딩 사각형(getFixtureCorners)** 을 `topFrame` 으로
+  전달해 윗면 이미지를 정확히 매핑하고, 윗면 폴리곤으로 clip. 사각형 집기는 `topFrame === footprint` 이라 동작 불변.
+- **[수정2] 출력물 제작 UI 숨김:** 툴바 버튼 + 커맨드 팔레트('출력물 제작 열기') 제거. PrintWorkspace/printSettings/데이터/onOpenPrint prop 타입은 유지.
+- **검증:** customPath 집기 윗면에 빨강 이미지 매핑 → 3D 렌더에서 빨강 픽셀 다수 확인, 사각형 집기 윗면(파랑)도 정상 → 회귀 없음.
+- **최소 수정 · 기존 데이터 100% 호환 · Console Error 0 · Build 성공.**
 
 **v1.0.6 — Layered Design Mapping, Collapsible Panels & Material UI Removal**
 - **[작업1] 레이어 매핑:** 같은 면 위에 여러 이미지 매핑을 레이어처럼 겹침(나중 추가 = 위). 각 레이어 독립 편집(이미지/방식/위치/크기/회전/투명도/반전),
