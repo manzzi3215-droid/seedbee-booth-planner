@@ -102,6 +102,26 @@ export interface IsoHuman {
   heightMm: number;
 }
 
+/** 커스텀 3D 모델(GLB/GLTF) 집기 (v1.1.5) — Three.js 스프라이트로 렌더, 실패 시 placeholder */
+export interface IsoModel {
+  /** 배치 인스턴스 id (스프라이트 매핑용) */
+  id: string;
+  /** 집기 정의 id (모델 캐시/URL 조회) */
+  defId: string;
+  /** Storage 다운로드 URL (없으면 로컬 캐시만) */
+  url?: string;
+  footprint: V3[];
+  cx: number;
+  cy: number;
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+  rotationDeg: number;
+  name: string;
+  /** placeholder(로드 실패) 색 */
+  color: string;
+}
+
 /**
  * 커스텀 이미지 집기의 세운 이미지 판넬/빌보드 (v1.1.4).
  * 회색 박스 대신 바닥에 세운 평면 이미지로 렌더(투명 PNG alpha 유지).
@@ -137,6 +157,8 @@ export interface IsoScene {
   humans?: IsoHuman[];
   /** 커스텀 이미지 판넬/빌보드 (v1.1.4) */
   panels?: IsoPanel[];
+  /** 커스텀 3D 모델 (v1.1.5) */
+  models?: IsoModel[];
 }
 
 /** 실무 시안(Practical Render) 추가 요소 (v1.0.0-pre) */
@@ -209,13 +231,37 @@ export function buildIsoScene(
 
   const boxes: IsoBox[] = [];
   const panels: IsoPanel[] = [];
+  const models: IsoModel[] = [];
   for (const p of placed) {
     const def = fixturesById.get(p.fixtureDefId);
     if (!def) continue;
 
+    const ca = def.customAsset;
+
+    // --- 커스텀 3D 모델 집기 → Three.js 스프라이트로 렌더 (v1.1.5). 실패 시 placeholder ---
+    if (ca?.kind === 'model') {
+      const corners = getFixtureCorners(p, def);
+      const cx = corners.reduce((s, c) => s + c.xMm, 0) / corners.length;
+      const cy = corners.reduce((s, c) => s + c.yMm, 0) / corners.length;
+      models.push({
+        id: p.id,
+        defId: def.id,
+        url: ca.fileUrl,
+        footprint: corners.map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
+        cx,
+        cy,
+        widthMm: def.widthMm,
+        depthMm: def.depthMm,
+        heightMm: resolveFixtureHeight(def.heightMm, booth.heightMm),
+        rotationDeg: p.rotationDeg,
+        name: def.name,
+        color: def.color,
+      });
+      continue;
+    }
+
     // --- 커스텀 이미지 집기: panel/billboard(및 미지정 fallback) → 세운 이미지 판넬 (v1.1.4) ---
     // display3d 가 box-texture/top-texture 인 경우만 기존 박스 텍스처 방식 유지.
-    const ca = def.customAsset;
     if (!p.design && ca?.kind === 'image' && ca.fileUrl && ca.display3d !== 'box-texture' && ca.display3d !== 'top-texture') {
       const corners = getFixtureCorners(p, def);
       const cx = corners.reduce((s, c) => s + c.xMm, 0) / corners.length;
@@ -408,5 +454,6 @@ export function buildIsoScene(
     floorImages: planImages.map((image) => ({ image })),
     humans,
     panels,
+    models,
   };
 }

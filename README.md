@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.1.4 - Hotfix: 커스텀 이미지 집기 3D 세운 이미지 판넬/빌보드 렌더(투명 유지)**
+> **v1.1.5 - 커스텀 3D 모델(GLB/GLTF) 실제 렌더링: Three.js 스프라이트 · 실물 사이즈 자동 스케일 · 바닥 접지 · 회전 · Storage 공유 저장**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -331,6 +331,15 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.1.5 — Custom 3D Model (GLB/GLTF) Real Rendering**
+- **목표:** 커스텀 3D 모델 집기가 3D 미리보기에서 **회색 Placeholder 박스** 로만 보이던 것을 제거하고, **실제 GLB/GLTF 메쉬**를 입력한 실물 사이즈로 렌더.
+- **렌더 방식(스프라이트 합성):** 3D 미리보기는 Canvas 2D 아이소메트릭 렌더러(`renderIso.ts`)라 메쉬를 직접 그릴 수 없어, **Three.js(WebGL)** 로 GLB 를 현재 카메라 각도(방위/고도)에 맞춰 오프스크린 렌더 → **투명 PNG 스프라이트** 로 만든 뒤 `renderIso` 가 footprint 위치에 깊이순 합성(`src/features/iso/glbRender.ts`). Three.js/GLTFLoader 는 **모델이 있을 때만 동적 import**(초기 번들 영향 최소화, 별도 청크).
+- **실물 사이즈 자동 스케일:** GLB 원본 BoundingBox 크기를 측정해 축별 스케일(X=가로, Y=높이, Z=깊이)로 입력한 mm 사이즈에 맞춤(예: 원본 500×300×400 → 입력 1200×600×1000 자동 스케일).
+- **바닥 접지 · 회전:** BoundingBox `minY` 를 0 으로 내려 바닥에 정확히 접지(공중부양/매몰 방지), 가로/깊이 중앙 정렬. 집기 회전값(수직축 Y)을 반영.
+- **저장 · 공유 · 지속:** 모델 원본은 수 MB 라 Firestore 문서(1MiB)에 못 담으므로 **Firebase Storage** 에 업로드(`models/{uid}/{id}`)하고 다운로드 URL 을 집기 정의에 저장 → 다른 회사/기기에서도 열람 가능. 업로더 브라우저는 **IndexedDB** 에 원본 blob 캐시로 즉시/오프라인 렌더. 새로고침 후에도 그대로 표시.
+- **Fallback:** GLB 로드/렌더 실패 시 기존 **회색 Placeholder 박스**로 자연스럽게 대체(에러로 죽지 않음). OBJ 는 아직 박스 표시.
+- **브라우저 검증:** 1200×600×1000mm 박스 glTF 로 `renderGlbSprite` 파이프라인 E2E 확인 — 실제 메쉬 렌더(불투명 픽셀 18만), 자동 스케일 정확(pxPerMm 0.354 ↔ 바운딩스피어 반경 계산 일치), 바닥 앵커/투영 footprint 폭(1273mm↔451px) 일치, 회전 반영. `npm run build` 통과(three/GLTFLoader 별도 lazy 청크), 앱 로드 Console Error 0.
 
 **v1.1.4 — Hotfix: Custom Image Fixture 3D Standing Panel/Billboard**
 - **원인:** v1.1.1 에서 `display3d='panel'/'billboard'` 커스텀 이미지 집기를 **회색 박스의 front/back 면에 텍스처**로 렌더 → 투명 PNG 영역에 회색 박스가 비치고, 옆/윗면은 회색, 이미지가 일부 면에만 작게 붙어 "세운 판넬"처럼 안 보임.

@@ -152,10 +152,20 @@ interface DrawUnit {
   draw: () => void;
 }
 
+/** 렌더된 GLB 스프라이트 (v1.1.5) — id(배치 인스턴스)별 이미지 + 합성 정보 */
+export interface ModelSprite {
+  img: HTMLImageElement;
+  spx: number;
+  pxPerMm: number;
+  anchorX: number;
+  anchorY: number;
+}
+
 export function renderIsoSceneToDataURL(
   scene: IsoScene,
   imageElements: Map<string, HTMLImageElement>,
   options: IsoRenderOptions,
+  modelSprites?: Map<string, ModelSprite>,
 ): string {
   // 자유 궤도 카메라(azimuth/elevation) 우선, 없으면 viewpoint 프리셋
   const vp =
@@ -215,6 +225,11 @@ export function renderIsoSceneToDataURL(
   for (const pn of scene.panels ?? []) {
     for (const f of pn.footprint) allPts.push(f, { ...f, z: pn.heightMm });
     allPts.push({ x: pn.cx, y: pn.cy, z: pn.heightMm });
+  }
+  // 커스텀 3D 모델(v1.1.5) footprint + 상단 지점
+  for (const md of scene.models ?? []) {
+    for (const f of md.footprint) allPts.push(f, { ...f, z: md.heightMm });
+    allPts.push({ x: md.cx, y: md.cy, z: md.heightMm });
   }
   const projected = allPts.map(rawProj);
   const minX = Math.min(...projected.map((p) => p.x));
@@ -409,6 +424,10 @@ export function renderIsoSceneToDataURL(
     // 커스텀 이미지 판넬의 접지 그림자(바닥에 붙은 느낌, v1.1.4)
     for (const pn of scene.panels ?? []) {
       contactPolys.push(pn.footprint.map((f) => ({ x: f.x, y: f.y })));
+    }
+    // 커스텀 3D 모델의 접지 그림자 (v1.1.5)
+    for (const md of scene.models ?? []) {
+      contactPolys.push(md.footprint.map((f) => ({ x: f.x, y: f.y })));
     }
     if (off) {
       for (const w of scene.walls) {
@@ -647,6 +666,54 @@ export function renderIsoSceneToDataURL(
     });
     if (options.showNames) {
       nameDraws.push({ screen: P({ x: pn.cx, y: pn.cy, z: pn.heightMm }), depth, text: pn.name });
+    }
+  }
+
+  // --- 커스텀 3D 모델 (v1.1.5) — Three.js 스프라이트 합성, 없으면 placeholder 박스 ---
+  for (const md of scene.models ?? []) {
+    const depth = depthOf(md.footprint);
+    const sprite = modelSprites?.get(md.id);
+    if (sprite && sprite.img) {
+      // 스프라이트를 iso 스케일로, 바닥중심 앵커를 P(cx,cy,0) 에 맞춰 합성
+      const drawScale = scale / (sprite.pxPerMm || 1);
+      const anchor = P({ x: md.cx, y: md.cy, z: 0 });
+      const dx = anchor.x - sprite.anchorX * drawScale;
+      const dy = anchor.y - sprite.anchorY * drawScale;
+      const dw = sprite.spx * drawScale;
+      boxUnits.push({
+        depth,
+        draw: () => {
+          ctx.drawImage(sprite.img, dx, dy, dw, dw);
+          reset();
+        },
+      });
+    } else {
+      // fallback: 회색 placeholder 박스 (로드/렌더 실패 또는 아직 준비 전)
+      const fp = md.footprint;
+      const bcx = fp.reduce((s, p) => s + p.x, 0) / fp.length;
+      const bcy = fp.reduce((s, p) => s + p.y, 0) / fp.length;
+      const top = fp.map((f) => ({ ...f, z: md.heightMm }));
+      boxUnits.push({
+        depth,
+        draw: () => {
+          for (let i = 0; i < fp.length; i++) {
+            const a = fp[i];
+            const b = fp[(i + 1) % fp.length];
+            let nx = b.y - a.y;
+            let ny = -(b.x - a.x);
+            const mx = (a.x + b.x) / 2 - bcx;
+            const my = (a.y + b.y) / 2 - bcy;
+            if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
+            if (nx * sa + ny * ca > 0) {
+              polygon([a, b, { ...b, z: md.heightMm }, { ...a, z: md.heightMm }], shade(md.color, 0.8), 'rgba(0,0,0,0.3)', 0.9);
+            }
+          }
+          polygon(top, shade(md.color, 1), 'rgba(0,0,0,0.3)', 0.9);
+        },
+      });
+    }
+    if (options.showNames) {
+      nameDraws.push({ screen: P({ x: md.cx, y: md.cy, z: md.heightMm }), depth, text: md.name });
     }
   }
 

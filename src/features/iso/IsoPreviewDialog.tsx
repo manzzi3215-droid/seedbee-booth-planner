@@ -33,7 +33,10 @@ import {
   DEFAULT_ISO_OPTIONS,
   type IsoRenderOptions,
   type IsoViewpointId,
+  type ModelSprite,
 } from './renderIso';
+import { loadModelBuffer } from '../../firebase/modelStorage';
+import { renderGlbSprite } from './glbRender';
 import { preloadImages, buildBaseName, downloadDataURL } from '../export/download';
 import { WALL_SIDES } from '../wall/constants';
 import type { EnvironmentId } from '../../types';
@@ -63,6 +66,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const [quality, setQuality] = useState(1920);
   const [opts, setOpts] = useState<IsoRenderOptions>(DEFAULT_ISO_OPTIONS);
   const imageElsRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  // GLB/GLTF 모델 스프라이트 (현재 카메라 각도에 맞춰 Three.js 로 오프스크린 렌더) — v1.1.5
+  const [modelSprites, setModelSprites] = useState<Map<string, ModelSprite>>(new Map());
 
   // 자유 궤도 카메라 (v0.9.1)
   const [azimuthDeg, setAzimuthDeg] = useState(VIEWPOINTS[0].azimuthDeg);
@@ -158,6 +163,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       setPan({ x: 0, y: 0 });
       setAutoOrbit(false);
       imageElsRef.current = new Map();
+      setModelSprites(new Map());
       return;
     }
     let active = true;
@@ -183,14 +189,62 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
     };
   }, [open, project, planImages, wallItems, designAssets, products]);
 
-  // 옵션/카메라/데이터 변경 시 미리보기 재렌더 (동기, 로드된 이미지 재사용)
+  // 3D 모델(GLB/GLTF) 스프라이트를 현재 카메라 각도에 맞춰 비동기 사전 렌더 (v1.1.5)
+  // - 실무시안 '정면' 시점은 렌더러와 동일하게 az=0/el=22 로 고정
+  // - 로드/렌더 실패 모델은 map 에서 빠지고 renderIso 가 회색 박스로 대체
+  useEffect(() => {
+    if (!open || !project || !ready) return;
+    const effAz = practical.on && practical.view === 'front' ? 0 : azimuthDeg;
+    const effEl = practical.on && practical.view === 'front' ? 22 : elevationDeg;
+    const extras = { humanSilhouette: practical.human, floorMat: practical.mat, hideProductImages: practical.on && !practical.productImages };
+    const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, extras);
+    const models = scene.models ?? [];
+    if (models.length === 0) {
+      setModelSprites((prev) => (prev.size ? new Map() : prev));
+      return;
+    }
+    let active = true;
+    (async () => {
+      const map = new Map<string, ModelSprite>();
+      for (const md of models) {
+        const buf = await loadModelBuffer(md.defId, md.url);
+        if (!active) return;
+        if (!buf) continue; // 로드 실패 → renderIso 가 회색 박스로 대체
+        const sprite = await renderGlbSprite(buf, {
+          widthMm: md.widthMm,
+          depthMm: md.depthMm,
+          heightMm: md.heightMm,
+          rotationDeg: md.rotationDeg,
+          azimuthDeg: effAz,
+          elevationDeg: effEl,
+        });
+        if (!active) return;
+        if (!sprite) continue; // 렌더 실패 → 회색 박스로 대체
+        const img = new Image();
+        await new Promise<void>((res) => {
+          img.onload = () => res();
+          img.onerror = () => res();
+          img.src = sprite.dataUrl;
+        });
+        if (!active) return;
+        map.set(md.id, { img, spx: sprite.spx, pxPerMm: sprite.pxPerMm, anchorX: sprite.anchorX, anchorY: sprite.anchorY });
+      }
+      if (!active) return;
+      setModelSprites(map);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [open, ready, azimuthDeg, elevationDeg, practical, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
+
+  // 옵션/카메라/데이터 변경 시 미리보기 재렌더 (동기, 로드된 이미지·스프라이트 재사용)
   useEffect(() => {
     if (!open || !project || !ready) return;
     const extras = { humanSilhouette: practical.human, floorMat: practical.mat, hideProductImages: practical.on && !practical.productImages };
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, extras);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(false));
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(false), modelSprites);
     setDataUrl(url);
-  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
+  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, modelSprites, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
 
   // 자동 회전(Auto Orbit) — 360° 연속 회전
   useEffect(() => {
@@ -205,7 +259,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const handleExport = () => {
     if (!project || !ready) return;
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, practicalExtras());
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(true));
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(true), modelSprites);
     const suffix = practical.on ? 'practical' : 'isometric';
     downloadDataURL(url, `${buildBaseName(project.name, layoutName)}_${suffix}.png`);
   };

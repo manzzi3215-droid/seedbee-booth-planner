@@ -18,6 +18,7 @@ import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
 import type { CustomAsset, FixtureDef } from '../../types';
 import { generateId } from '../../utils/id';
 import { uploadCustomFixtureImage } from '../../firebase/storage';
+import { uploadModelFile } from '../../firebase/modelStorage';
 
 const DEFAULT_CUSTOM_COLOR = '#94a3b8';
 const IMG_RE = /\.(png|jpe?g|webp|svg)$/i;
@@ -31,6 +32,8 @@ interface Loaded {
   originalWidth?: number;
   originalHeight?: number;
   modelFormat?: 'glb' | 'gltf' | 'obj';
+  /** 3D 모델 원본 파일 (저장 시 Storage 업로드 + 로컬 캐시) — v1.1.5 */
+  file?: File;
 }
 
 /**
@@ -109,7 +112,7 @@ export default function CustomFixtureDialog({
         }
       } else {
         const fmt = (file.name.match(MODEL_RE)?.[1].toLowerCase() as 'glb' | 'gltf' | 'obj') ?? 'glb';
-        setLoaded({ kind: 'model', fileName: file.name, mimeType: file.type, modelFormat: fmt });
+        setLoaded({ kind: 'model', fileName: file.name, mimeType: file.type, modelFormat: fmt, file });
         setDisplay3d('placeholder');
       }
     } catch (err) {
@@ -126,13 +129,27 @@ export default function CustomFixtureDialog({
     if (!loaded || !canSave) return;
     setSaving(true);
     setError(null);
+    const defId = generateId();
     try {
       const realW = num(wMm);
       const realD = num(dMm);
       const realH = num(hMm);
+
+      // 3D 모델: Storage 업로드(공유) + 로컬 캐시. URL 은 집기 정의에 저장 (v1.1.5)
+      let modelUrl = loaded.fileUrl;
+      if (loaded.kind === 'model' && loaded.file) {
+        const up = await uploadModelFile(loaded.file, defId);
+        modelUrl = up.url ?? undefined;
+        if (!up.url && !up.cached) {
+          setError('3D 모델 저장에 실패했습니다. 파일 크기(최대 20MB)와 네트워크를 확인해 주세요.');
+          setSaving(false);
+          return;
+        }
+      }
+
       const customAsset: CustomAsset = {
         kind: loaded.kind,
-        fileUrl: loaded.fileUrl,
+        fileUrl: modelUrl,
         fileName: loaded.fileName,
         mimeType: loaded.mimeType,
         originalWidth: loaded.originalWidth,
@@ -146,7 +163,7 @@ export default function CustomFixtureDialog({
         scaleMode: 'fit-real-size',
       };
       const def: FixtureDef = {
-        id: generateId(),
+        id: defId,
         name: name.trim(),
         shape: 'rectangle',
         widthMm: realW,
@@ -162,8 +179,8 @@ export default function CustomFixtureDialog({
       // 저장 실패(예: 라이브러리 문서 용량 초과)를 사용자에게 명확히 표시 (v1.1.2)
       console.error('[CustomFixture] save failed', e);
       setError(
-        '집기 저장에 실패했습니다. 라이브러리 저장 용량(문서 1MB)을 초과했을 수 있습니다. ' +
-          '불필요한 커스텀 집기를 삭제하거나 더 작은 이미지로 다시 시도해 주세요.',
+        '집기 저장에 실패했습니다. 라이브러리 저장 용량(문서 1MB)을 초과했거나 모델 업로드에 실패했을 수 있습니다. ' +
+          '다시 시도해 주세요.',
       );
     } finally {
       setSaving(false);
@@ -247,7 +264,7 @@ export default function CustomFixtureDialog({
             </Stack>
             {isModel && (
               <Alert severity="info" sx={{ mt: 1 }}>
-                3D 모델(GLB/GLTF/OBJ)은 이번 버전에서 <b>2D footprint + 3D placeholder 박스</b>로 표시됩니다. 실제 모델 렌더링은 다음 버전에서 지원됩니다.
+                <b>GLB/GLTF</b> 모델은 3D 미리보기에서 입력한 실물 사이즈로 <b>실제 렌더링</b>됩니다(바닥 접지·회전 반영). 불러오기에 실패하면 회색 박스로 대체 표시됩니다. OBJ 는 아직 박스로 표시됩니다.
               </Alert>
             )}
           </Box>
