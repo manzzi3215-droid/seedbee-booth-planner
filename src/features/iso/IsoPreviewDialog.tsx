@@ -68,6 +68,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const imageElsRef = useRef<Map<string, HTMLImageElement>>(new Map());
   // GLB/GLTF 모델 스프라이트 (현재 카메라 각도에 맞춰 Three.js 로 오프스크린 렌더) — v1.1.5
   const [modelSprites, setModelSprites] = useState<Map<string, ModelSprite>>(new Map());
+  // 이 기기에 원본이 없어(로컬 캐시·URL 모두 없음) placeholder 로 표시할 모델 id — v1.1.6
+  const [missingModelIds, setMissingModelIds] = useState<Set<string>>(new Set());
 
   // 자유 궤도 카메라 (v0.9.1)
   const [azimuthDeg, setAzimuthDeg] = useState(VIEWPOINTS[0].azimuthDeg);
@@ -164,6 +166,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       setAutoOrbit(false);
       imageElsRef.current = new Map();
       setModelSprites(new Map());
+      setMissingModelIds(new Set());
       return;
     }
     let active = true;
@@ -201,15 +204,21 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
     const models = scene.models ?? [];
     if (models.length === 0) {
       setModelSprites((prev) => (prev.size ? new Map() : prev));
+      setMissingModelIds((prev) => (prev.size ? new Set() : prev));
       return;
     }
     let active = true;
     (async () => {
       const map = new Map<string, ModelSprite>();
+      const missing = new Set<string>();
       for (const md of models) {
         const buf = await loadModelBuffer(md.defId, md.url);
         if (!active) return;
-        if (!buf) continue; // 로드 실패 → renderIso 가 회색 박스로 대체
+        if (!buf) {
+          // 이 기기에 원본 없음 → placeholder + "모델 파일 없음" 라벨 (v1.1.6)
+          missing.add(md.id);
+          continue;
+        }
         const sprite = await renderGlbSprite(buf, {
           widthMm: md.widthMm,
           depthMm: md.depthMm,
@@ -231,6 +240,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       }
       if (!active) return;
       setModelSprites(map);
+      setMissingModelIds(missing);
     })();
     return () => {
       active = false;
@@ -242,9 +252,9 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
     if (!open || !project || !ready) return;
     const extras = { humanSilhouette: practical.human, floorMat: practical.mat, hideProductImages: practical.on && !practical.productImages };
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, extras);
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(false), modelSprites);
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(false), modelSprites, missingModelIds);
     setDataUrl(url);
-  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, modelSprites, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
+  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, modelSprites, missingModelIds, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
 
   // 자동 회전(Auto Orbit) — 360° 연속 회전
   useEffect(() => {
@@ -259,7 +269,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
   const handleExport = () => {
     if (!project || !ready) return;
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, practicalExtras());
-    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(true), modelSprites);
+    const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(true), modelSprites, missingModelIds);
     const suffix = practical.on ? 'practical' : 'isometric';
     downloadDataURL(url, `${buildBaseName(project.name, layoutName)}_${suffix}.png`);
   };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -29,6 +29,28 @@ import FixtureFormDialog from './FixtureFormDialog';
 import CustomFixtureDialog from './CustomFixtureDialog';
 import { useEditor } from '../editor/EditorContext';
 import AssetManagerPanel from '../design/AssetManagerPanel';
+import { hasLocalModel } from '../../firebase/modelStorage';
+
+/** 3D 모델 집기 카드용 로컬 캐시 상태 칩 (v1.1.6) — 이 브라우저 IndexedDB 에 원본이 있는지 표시 */
+function ModelCacheChip({ fixture }: { fixture: FixtureDef }) {
+  const key = fixture.customAsset?.localModelId ?? fixture.id;
+  const [state, setState] = useState<'loading' | 'local' | 'missing'>('loading');
+  useEffect(() => {
+    let active = true;
+    hasLocalModel(key).then((has) => {
+      if (active) setState(has ? 'local' : 'missing');
+    });
+    return () => {
+      active = false;
+    };
+  }, [key]);
+  if (state === 'loading') return null;
+  return state === 'local' ? (
+    <Chip label="로컬 모델 있음" size="small" color="success" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+  ) : (
+    <Chip label="모델 파일 없음" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+  );
+}
 
 /** 색상 스와치 */
 function ColorSwatch({ color }: { color: string }) {
@@ -125,12 +147,15 @@ function FixtureCard({
         {fixture.widthMm}×{fixture.depthMm}×{fixture.heightMm ?? '-'} mm
       </Typography>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75, ml: 3.5 }}>
-        <Chip
-          label={getShapeLabel(fixture.shape)}
-          size="small"
-          variant="outlined"
-          sx={{ height: 20, fontSize: 11 }}
-        />
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0, flexWrap: 'wrap', rowGap: 0.5 }}>
+          <Chip
+            label={getShapeLabel(fixture.shape)}
+            size="small"
+            variant="outlined"
+            sx={{ height: 20, fontSize: 11 }}
+          />
+          {fixture.customAsset?.kind === 'model' && <ModelCacheChip fixture={fixture} />}
+        </Stack>
         <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
           {/* 순서 변경 버튼 (v1.1.3) — 드래그 대신 안정적인 이동 */}
           {showMove && (

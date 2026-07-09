@@ -166,6 +166,7 @@ export function renderIsoSceneToDataURL(
   imageElements: Map<string, HTMLImageElement>,
   options: IsoRenderOptions,
   modelSprites?: Map<string, ModelSprite>,
+  missingModelIds?: Set<string>,
 ): string {
   // 자유 궤도 카메라(azimuth/elevation) 우선, 없으면 viewpoint 프리셋
   const vp =
@@ -516,6 +517,8 @@ export function renderIsoSceneToDataURL(
   // --- 집기 박스 ---
   const nameDraws: { screen: Pt; depth: number; text: string }[] = [];
   const sizeDraws: { screen: Pt; depth: number; text: string }[] = [];
+  // "이 기기에 모델 파일 없음" 안내 (원본 미보유 placeholder 모델용, v1.1.6)
+  const noModelDraws: { screen: Pt; depth: number }[] = [];
   for (const box of scene.boxes) {
     const fp = box.footprint;
     const topZ = (box.baseZmm ?? 0) + box.heightMm; // 상판 위 제품은 baseZ 만큼 올라감 (v0.9.4)
@@ -693,6 +696,7 @@ export function renderIsoSceneToDataURL(
       const bcx = fp.reduce((s, p) => s + p.x, 0) / fp.length;
       const bcy = fp.reduce((s, p) => s + p.y, 0) / fp.length;
       const top = fp.map((f) => ({ ...f, z: md.heightMm }));
+      const noFile = missingModelIds?.has(md.id) ?? false; // 이 기기에 원본 없음 (v1.1.6)
       boxUnits.push({
         depth,
         draw: () => {
@@ -711,6 +715,10 @@ export function renderIsoSceneToDataURL(
           polygon(top, shade(md.color, 1), 'rgba(0,0,0,0.3)', 0.9);
         },
       });
+      // 원본이 이 기기에 없으면 상단에 안내 라벨 (v1.1.6)
+      if (noFile) {
+        noModelDraws.push({ screen: P({ x: md.cx, y: md.cy, z: md.heightMm }), depth });
+      }
     }
     if (options.showNames) {
       nameDraws.push({ screen: P({ x: md.cx, y: md.cy, z: md.heightMm }), depth, text: md.name });
@@ -731,6 +739,15 @@ export function renderIsoSceneToDataURL(
     const fontPx = Math.max(11, options.targetPx / 78);
     nameDraws.sort((a, b) => a.depth - b.depth);
     for (const n of nameDraws) drawName(ctx, n.screen, n.text, fontPx);
+  }
+
+  // --- "이 기기에 모델 파일 없음" 안내 (원본 미보유 placeholder, v1.1.6) — 집기명 유무와 무관하게 표시 ---
+  if (noModelDraws.length) {
+    const fontPx = Math.max(10, options.targetPx / 92);
+    // 집기명이 켜져 있으면 이름 아래로 살짝 내려 겹치지 않게
+    const yOff = options.showNames ? fontPx * 1.9 : 0;
+    noModelDraws.sort((a, b) => a.depth - b.depth);
+    for (const n of noModelDraws) drawNotice(ctx, { x: n.screen.x, y: n.screen.y + yOff }, '이 기기에 모델 파일 없음', fontPx);
   }
 
   // --- 사이즈(치수) 표기 (실무시안, v1.0.8) — 부스 전체 + 주요 집기 ---
@@ -860,6 +877,37 @@ function drawName(ctx: CanvasRenderingContext2D, at: Pt, text: string, fontPx: n
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.fillStyle = '#0f172a';
+  ctx.fillText(text, at.x, at.y);
+  ctx.restore();
+}
+
+/** 경고 칩(호박색) — 로컬 모델 미보유 안내 등 (v1.1.6). drawName 과 같은 형태, 색만 경고색. */
+function drawNotice(ctx: CanvasRenderingContext2D, at: Pt, text: string, fontPx: number) {
+  if (!text) return;
+  ctx.save();
+  ctx.font = `bold ${fontPx}px ${TEXT_FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width;
+  const padX = fontPx * 0.55;
+  const h = fontPx * 1.6;
+  const rx = at.x - w / 2 - padX;
+  const ry = at.y - h / 2;
+  const rw = w + padX * 2;
+  const r = fontPx * 0.4;
+  ctx.beginPath();
+  ctx.moveTo(rx + r, ry);
+  ctx.arcTo(rx + rw, ry, rx + rw, ry + h, r);
+  ctx.arcTo(rx + rw, ry + h, rx, ry + h, r);
+  ctx.arcTo(rx, ry + h, rx, ry, r);
+  ctx.arcTo(rx, ry, rx + rw, ry, r);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(251,191,36,0.96)'; // amber-400
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(146,64,14,0.55)'; // amber-800
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = '#7c2d12'; // amber-900
   ctx.fillText(text, at.x, at.y);
   ctx.restore();
 }

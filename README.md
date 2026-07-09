@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.1.5 - 커스텀 3D 모델(GLB/GLTF) 실제 렌더링: Three.js 스프라이트 · 실물 사이즈 자동 스케일 · 바닥 접지 · 회전 · Storage 공유 저장**
+> **v1.1.6 - Hotfix: GLB/GLTF 커스텀 집기 Storage 없이 로컬(IndexedDB) 저장 · 저장 멈춤 해결 · 로컬 모델 상태 표시**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -331,6 +331,18 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.1.6 — Hotfix: Save GLB/GLTF Without Firebase Storage (Local IndexedDB)**
+- **증상:** 커스텀 집기 창에서 GLB 를 불러오고 사이즈·이름을 입력해도 "집기로 저장" 이 눌리지 않거나(비활성) 저장 후 다이얼로그가 닫히지 않음.
+- **근본 원인:** 프로젝트가 **Spark(무료) 플랜이라 Firebase Storage 가 미활성** 상태인데, `uploadModelFile` 이 `isFirebaseConfigured===true` 만 보고 없는 버킷에 `uploadBytes` 를 호출 → SDK 가 **최대 ~2분간 재시도**하다 실패. 그동안 `save()` 의 `await` 가 멈춰 `saving=true` 유지 → 저장 버튼이 계속 비활성(스피너)이고 다이얼로그가 안 닫힘.
+- **수정 (로컬 우선):**
+  - `modelStorage.ts`: `MODEL_STORAGE_ENABLED=false`(Spark) 플래그 추가. 업로드는 **IndexedDB 로컬 캐시만** 하고 즉시 `{url:null, cached:true}` 반환(클라우드 시도 없음 → 멈춤 제거). Storage 활성화 후 플래그만 true 로 바꾸면 클라우드 공유 복원. `hasLocalModel(defId)` 추가.
+  - `CustomFixtureDialog`: 모델 저장 시 Storage 실패를 **치명 오류로 처리하지 않음**. 로컬 캐시(IndexedDB)만 성공해도 저장 진행, `customAsset.localModelId=defId` 기록, 다이얼로그 정상 닫힘·라이브러리 즉시 추가. 로컬 저장까지 막혔을 때만(시크릿 모드 등) 오류 표시. 안내 문구를 "무료 플랜: 이 브라우저에만 저장" 으로 갱신.
+  - `scene.ts`: 3D 로더 캐시 키를 `localModelId ?? def.id` 로 사용.
+  - `IsoPreviewDialog`/`renderIso`: 이 기기에 원본이 없으면(로컬·URL 모두 없음) placeholder + **"이 기기에 모델 파일 없음"** 호박색 라벨 표시(`missingModelIds`).
+  - `FixtureLibraryPanel`: 모델 집기 카드에 **로컬 모델 있음 / 모델 파일 없음** 칩 표시(IndexedDB 조회).
+- **동작 요약:** GLB 저장 = Firestore 에 집기 정의 + IndexedDB 에 원본. **같은 브라우저**: 새로고침 후에도 실제 GLB 렌더 유지. **다른 기기/브라우저**: 정의는 공유되되 원본이 없어 placeholder + 안내 라벨(Storage 활성화 시 클라우드 공유로 해소).
+- **브라우저 검증(E2E):** `uploadModelFile` 1ms 반환(기존 최대 2분 → 멈춤 없음), GLB 선택 후 저장버튼 활성, 사이즈 1300×900×1750 저장 시 다이얼로그 닫힘 + 라이브러리에 "GLB2/로컬 모델 있음" 카드 추가, 배치 후 3D 미리보기 실제 렌더(placeholder 아님, Error 0), 새로고침 후 카드·IndexedDB·칩 유지, 원본 삭제(타 기기 모사) 시 3D 에 "모델 파일 없음" 라벨 표시 확인. `npm run build` 통과.
 
 **v1.1.5 — Custom 3D Model (GLB/GLTF) Real Rendering**
 - **목표:** 커스텀 3D 모델 집기가 3D 미리보기에서 **회색 Placeholder 박스** 로만 보이던 것을 제거하고, **실제 GLB/GLTF 메쉬**를 입력한 실물 사이즈로 렌더.

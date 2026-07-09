@@ -135,21 +135,27 @@ export default function CustomFixtureDialog({
       const realD = num(dMm);
       const realH = num(hMm);
 
-      // 3D 모델: Storage 업로드(공유) + 로컬 캐시. URL 은 집기 정의에 저장 (v1.1.5)
+      // 3D 모델: IndexedDB 로컬 캐시(필수) + Storage 업로드(가능할 때만, v1.1.6).
+      // Spark 플랜에선 Storage 미사용 → uploadModelFile 이 즉시 {url:null, cached:true} 반환.
+      // 로컬 캐시조차 실패한 경우에만 저장을 막습니다(브라우저 IndexedDB 차단 등).
       let modelUrl = loaded.fileUrl;
+      let localModelId: string | undefined;
       if (loaded.kind === 'model' && loaded.file) {
         const up = await uploadModelFile(loaded.file, defId);
         modelUrl = up.url ?? undefined;
-        if (!up.url && !up.cached) {
-          setError('3D 모델 저장에 실패했습니다. 파일 크기(최대 20MB)와 네트워크를 확인해 주세요.');
+        if (!up.cached && !up.url) {
+          setError('이 브라우저에 3D 모델을 저장하지 못했습니다(로컬 저장소 차단/용량 부족). 시크릿 모드를 끄거나 다른 브라우저로 시도해 주세요.');
           setSaving(false);
           return;
         }
+        // 로컬 캐시 성공 → 이 키로 어느 세션에서든 로컬 GLB 를 읽어 렌더
+        localModelId = up.cached ? defId : undefined;
       }
 
       const customAsset: CustomAsset = {
         kind: loaded.kind,
         fileUrl: modelUrl,
+        localModelId,
         fileName: loaded.fileName,
         mimeType: loaded.mimeType,
         originalWidth: loaded.originalWidth,
@@ -264,7 +270,7 @@ export default function CustomFixtureDialog({
             </Stack>
             {isModel && (
               <Alert severity="info" sx={{ mt: 1 }}>
-                <b>GLB/GLTF</b> 모델은 3D 미리보기에서 입력한 실물 사이즈로 <b>실제 렌더링</b>됩니다(바닥 접지·회전 반영). 불러오기에 실패하면 회색 박스로 대체 표시됩니다. OBJ 는 아직 박스로 표시됩니다.
+                현재 무료 플랜에서는 3D 모델이 <b>이 브라우저에만 저장</b>됩니다. 같은 PC/브라우저에서는 새로고침 후에도 유지되며, 다른 기기에서는 placeholder 로 표시될 수 있습니다. <b>GLB/GLTF</b> 는 3D 미리보기에서 입력한 실물 사이즈로 실제 렌더링됩니다(바닥 접지·회전 반영). OBJ 는 아직 박스로 표시됩니다.
               </Alert>
             )}
           </Box>

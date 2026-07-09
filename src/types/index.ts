@@ -215,6 +215,11 @@ export interface CustomAsset {
   originalWidth?: number;
   originalHeight?: number;
   modelFormat?: 'glb' | 'gltf' | 'obj';
+  /**
+   * 3D 모델 원본이 캐시된 IndexedDB 키 (v1.1.6). 보통 FixtureDef.id 와 동일.
+   * Firebase Storage 없이도 이 키로 로컬 GLB 를 읽어 실제 렌더합니다. 없으면 placeholder.
+   */
+  localModelId?: string;
   /** 2D 평면도 표시 방식 */
   display2d?: 'footprint' | 'image' | 'image-footprint';
   /** 3D 표시 방식 */

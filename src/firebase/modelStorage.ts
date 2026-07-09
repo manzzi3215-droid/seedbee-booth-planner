@@ -13,6 +13,19 @@ import { isFirebaseConfigured } from './config';
 const IDB_NAME = 'blp-models';
 const IDB_STORE = 'models';
 
+/**
+ * Firebase Storage 업로드 사용 여부 (v1.1.6).
+ *
+ * 현재 프로젝트는 Spark(무료) 플랜이라 Firebase Storage 가 활성화돼 있지 않습니다.
+ * 이 상태에서 `uploadBytes` 를 호출하면 없는 버킷에 대해 SDK 가 최대 ~2분간 재시도하다
+ * 실패 → 저장(await)이 그 시간 동안 멈춰 다이얼로그가 안 닫히는 문제가 있었습니다.
+ * 그래서 당분간 **로컬(IndexedDB)** 저장만 사용합니다.
+ *
+ * Storage 를 콘솔에서 'Get Started' 로 활성화하고 `storage.rules` 를 배포한 뒤
+ * 이 값을 true 로 바꾸면 클라우드 업로드(다른 기기 공유)가 다시 켜집니다.
+ */
+export const MODEL_STORAGE_ENABLED = false;
+
 function openIdb(): Promise<IDBDatabase | null> {
   return new Promise((resolve) => {
     try {
@@ -58,6 +71,12 @@ export function isSupportedModelFile(file: File): boolean {
   return /\.(glb|gltf)$/i.test(file.name);
 }
 
+/** 이 브라우저(IndexedDB)에 해당 모델 원본이 캐시돼 있는지 (라이브러리 카드/placeholder 표시용) — v1.1.6 */
+export async function hasLocalModel(defId: string): Promise<boolean> {
+  const buf = await idbGet(defId);
+  return !!buf;
+}
+
 /** 최대 모델 파일 크기(20MB) */
 export const MAX_MODEL_BYTES = 20 * 1024 * 1024;
 
@@ -79,7 +98,8 @@ export async function uploadModelFile(
     /* 무시 */
   }
 
-  if (!isFirebaseConfigured) return { url: null, cached };
+  // Spark 플랜: Storage 미사용 → 로컬 캐시만 하고 즉시 반환(업로드 대기로 저장이 멈추지 않도록). v1.1.6
+  if (!MODEL_STORAGE_ENABLED || !isFirebaseConfigured) return { url: null, cached };
   try {
     const { app, uid } = await getFirebase();
     const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');

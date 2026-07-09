@@ -245,7 +245,8 @@ export function buildIsoScene(
       const cy = corners.reduce((s, c) => s + c.yMm, 0) / corners.length;
       models.push({
         id: p.id,
-        defId: def.id,
+        // IndexedDB 캐시 키: localModelId(v1.1.6) 우선, 없으면 def.id (하위 호환)
+        defId: ca.localModelId ?? def.id,
         url: ca.fileUrl,
         footprint: corners.map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
         cx,
