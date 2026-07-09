@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -18,7 +18,10 @@ import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateR
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import AddLocationAltRoundedIcon from '@mui/icons-material/AddLocationAltRounded';
-import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
+import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import VerticalAlignTopRoundedIcon from '@mui/icons-material/VerticalAlignTopRounded';
+import VerticalAlignBottomRoundedIcon from '@mui/icons-material/VerticalAlignBottomRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import type { FixtureDef } from '../../types';
 import { getShapeLabel } from './shapes';
@@ -48,57 +51,43 @@ function FixtureCard({
   fixture,
   selected,
   canEdit,
-  dragEnabled,
-  dropLine,
+  showMove,
+  canMoveUp,
+  canMoveDown,
   onToggleSelect,
   onPlace,
   onEdit,
   onDelete,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
+  onMove,
 }: {
   fixture: FixtureDef;
   selected: boolean;
   canEdit: boolean;
-  dragEnabled: boolean;
-  dropLine: 'top' | 'bottom' | null;
+  showMove: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onToggleSelect: () => void;
   onPlace: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onDragStart: () => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
-  onDragEnd: () => void;
+  onMove: (dir: 'top' | 'up' | 'down' | 'bottom') => void;
 }) {
   const isCustom = !!fixture.customAsset;
   return (
     <Paper
       elevation={0}
-      draggable={dragEnabled}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
       sx={{
         p: 1.25,
         border: '1px solid',
         borderColor: selected ? 'primary.main' : 'divider',
         bgcolor: selected ? 'action.selected' : 'background.paper',
         borderRadius: 1.5,
-        // 드롭 삽입 위치 표시선 (위/아래) — v1.1.2
-        boxShadow: dropLine === 'top' ? 'inset 0 3px 0 0 #2563eb' : dropLine === 'bottom' ? 'inset 0 -3px 0 0 #2563eb' : undefined,
         transition: 'border-color 0.15s, background-color 0.15s',
         '&:hover': { borderColor: selected ? 'primary.main' : 'text.disabled' },
         '&:hover .fixture-actions': { opacity: 1 },
       }}
     >
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-        {dragEnabled && (
-          <DragIndicatorRoundedIcon sx={{ fontSize: 16, color: 'text.disabled', cursor: 'grab', flexShrink: 0 }} />
-        )}
         <Checkbox
           size="small"
           checked={selected}
@@ -142,16 +131,27 @@ function FixtureCard({
           variant="outlined"
           sx={{ height: 20, fontSize: 11 }}
         />
-        <Button
-          size="small"
-          variant="contained"
-          startIcon={<AddLocationAltRoundedIcon sx={{ fontSize: 16 }} />}
-          onClick={onPlace}
-          disabled={!canEdit}
-          sx={{ py: 0.25, px: 1, minWidth: 0 }}
-        >
-          배치
-        </Button>
+        <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
+          {/* 순서 변경 버튼 (v1.1.3) — 드래그 대신 안정적인 이동 */}
+          {showMove && (
+            <>
+              <Tooltip title="맨 위로"><span><IconButton size="small" disabled={!canMoveUp} onClick={() => onMove('top')} sx={{ p: 0.25 }}><VerticalAlignTopRoundedIcon sx={{ fontSize: 16 }} /></IconButton></span></Tooltip>
+              <Tooltip title="위로"><span><IconButton size="small" disabled={!canMoveUp} onClick={() => onMove('up')} sx={{ p: 0.25 }}><KeyboardArrowUpRoundedIcon sx={{ fontSize: 18 }} /></IconButton></span></Tooltip>
+              <Tooltip title="아래로"><span><IconButton size="small" disabled={!canMoveDown} onClick={() => onMove('down')} sx={{ p: 0.25 }}><KeyboardArrowDownRoundedIcon sx={{ fontSize: 18 }} /></IconButton></span></Tooltip>
+              <Tooltip title="맨 아래로"><span><IconButton size="small" disabled={!canMoveDown} onClick={() => onMove('bottom')} sx={{ p: 0.25 }}><VerticalAlignBottomRoundedIcon sx={{ fontSize: 16 }} /></IconButton></span></Tooltip>
+            </>
+          )}
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<AddLocationAltRoundedIcon sx={{ fontSize: 16 }} />}
+            onClick={onPlace}
+            disabled={!canEdit}
+            sx={{ py: 0.25, px: 1, minWidth: 0, ml: 0.5 }}
+          >
+            배치
+          </Button>
+        </Stack>
       </Stack>
     </Paper>
   );
@@ -187,13 +187,10 @@ export default function FixtureLibraryPanel() {
   // 검색 · 폴더(카테고리) 필터 (v1.0.9)
   const [query, setQuery] = useState('');
   const [catFilter, setCatFilter] = useState<string>('all'); // 'all' | 'none' | <category>
-  // 드래그 정렬 (v1.1.1, v1.1.2 정밀화 — 드롭은 ref/이벤트 기반으로 state 타이밍 의존 제거)
-  const [dragId, setDragId] = useState<string | null>(null);
-  const dragIdRef = useRef<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
+  // 순서 변경 (v1.1.3) — 버튼 방식. 검색 중에는 숨김, 카테고리 필터 상태에선 해당 목록 안에서만.
   const [reorderError, setReorderError] = useState<string | null>(null);
-  // 검색 중에는 드래그 비활성(원본 순서와 어긋남 방지). 카테고리 필터는 허용.
-  const dragActive = canEdit && query.trim() === '';
+  const searching = query.trim() !== '';
+  const showMove = canEdit && !searching; // 검색 중 순서 변경 비활성
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -222,36 +219,24 @@ export default function FixtureLibraryPanel() {
     });
   }, [ordered, query, catFilter]);
 
-  // 드래그 정렬 (v1.1.2) — 드롭 지점(대상 카드 위/아래)에 따라 정확히 before/after 삽입.
-  //  1) 보이는 목록에서 dragId 제거 → 대상(toId) 기준 before/after 위치에 삽입
-  //  2) 전체 order 배열의 '보이는 슬롯'을 새 순서로 되메움(카테고리 필터에서도 안전)
-  const handleDrop = (toId: string, after: boolean) => {
-    const dropped = dragIdRef.current; // state 가 아닌 ref 로 최신 dragId 확정
-    dragIdRef.current = null;
-    setDropTarget(null);
-    setDragId(null);
-    if (!dropped || dropped === toId) return;
+  // 순서 이동 (v1.1.3) — 보이는(필터된) 목록 안에서 이동한 뒤, 전체 order 배열의
+  // '보이는 슬롯'만 새 순서로 되메워 카테고리 필터 상태에서도 다른 카테고리는 건드리지 않음.
+  const moveFixture = (id: string, dir: 'top' | 'up' | 'down' | 'bottom') => {
     const visIds = filtered.map((f) => f.id);
-    if (!visIds.includes(dropped) || !visIds.includes(toId)) return;
-    const without = visIds.filter((id) => id !== dropped);
-    let idx = without.indexOf(toId);
-    if (idx < 0) return;
-    if (after) idx += 1;
-    // 같은 자리면 변화 없음
-    without.splice(idx, 0, dropped);
-    if (without.join() === visIds.join()) return;
+    const from = visIds.indexOf(id);
+    if (from < 0) return;
+    const to =
+      dir === 'top' ? 0 : dir === 'bottom' ? visIds.length - 1 : dir === 'up' ? Math.max(0, from - 1) : Math.min(visIds.length - 1, from + 1);
+    if (to === from) return;
+    const newVis = [...visIds];
+    newVis.splice(from, 1);
+    newVis.splice(to, 0, id);
     const visSet = new Set(visIds);
     let vi = 0;
-    const newFull = ordered.map((f) => (visSet.has(f.id) ? without[vi++] : f.id));
+    const newFull = ordered.map((f) => (visSet.has(f.id) ? newVis[vi++] : f.id));
     setReorderError(null);
+    // 원자적 저장 실패 시 에러 표시(상태는 그대로라 이전 순서 유지)
     reorderFixtures(newFull).catch(() => setReorderError('순서 저장에 실패했습니다. 잠시 후 다시 시도하세요.'));
-  };
-  const handleDragOver = (e: React.DragEvent, id: string) => {
-    if (!dragIdRef.current) return;
-    e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const after = e.clientY > rect.top + rect.height / 2;
-    if (!dropTarget || dropTarget.id !== id || dropTarget.after !== after) setDropTarget({ id, after });
   };
 
   const openAdd = () => {
@@ -365,27 +350,20 @@ export default function FixtureLibraryPanel() {
             </Box>
           ) : (
             <Stack spacing={1} sx={{ flex: 1, minHeight: 0, overflowY: 'auto', pr: 0.5 }}>
-              {filtered.map((f) => (
+              {filtered.map((f, i) => (
                 <FixtureCard
                   key={f.id}
                   fixture={f}
                   selected={selectedIds.has(f.id)}
                   canEdit={canEdit}
-                  dragEnabled={dragActive && filtered.length > 1}
-                  dropLine={dragId && dragId !== f.id && dropTarget?.id === f.id ? (dropTarget.after ? 'bottom' : 'top') : null}
+                  showMove={showMove && filtered.length > 1}
+                  canMoveUp={i > 0}
+                  canMoveDown={i < filtered.length - 1}
                   onToggleSelect={() => toggleOne(f.id)}
                   onPlace={() => place(f)}
                   onEdit={() => openEdit(f)}
                   onDelete={() => handleDelete(f)}
-                  onDragStart={() => { dragIdRef.current = f.id; setDragId(f.id); }}
-                  onDragOver={(e) => handleDragOver(e, f.id)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    // 드롭 위치(카드 상/하반부)로 before/after 를 이벤트에서 직접 계산 (state 의존 제거)
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    handleDrop(f.id, e.clientY > rect.top + rect.height / 2);
-                  }}
-                  onDragEnd={() => { dragIdRef.current = null; setDragId(null); setDropTarget(null); }}
+                  onMove={(dir) => moveFixture(f.id, dir)}
                 />
               ))}
               {fixtures.length === 0 && (

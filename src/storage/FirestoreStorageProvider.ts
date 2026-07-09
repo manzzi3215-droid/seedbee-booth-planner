@@ -233,6 +233,12 @@ export class FirestoreStorageProvider implements StorageProvider {
     await this.writeCloudFixtures(cloud);
   }
 
+  // 전체 라이브러리를 한 번의 문서 쓰기로 저장 (v1.1.3) — 순서 변경 시 병렬 read-modify-write 경쟁 방지
+  async saveFixtures(fixtures: FixtureDef[]): Promise<void> {
+    await this.cache.saveFixtures(fixtures);
+    await this.writeCloudFixtures(fixtures);
+  }
+
   async deleteFixture(id: string): Promise<void> {
     await this.cache.deleteFixture(id);
     const cloud = await this.readCloudFixtures();

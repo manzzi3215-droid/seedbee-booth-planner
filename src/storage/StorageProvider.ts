@@ -24,6 +24,12 @@ export interface StorageProvider {
   getFixtures(): Promise<FixtureDef[]>;
   getFixture(id: string): Promise<FixtureDef | null>;
   saveFixture(fixture: FixtureDef): Promise<void>;
+  /**
+   * 집기 라이브러리 전체를 한 번에 원자적으로 저장 (v1.1.3).
+   * 순서 변경 등 여러 집기를 동시에 갱신할 때, 개별 saveFixture 를 병렬 호출하면
+   * 같은 문서에 대한 read-modify-write 경쟁으로 일부만 반영되는 문제를 방지합니다.
+   */
+  saveFixtures(fixtures: FixtureDef[]): Promise<void>;
   deleteFixture(id: string): Promise<void>;
 
   // --- Asset (에셋 라이브러리, v0.9.7) ---

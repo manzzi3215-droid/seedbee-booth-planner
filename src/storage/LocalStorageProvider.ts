@@ -96,6 +96,10 @@ export class LocalStorageProvider implements StorageProvider {
     writeJSON(FIXTURES_KEY, fixtures);
   }
 
+  async saveFixtures(fixtures: FixtureDef[]): Promise<void> {
+    writeJSON(FIXTURES_KEY, fixtures);
+  }
+
   async deleteFixture(id: string): Promise<void> {
     const fixtures = readJSON<FixtureDef[]>(FIXTURES_KEY, []);
     writeJSON(

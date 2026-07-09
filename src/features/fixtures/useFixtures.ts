@@ -46,16 +46,17 @@ export function useFixtures() {
     [reload],
   );
 
-  // 드래그 정렬(v1.1.1) — 주어진 id 순서대로 order 를 0,1,2… 로 재부여 후 1회 재조회
+  // 순서 정규화(v1.1.3) — 주어진 id 순서대로 order 를 0,1,2… 로 재부여하고,
+  // 전체 라이브러리를 "한 번의 문서 쓰기"로 원자적 저장(병렬 저장 경쟁 제거) 후 재조회.
+  // orderedIds 에 없는 집기가 있으면 뒤에 붙여 유실을 방지합니다.
   const reorderFixtures = useCallback(
     async (orderedIds: string[]) => {
       const map = new Map(fixtures.map((f) => [f.id, f]));
-      await Promise.all(
-        orderedIds.map((id, i) => {
-          const f = map.get(id);
-          return f && f.order !== i ? storage.saveFixture({ ...f, order: i }) : Promise.resolve();
-        }),
-      );
+      const seen = new Set(orderedIds);
+      const inOrder = orderedIds.map((id) => map.get(id)).filter((f): f is FixtureDef => !!f);
+      const rest = fixtures.filter((f) => !seen.has(f.id)); // 방어적: 누락분 뒤에 유지
+      const next = [...inOrder, ...rest].map((f, i) => ({ ...f, order: i }));
+      await storage.saveFixtures(next);
       await reload();
     },
     [fixtures, reload],

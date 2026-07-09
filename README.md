@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.1.2 - Hotfix: 커스텀 집기 저장 오류(1MiB 한계) · 드래그 정렬 정밀화**
+> **v1.1.3 - Hotfix: 집기 라이브러리 순서 변경 안정화(이동 버튼 + 원자적 저장)**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -331,6 +331,13 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.1.3 — Hotfix: Stable Library Reorder (move buttons + atomic save)**
+- **근본 원인:** `reorderFixtures` 가 순서 변경 시 **개별 `saveFixture` 를 N개 병렬 호출** → 같은 Firestore 문서(`libraries/{uid}`)에 대한 read-modify-write **경쟁(race)** 으로 일부 `order` 만 반영 → 순서가 계속 튐(HTML5 드래그의 state 타이밍 문제와 겹쳐 v1.1.2 에서도 재발).
+- **수정 1 (원자적 저장):** `StorageProvider.saveFixtures(fixtures[])` 추가 — 라이브러리 전체를 **한 번의 문서 쓰기**로 저장. `reorderFixtures` 는 새 순서 배열을 만들어 order 0..N 재부여 후 1회 저장 → 경쟁 제거, 새로고침 후 순서 정확히 유지.
+- **수정 2 (드래그 제거·버튼 도입):** 불안정한 HTML5 Drag&Drop 제거. 각 집기 카드에 **맨 위로 / 위로 / 아래로 / 맨 아래로** 버튼 → 클릭 즉시 정확히 이동. 검색 중 버튼 숨김, 카테고리 필터 상태에선 해당 목록 안에서만 이동(다른 카테고리 순서 불변). 저장 실패 시 에러 표시(상태 유지 = 이전 순서 복구).
+- **정렬 기준(단순화 유지):** order 있는 항목 오름차순 → 없는 항목은 저장순 유지, 한 번 이동하면 전체 order 0..N 정규화(index/order 혼합 없음).
+- **브라우저 검증:** 마지막→맨위/첫→맨아래/위·아래 한 칸 이동 정확, 새로고침 유지, 검색 중 버튼 숨김, 카테고리 필터 내 이동 시 타 카테고리 불변·유지 모두 확인. Console Error 0.
 
 **v1.1.2 — Hotfix: Custom-fixture Save & Precise Drag Reorder**
 - **[버그1 원인] 커스텀 집기 저장 실패:** 커스텀 이미지가 ~400KB dataURL 로 전역 라이브러리 문서(`libraries/{uid}`, 모든 집기를 한 문서에 저장)에 임베드되어 Firestore **문서 1MiB 한계**를 초과 → `setDoc` 예외. 게다가 다이얼로그에 catch 가 없어 에러가 **완전히 숨겨져** 저장 안 됨이 조용히 발생.
