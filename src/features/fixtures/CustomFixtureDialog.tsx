@@ -17,7 +17,7 @@ import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 import ViewInArRoundedIcon from '@mui/icons-material/ViewInArRounded';
 import type { CustomAsset, FixtureDef } from '../../types';
 import { generateId } from '../../utils/id';
-import { uploadDesignAsset } from '../../firebase/storage';
+import { uploadCustomFixtureImage } from '../../firebase/storage';
 
 const DEFAULT_CUSTOM_COLOR = '#94a3b8';
 const IMG_RE = /\.(png|jpe?g|webp|svg)$/i;
@@ -92,7 +92,7 @@ export default function CustomFixtureDialog({
       const baseName = file.name.replace(/\.[^.]+$/, '');
       if (!name) setName(baseName);
       if (isImg) {
-        const a = await uploadDesignAsset(file);
+        const a = await uploadCustomFixtureImage(file);
         setLoaded({
           kind: 'image',
           fileName: file.name,
@@ -125,6 +125,7 @@ export default function CustomFixtureDialog({
   const save = async () => {
     if (!loaded || !canSave) return;
     setSaving(true);
+    setError(null);
     try {
       const realW = num(wMm);
       const realD = num(dMm);
@@ -157,6 +158,13 @@ export default function CustomFixtureDialog({
       };
       await onSave(def);
       handleClose();
+    } catch (e) {
+      // 저장 실패(예: 라이브러리 문서 용량 초과)를 사용자에게 명확히 표시 (v1.1.2)
+      console.error('[CustomFixture] save failed', e);
+      setError(
+        '집기 저장에 실패했습니다. 라이브러리 저장 용량(문서 1MB)을 초과했을 수 있습니다. ' +
+          '불필요한 커스텀 집기를 삭제하거나 더 작은 이미지로 다시 시도해 주세요.',
+      );
     } finally {
       setSaving(false);
     }

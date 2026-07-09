@@ -89,6 +89,73 @@ async function buildSvgDataUrl(file: File): Promise<{ url: string; w: number; h:
   return { url, w: dim.w, h: dim.h };
 }
 
+// --- 커스텀 집기 이미지 (v1.1.2) ---
+// 커스텀 집기는 전역 라이브러리 문서(libraries/{uid})에 함께 저장되며 Firestore 문서 1MiB
+// 한계를 공유합니다. 여러 개가 쌓여도 한계를 넘지 않도록 훨씬 작게 인코딩합니다(썸네일급).
+const CUSTOM_MAX_SIDE = 512;
+const CUSTOM_MAX_LEN = 150_000; // dataURL 문자 수 ≈ 110KB (여러 개가 1MiB 문서에 함께 저장됨)
+
+/** 이미지(원본/svg dataURL)를 작은 dataURL 로 래스터화 (여러 크기/포맷 시도) */
+async function rasterizeCompact(
+  srcUrl: string,
+  hasAlpha: boolean,
+  maxSides: number[],
+  maxLen: number,
+): Promise<{ url: string; w: number; h: number }> {
+  const img = await loadImage(srcUrl);
+  const iw = img.naturalWidth || img.width || maxSides[0];
+  const ih = img.naturalHeight || img.height || maxSides[0];
+  const encode = (maxSide: number, jpeg: boolean): { url: string; w: number; h: number } => {
+    const scale = Math.min(1, maxSide / Math.max(iw, ih || 1));
+    const cw = Math.max(1, Math.round(iw * scale));
+    const ch = Math.max(1, Math.round((ih || iw) * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, cw, ch);
+    const url = jpeg ? canvas.toDataURL('image/jpeg', 0.72) : canvas.toDataURL('image/png');
+    return { url, w: cw, h: ch };
+  };
+  let last = encode(maxSides[0], !hasAlpha);
+  for (const ms of maxSides) {
+    for (const jpeg of hasAlpha ? [false, true] : [true]) {
+      const out = encode(ms, jpeg);
+      last = out;
+      if (out.url.length <= maxLen) return out;
+    }
+  }
+  return last; // 한계 초과해도 가장 작은 결과 반환(호출부에서 저장 실패 시 안내)
+}
+
+/**
+ * 커스텀 집기용 이미지 → 소형 dataURL (v1.1.2).
+ * 라이브러리 문서 용량을 보호하기 위해 최대 560px·JPEG 재인코딩으로 크게 줄입니다.
+ * SVG 도 안전을 위해 소형 래스터로 변환합니다(투명 유지).
+ */
+export async function uploadCustomFixtureImage(
+  file: File,
+): Promise<{ url: string; widthPx?: number; heightPx?: number }> {
+  const isSvg = /svg/i.test(file.type) || /\.svg$/i.test(file.name);
+  const hasAlpha = isSvg || /png|webp/i.test(file.type) || /\.(png|webp)$/i.test(file.name);
+  let srcUrl: string;
+  let revoke = false;
+  if (isSvg) {
+    srcUrl = (await buildSvgDataUrl(file)).url;
+  } else {
+    srcUrl = URL.createObjectURL(file);
+    revoke = true;
+  }
+  try {
+    const { url, w, h } = await rasterizeCompact(srcUrl, hasAlpha, [CUSTOM_MAX_SIDE, 400, 320], CUSTOM_MAX_LEN);
+    return { url, widthPx: w || undefined, heightPx: h || undefined };
+  } finally {
+    if (revoke) URL.revokeObjectURL(srcUrl);
+  }
+}
+
 /**
  * 디자인 파일 → DesignAsset (자기완결 dataURL 참조).
  * 함수명은 하위 호환을 위해 유지(uploadDesignAsset).

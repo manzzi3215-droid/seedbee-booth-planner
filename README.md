@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.1.1 - 커스텀 집기(이미지/3D) 실물사이즈 자동 스케일 · 집기 라이브러리 드래그 정렬**
+> **v1.1.2 - Hotfix: 커스텀 집기 저장 오류(1MiB 한계) · 드래그 정렬 정밀화**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -331,6 +331,13 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.1.2 — Hotfix: Custom-fixture Save & Precise Drag Reorder**
+- **[버그1 원인] 커스텀 집기 저장 실패:** 커스텀 이미지가 ~400KB dataURL 로 전역 라이브러리 문서(`libraries/{uid}`, 모든 집기를 한 문서에 저장)에 임베드되어 Firestore **문서 1MiB 한계**를 초과 → `setDoc` 예외. 게다가 다이얼로그에 catch 가 없어 에러가 **완전히 숨겨져** 저장 안 됨이 조용히 발생.
+  - **수정:** 커스텀 이미지를 소형(≤512px·JPEG, ~110KB)으로 재인코딩(`uploadCustomFixtureImage`) → 여러 개가 한 문서에 들어가도 여유. 저장 실패 시 다이얼로그에 명확한 에러 표시(다이얼로그 유지). 검증: 원본 2MB → 132KB 저장, 정상 등록.
+- **[버그2 원인] 드래그 정렬 부정확:** ① before/after 없이 대상 index 에 삽입(아래로 드래그 시 off-by-one), ② `ordered` 정렬이 `order` 값과 index 폴백을 섞어(`order ?? i+len`) 일부만 order 가 있으면 항목이 튐, ③ state 타이밍 의존.
+  - **수정:** 드롭 위치(카드 상/하반부, `clientY`)로 before/after 정확 계산 · 결정적 정렬(order 있는 것 먼저→없는 것은 저장순 유지) · dragId 를 ref 로(state 타이밍 무관) · 검색 중 드래그 비활성 · 저장 실패 시 에러 · 드롭선(위/아래) 표시. 정렬 로직은 오프라인 테스트로 전 케이스 검증.
+- Build 성공 · Console Error 0.
 
 **v1.1.1 — Custom Fixtures (image/3D) & Fixture-library Drag Reorder**
 - **[데이터 구조] `FixtureDef.customAsset?`(optional):** `{ kind:'image'|'model', fileUrl?, fileName, mimeType?, originalWidth?/Height?, modelFormat?, display2d?, display3d?, realWidthMm/DepthMm/HeightMm, rotationOffset?, scaleMode? }`. 실물 사이즈는 width/depth/height 에도 반영. 기존 집기 100% 호환.
