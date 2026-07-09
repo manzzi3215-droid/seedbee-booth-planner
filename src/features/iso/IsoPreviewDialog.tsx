@@ -169,6 +169,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
         ...designAssets.map((a) => a.url),
         ...products.map((p) => p.thumbnailUrl).filter((u): u is string => !!u),
         ...products.flatMap((p) => Object.values(p.images ?? {})).filter((u): u is string => !!u),
+        // 커스텀 이미지 집기(v1.1.1)
+        ...placed.map((p) => fixturesById.get(p.fixtureDefId)?.customAsset).filter((ca) => ca?.kind === 'image' && !!ca.fileUrl).map((ca) => ca!.fileUrl!),
       ];
       const imageEls = await preloadImages(srcs);
       if (!active) return;

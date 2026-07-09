@@ -13,13 +13,16 @@ import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import AddLocationAltRoundedIcon from '@mui/icons-material/AddLocationAltRounded';
+import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import type { FixtureDef } from '../../types';
 import { getShapeLabel } from './shapes';
 import FixtureFormDialog from './FixtureFormDialog';
+import CustomFixtureDialog from './CustomFixtureDialog';
 import { useEditor } from '../editor/EditorContext';
 import AssetManagerPanel from '../design/AssetManagerPanel';
 
@@ -44,41 +47,70 @@ function FixtureCard({
   fixture,
   selected,
   canEdit,
+  dragEnabled,
+  dragOver,
   onToggleSelect,
   onPlace,
   onEdit,
   onDelete,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: {
   fixture: FixtureDef;
   selected: boolean;
   canEdit: boolean;
+  dragEnabled: boolean;
+  dragOver: boolean;
   onToggleSelect: () => void;
   onPlace: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }) {
+  const isCustom = !!fixture.customAsset;
   return (
     <Paper
       elevation={0}
+      draggable={dragEnabled}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
       sx={{
         p: 1.25,
         border: '1px solid',
         borderColor: selected ? 'primary.main' : 'divider',
         bgcolor: selected ? 'action.selected' : 'background.paper',
         borderRadius: 1.5,
+        borderTop: dragOver ? '2px solid' : '1px solid',
+        borderTopColor: dragOver ? 'primary.main' : undefined,
         transition: 'border-color 0.15s, background-color 0.15s',
         '&:hover': { borderColor: selected ? 'primary.main' : 'text.disabled' },
         '&:hover .fixture-actions': { opacity: 1 },
       }}
     >
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        {dragEnabled && (
+          <DragIndicatorRoundedIcon sx={{ fontSize: 16, color: 'text.disabled', cursor: 'grab', flexShrink: 0 }} />
+        )}
         <Checkbox
           size="small"
           checked={selected}
           onChange={onToggleSelect}
           sx={{ p: 0.25, mr: 0.25 }}
         />
-        <ColorSwatch color={fixture.color} />
+        {isCustom && fixture.customAsset?.kind === 'image' && fixture.customAsset.fileUrl ? (
+          <Box sx={{ width: 18, height: 18, flexShrink: 0, borderRadius: 0.5, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.2)' }}>
+            <img src={fixture.customAsset.fileUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </Box>
+        ) : (
+          <ColorSwatch color={fixture.color} />
+        )}
         <Typography variant="body2" sx={{ fontWeight: 700, flex: 1 }} noWrap title={fixture.name}>
           {fixture.name}
         </Typography>
@@ -144,8 +176,9 @@ function GroupHeader({ title, count, open, onToggle }: { title: string; count: n
 }
 
 export default function FixtureLibraryPanel() {
-  const { fixtures, fixturesLoading, saveFixture, deleteFixture, place, canEdit, designAssets } = useEditor();
+  const { fixtures, fixturesLoading, saveFixture, deleteFixture, reorderFixtures, place, canEdit, designAssets } = useEditor();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
   const [editing, setEditing] = useState<FixtureDef | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [fixOpen, setFixOpen] = useState(true);
@@ -153,6 +186,9 @@ export default function FixtureLibraryPanel() {
   // 검색 · 폴더(카테고리) 필터 (v1.0.9)
   const [query, setQuery] = useState('');
   const [catFilter, setCatFilter] = useState<string>('all'); // 'all' | 'none' | <category>
+  // 드래그 정렬 (v1.1.1)
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -160,15 +196,40 @@ export default function FixtureLibraryPanel() {
     return [...set].sort();
   }, [fixtures]);
 
+  // order 기준 정렬 — order 없으면 현재(추가) 순서 유지(뒤로) → 하위 호환 (v1.1.1)
+  const ordered = useMemo(() => {
+    return fixtures
+      .map((f, i) => ({ f, key: f.order ?? i + fixtures.length }))
+      .sort((a, b) => a.key - b.key)
+      .map((x) => x.f);
+  }, [fixtures]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return fixtures.filter((f) => {
+    return ordered.filter((f) => {
       if (catFilter === 'none' && f.category) return false;
       if (catFilter !== 'all' && catFilter !== 'none' && f.category !== catFilter) return false;
       if (!q) return true;
       return [f.name, f.category, f.memo].filter(Boolean).some((s) => s!.toLowerCase().includes(q));
     });
-  }, [fixtures, query, catFilter]);
+  }, [ordered, query, catFilter]);
+
+  // 드래그 정렬: 보이는 목록 내에서 순서를 바꾼 뒤, 전체 order 로 반영 (필터 상태에서도 안전)
+  const handleReorder = (toId: string) => {
+    if (!dragId || dragId === toId) return;
+    const visIds = filtered.map((f) => f.id);
+    const from = visIds.indexOf(dragId);
+    const to = visIds.indexOf(toId);
+    if (from < 0 || to < 0) return;
+    const newVis = [...visIds];
+    newVis.splice(from, 1);
+    newVis.splice(to, 0, dragId);
+    // 전체 순서에 되반영: 보이는 슬롯을 newVis 순서로 채우고, 안 보이는 항목은 그대로
+    const visSet = new Set(visIds);
+    let vi = 0;
+    const newFull = ordered.map((f) => (visSet.has(f.id) ? newVis[vi++] : f.id));
+    void reorderFixtures(newFull);
+  };
 
   const openAdd = () => {
     setEditing(null);
@@ -224,9 +285,14 @@ export default function FixtureLibraryPanel() {
       <GroupHeader title="집기 라이브러리" count={fixtures.length} open={fixOpen} onToggle={() => setFixOpen((v) => !v)} />
       {fixOpen && (
         <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', mb: 1 }}>
-          <Button variant="contained" size="small" fullWidth startIcon={<AddRoundedIcon />} onClick={openAdd} sx={{ mb: 1, flexShrink: 0 }}>
-            집기 추가
-          </Button>
+          <Stack direction="row" spacing={0.5} sx={{ mb: 1, flexShrink: 0 }}>
+            <Button variant="contained" size="small" fullWidth startIcon={<AddRoundedIcon />} onClick={openAdd}>
+              집기 추가
+            </Button>
+            <Button variant="outlined" size="small" fullWidth startIcon={<AddPhotoAlternateRoundedIcon />} onClick={() => setCustomOpen(true)} disabled={!canEdit}>
+              커스텀(이미지/3D)
+            </Button>
+          </Stack>
 
           {/* 검색 (v1.0.9) */}
           {!fixturesLoading && fixtures.length > 0 && (
@@ -280,10 +346,16 @@ export default function FixtureLibraryPanel() {
                   fixture={f}
                   selected={selectedIds.has(f.id)}
                   canEdit={canEdit}
+                  dragEnabled={canEdit && filtered.length > 1}
+                  dragOver={dragOverId === f.id && dragId !== f.id}
                   onToggleSelect={() => toggleOne(f.id)}
                   onPlace={() => place(f)}
                   onEdit={() => openEdit(f)}
                   onDelete={() => handleDelete(f)}
+                  onDragStart={() => setDragId(f.id)}
+                  onDragOver={(e) => { e.preventDefault(); if (dragOverId !== f.id) setDragOverId(f.id); }}
+                  onDrop={() => { handleReorder(f.id); setDragId(null); setDragOverId(null); }}
+                  onDragEnd={() => { setDragId(null); setDragOverId(null); }}
                 />
               ))}
               {fixtures.length === 0 && (
@@ -312,6 +384,7 @@ export default function FixtureLibraryPanel() {
       </Box>
 
       <FixtureFormDialog open={dialogOpen} fixture={editing} onClose={() => setDialogOpen(false)} onSubmit={saveFixture} />
+      <CustomFixtureDialog open={customOpen} onClose={() => setCustomOpen(false)} onSave={saveFixture} />
     </Box>
   );
 }

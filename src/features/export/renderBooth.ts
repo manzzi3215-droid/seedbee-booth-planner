@@ -11,6 +11,7 @@ import type {
   PlacedText,
   Product,
 } from '../../types';
+import { DEFAULT_TEXTURE_TRANSFORM } from '../../types';
 import { planFaceMapping, assetById, computeFitRect } from '../design/mapping';
 import { productById as findProduct, productImageUrl, productSize, DEFAULT_PRODUCT_COLOR } from '../products/productModel';
 import { TEXT_FONT_FAMILY } from '../texts/constants';
@@ -199,9 +200,14 @@ export function createBoothDrawingDataURL(
     for (const p of placed) {
       const def = fixturesById.get(p.fixtureDefId);
       if (!def) continue;
-      const dm = planFaceMapping(p.design);
-      const asset = dm ? assetById(designAssets, dm.assetId) : null;
-      const designImage = asset ? imageElements.get(asset.url) : undefined;
+      let dm = planFaceMapping(p.design);
+      let designImage = dm ? imageElements.get(assetById(designAssets, dm.assetId)?.url ?? '') : undefined;
+      // 커스텀 이미지 집기(v1.1.1) — 인스턴스 디자인 없으면 customAsset 이미지 표시
+      const ca = def.customAsset;
+      if (!dm && ca?.kind === 'image' && ca.fileUrl && ca.display2d !== 'footprint') {
+        dm = { assetId: '', mode: 'contain', transform: DEFAULT_TEXTURE_TRANSFORM };
+        designImage = imageElements.get(ca.fileUrl);
+      }
       layer.add(buildFixtureGroup(p, def, scale, showFixtureNames, dm, designImage));
     }
 

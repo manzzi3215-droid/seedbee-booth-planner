@@ -196,6 +196,37 @@ export interface FixtureDef {
    * 재단선/안전영역/출력용 변형을 면별로 보관합니다. 누락 시 집기 치수 기준 기본값을 생성합니다.
    */
   printSettings?: PrintSettings;
+
+  /**
+   * 커스텀 집기(사용자가 이미지/3D 모델을 불러와 등록) 정보 — v1.1.1 (optional, 하위 호환).
+   * 실물 사이즈(realWidthMm/DepthMm/HeightMm)는 widthMm/depthMm/heightMm 에도 반영됩니다.
+   */
+  customAsset?: CustomAsset;
+}
+
+/** 커스텀 집기 에셋 (v1.1.1) — 이미지 또는 3D 모델 기반 */
+export interface CustomAsset {
+  kind: 'image' | 'model';
+  /** 이미지: dataURL(자기완결). 모델: 파일명/포맷만 저장(1차 구현은 placeholder 렌더) */
+  fileUrl?: string;
+  fileName: string;
+  mimeType?: string;
+  /** 원본 픽셀 크기(이미지) */
+  originalWidth?: number;
+  originalHeight?: number;
+  modelFormat?: 'glb' | 'gltf' | 'obj';
+  /** 2D 평면도 표시 방식 */
+  display2d?: 'footprint' | 'image' | 'image-footprint';
+  /** 3D 표시 방식 */
+  display3d?: 'panel' | 'box-texture' | 'top-texture' | 'billboard' | 'model' | 'placeholder';
+  /** 입력한 실물 사이즈(mm) — width/depth/height 에도 반영 */
+  realWidthMm: number;
+  realDepthMm: number;
+  realHeightMm: number;
+  /** 3D 모델 방향 보정(도) */
+  rotationOffset?: { x?: number; y?: number; z?: number };
+  /** 스케일 모드 (기본: 실물 사이즈 맞춤) */
+  scaleMode?: 'fit-real-size';
 }
 
 /**

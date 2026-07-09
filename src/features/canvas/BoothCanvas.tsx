@@ -24,6 +24,7 @@ import type {
   Product,
   SvgDocument,
 } from '../../types';
+import { DEFAULT_TEXTURE_TRANSFORM } from '../../types';
 import { planFaceMapping, assetById } from '../design/mapping';
 import { floorMaterialDef } from '../styling/styling';
 import ProductNode from '../products/ProductNode';
@@ -186,6 +187,11 @@ export default function BoothCanvas({
         return prod ? productImageUrl(prod, pp.facing) : undefined;
       })
       .filter((u): u is string => !!u),
+    // 커스텀 이미지 집기(v1.1.1) — def.customAsset.fileUrl
+    ...placed
+      .map((p) => fixturesById.get(p.fixtureDefId)?.customAsset)
+      .filter((ca): ca is NonNullable<typeof ca> => ca?.kind === 'image' && !!ca.fileUrl)
+      .map((ca) => ca.fileUrl!),
   ]);
   // 이미지 또는 배경 중 선택된 것에 Transformer 부착
   const { transformerRef, register } = useImageTransformer(selectedImageId ?? selectedBackgroundId);
@@ -708,8 +714,14 @@ export default function BoothCanvas({
             {placed.map((p) => {
               const def = fixturesById.get(p.fixtureDefId);
               if (!def) return null;
-              const dm = planFaceMapping(p.design);
-              const asset = dm ? assetById(designAssets, dm.assetId) : null;
+              let dm = planFaceMapping(p.design);
+              let designImg = dm ? imageMap.get(assetById(designAssets, dm.assetId)?.url ?? '') : undefined;
+              // 커스텀 이미지 집기: 인스턴스 디자인이 없으면 customAsset 이미지를 footprint 에 표시 (v1.1.1)
+              const ca = def.customAsset;
+              if (!dm && ca?.kind === 'image' && ca.fileUrl && ca.display2d !== 'footprint') {
+                dm = { assetId: '', mode: 'contain', transform: DEFAULT_TEXTURE_TRANSFORM };
+                designImg = imageMap.get(ca.fileUrl);
+              }
               return (
                 <FixtureNode
                   key={p.id}
@@ -720,7 +732,7 @@ export default function BoothCanvas({
                   scale={viewport.scale}
                   showName={showFixtureNames}
                   designMapping={dm}
-                  designImage={asset ? imageMap.get(asset.url) : undefined}
+                  designImage={designImg}
                   showRotateHandle={
                     (selectedFixtureIds?.includes(p.id) ?? p.id === selectedFixtureId) &&
                     (selectedFixtureIds?.length ?? 1) <= 1

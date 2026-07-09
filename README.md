@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.1.0 - 자동저장 상태 · 스타일 복사 · 정렬 업그레이드 · 확대 UX · 프로젝트 정보**
+> **v1.1.1 - 커스텀 집기(이미지/3D) 실물사이즈 자동 스케일 · 집기 라이브러리 드래그 정렬**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,14 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**커스텀 집기(이미지/3D) · 라이브러리 드래그 정렬 (v1.1.1)**
+- **커스텀 집기 추가:** 집기 라이브러리에서 **[커스텀(이미지/3D)]** → 파일 불러오기(이미지 PNG·JPG·WEBP·SVG / 3D GLB·GLTF·OBJ) → 미리보기 → 실물 사이즈(가로·깊이·높이 mm) → 2D/3D 표시 방식 → 이름·폴더 → 저장. 기존 집기처럼 배치·검색·카테고리·정렬에 포함.
+- **실물 사이즈 자동 스케일:** 입력한 mm가 집기 width/depth/height 에 반영되어 부스 축척에 자동 정합. 이미지 원본 픽셀과 무관.
+- **이미지 집기 2D:** footprint + 이미지 / 이미지만 / footprint만. **3D:** 세운 판넬(전면 이미지)·박스 전체 텍스처·상판 이미지·빌보드. (예: TV 1200×80×700 → 얇은 판넬 전면에 TV 이미지)
+- **3D 모델(GLB/GLTF/OBJ):** 1차 구현은 2D footprint + 3D placeholder 박스 + 메타데이터 저장(데이터 구조는 실제 모델 렌더 확장 대비). 방향 보정값(rotationOffset) 필드 포함.
+- **파일 저장:** 이미지는 기존 `uploadDesignAsset` 재사용(자기완결 dataURL, 압축 ≤900KB) — 게스트/로그인 동일 동작, Storage/CORS 불필요. 모델은 메타데이터만 저장(대용량 임베드 회피).
+- **집기 라이브러리 드래그 정렬:** 드래그 핸들로 순서 변경(드롭 위치 표시선), `order`(optional) 저장, 새로고침·재접속 후 순서 유지. 검색/카테고리 필터 상태에서도 안전하게 반영.
 
 **실무 완성도·UX 향상 (v1.1.0)**
 - **자동 저장 상태 표시:** 하단 상태바에 `●저장중… / ✓저장완료·HH:MM:SS / 변경됨 / 저장 실패` 표시. (자동 저장 로직은 기존 5초 debounce, Undo/Redo 는 이미 완비 — Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, 200단계)
@@ -323,6 +331,14 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.1.1 — Custom Fixtures (image/3D) & Fixture-library Drag Reorder**
+- **[데이터 구조] `FixtureDef.customAsset?`(optional):** `{ kind:'image'|'model', fileUrl?, fileName, mimeType?, originalWidth?/Height?, modelFormat?, display2d?, display3d?, realWidthMm/DepthMm/HeightMm, rotationOffset?, scaleMode? }`. 실물 사이즈는 width/depth/height 에도 반영. 기존 집기 100% 호환.
+- **[등록 플로우] `CustomFixtureDialog`:** 파일→미리보기→실물 사이즈→2D/3D 표시 방식→이름/폴더→저장. 이미지는 `uploadDesignAsset`(dataURL) 재사용, 모델은 메타데이터. `saveFixture` 로 라이브러리 등록.
+- **[2D 렌더] BoothCanvas/renderBooth:** 인스턴스 디자인이 없고 `customAsset.kind==='image'` 이면 footprint 에 이미지 표시(display2d 반영). imageMap/export 프리로드에 커스텀 URL 추가.
+- **[3D 렌더] scene.ts:** `customAsset` 이미지→display3d 별 면 텍스처 합성(panel=전/후면, box-texture=전체, top-texture=상판, billboard=전면). 모델=placeholder 박스. IsoPreviewDialog 프리로드 추가.
+- **[드래그 정렬] `useFixtures.reorderFixtures`:** 드롭 순서대로 `order` 재부여+1회 재조회. FixtureLibraryPanel 은 order 정렬(없으면 기존 순서), 드래그 핸들/드롭 표시선, 필터 상태 안전 반영.
+- **검증:** 이미지 커스텀 집기(TV 1200×80×700) 등록→배치→3D 판넬+이미지+실물사이즈 확인, GLB placeholder 등록, 드래그 정렬 후 새로고침 유지, Console Error 0. Build 성공.
 
 **v1.1.0 — Auto-save Status · Style Copy/Paste · Align Upgrade · Zoom UX · Project Info**
 - **조사 결과:** Undo/Redo(#1)는 v0.9.0부터 이미 완비(Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, 200단계 스냅샷 — 이동·회전·삭제·복사·그룹·매핑·색상·부스·치수 커버)라 재작업 없음. Auto Save·Smart Snap·치수선도 기존 존재. 이번 버전은 사용자 협의로 **저위험 완성 세트(#2·#7·#8·#9·#10)**를 구현.

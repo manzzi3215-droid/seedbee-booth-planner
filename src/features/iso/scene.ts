@@ -220,6 +220,27 @@ export function buildIsoScene(
         const wt = wl.length ? toTex(wl[wl.length - 1]) : null;
         if (wt) wrapTexture = wt;
       }
+    } else if (def.customAsset?.kind === 'image' && def.customAsset.fileUrl) {
+      // 커스텀 이미지 집기(v1.1.1) — display3d 에 따라 면 텍스처 합성 (인스턴스 디자인 없을 때)
+      const url = def.customAsset.fileUrl;
+      const tex: IsoFaceTexture = { url, opacity: 1 };
+      const f: NonNullable<IsoBox['faces']> = {};
+      switch (def.customAsset.display3d) {
+        case 'box-texture':
+          f.front = tex; f.back = tex; f.left = tex; f.right = tex; f.top = tex;
+          break;
+        case 'top-texture':
+          f.top = tex;
+          break;
+        case 'billboard':
+          f.front = tex;
+          break;
+        case 'panel':
+        default:
+          f.front = tex; f.back = tex;
+          break;
+      }
+      if (Object.keys(f).length > 0) faces = f;
     }
     const fxHeight = resolveFixtureHeight(def.heightMm, booth.heightMm);
     boxes.push({

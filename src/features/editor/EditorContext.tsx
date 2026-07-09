@@ -162,6 +162,8 @@ interface EditorContextValue {
   fixturesById: Map<string, FixtureDef>;
   saveFixture: (f: FixtureDef) => Promise<void>;
   deleteFixture: (id: string) => Promise<void>;
+  /** 집기 라이브러리 드래그 정렬 — 주어진 id 순서대로 order 재부여 (v1.1.1) */
+  reorderFixtures: (orderedIds: string[]) => Promise<void>;
 
   // ---------- Asset Library 2.0 (v0.9.7) ----------
   /** 전역 에셋 라이브러리 (My/Company) */
@@ -491,7 +493,7 @@ export function EditorProvider({
   const [project, setProject] = useState<Project | null>(null);
   const [projectLoading, setProjectLoading] = useState(true);
 
-  const { fixtures, loading: fixturesLoading, saveFixture, deleteFixture } = useFixtures();
+  const { fixtures, loading: fixturesLoading, saveFixture, deleteFixture, reorderFixtures } = useFixtures();
   const {
     assets,
     loading: assetsLoading,
@@ -2071,6 +2073,7 @@ export function EditorProvider({
       fixturesById,
       saveFixture,
       deleteFixture,
+      reorderFixtures,
       // Asset Library 2.0 (v0.9.7)
       assets,
       assetsLoading,
@@ -2214,6 +2217,7 @@ export function EditorProvider({
     fixturesById,
     saveFixture,
     deleteFixture,
+    reorderFixtures,
     assets,
     assetsLoading,
     saveAsset,

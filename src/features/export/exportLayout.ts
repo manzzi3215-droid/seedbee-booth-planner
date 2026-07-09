@@ -38,6 +38,14 @@ export function productImageSrcs(placedProducts: PlacedProduct[], products: Prod
     .filter((u): u is string => !!u);
 }
 
+/** 커스텀 이미지 집기(v1.1.1)의 이미지 URL 목록 — 출력 프리로드용 */
+function customFixtureImageSrcs(input: ExportInput): string[] {
+  return input.placed
+    .map((p) => input.fixturesById.get(p.fixtureDefId)?.customAsset)
+    .filter((ca) => ca?.kind === 'image' && !!ca.fileUrl)
+    .map((ca) => ca!.fileUrl!);
+}
+
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString('ko-KR', {
     year: 'numeric',
@@ -55,6 +63,7 @@ export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
     ...[...input.backgrounds, ...input.images].map((i) => i.srcDataUrl),
     ...designAssets.map((a) => a.url),
     ...productImageSrcs(placedProducts, products),
+    ...customFixtureImageSrcs(input),
   ]);
   const base = createBoothDrawingDataURL(
     input.project.boothConfig,
@@ -178,6 +187,7 @@ async function buildReportDataURL(input: ExportInput): Promise<string> {
     ...[...input.backgrounds, ...input.images].map((i) => i.srcDataUrl),
     ...designAssets.map((a) => a.url),
     ...productImageSrcs(placedProducts, products),
+    ...customFixtureImageSrcs(input),
   ]);
   const boothImg = await loadImage(
     await rotateDataUrl(

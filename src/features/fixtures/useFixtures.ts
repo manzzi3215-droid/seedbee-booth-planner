@@ -46,5 +46,20 @@ export function useFixtures() {
     [reload],
   );
 
-  return { fixtures, loading, saveFixture, deleteFixture };
+  // 드래그 정렬(v1.1.1) — 주어진 id 순서대로 order 를 0,1,2… 로 재부여 후 1회 재조회
+  const reorderFixtures = useCallback(
+    async (orderedIds: string[]) => {
+      const map = new Map(fixtures.map((f) => [f.id, f]));
+      await Promise.all(
+        orderedIds.map((id, i) => {
+          const f = map.get(id);
+          return f && f.order !== i ? storage.saveFixture({ ...f, order: i }) : Promise.resolve();
+        }),
+      );
+      await reload();
+    },
+    [fixtures, reload],
+  );
+
+  return { fixtures, loading, saveFixture, deleteFixture, reorderFixtures };
 }
