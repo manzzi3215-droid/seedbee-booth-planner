@@ -42,6 +42,8 @@ import { useImageTransformer } from './useImageTransformer';
 import {
   getBoothShape,
   getBoothPolygon,
+  getBoothCurves,
+  tessellatePolygon,
   flattenPolygon,
   type BoothBounds,
 } from './boothGeometry';
@@ -95,7 +97,7 @@ interface BoothCanvasProps {
   /** 부스 외곽 편집 모드 (v0.8.6) */
   shapeEditMode?: boolean;
   /** 외곽 폴리곤(mm) 변경 커밋 */
-  onBoothShapeChange?: (points: PointMm[]) => void;
+  onBoothShapeChange?: (points: PointMm[], curves?: number[]) => void;
   /** 외곽 편집 종료(ESC) */
   onExitShapeEdit?: () => void;
   onSelect: (id: string | null, additive?: boolean) => void;
@@ -188,30 +190,39 @@ export default function BoothCanvas({
   // 이미지 또는 배경 중 선택된 것에 Transformer 부착
   const { transformerRef, register } = useImageTransformer(selectedImageId ?? selectedBackgroundId);
 
-  // --- 부스 외곽 편집 상태 (v0.8.6) ---
+  // --- 부스 외곽 편집 상태 (v0.8.6, 곡선 v1.0.9) ---
   const shapeLayerRef = useRef<Konva.Layer>(null);
   const [editPoints, setEditPoints] = useState<PointMm[] | null>(null);
   const editPointsRef = useRef<PointMm[] | null>(null);
+  const [editCurves, setEditCurves] = useState<number[]>([]); // 변별 bulge(mm), 편집 중
+  const editCurvesRef = useRef<number[]>([]);
   const [selectedVertex, setSelectedVertex] = useState<number | null>(null);
   const [hoverEdge, setHoverEdge] = useState<number | null>(null);
-  const dragRef = useRef<{ type: 'vertex' | 'edge'; index: number; last: { x: number; y: number } } | null>(null);
+  const dragRef = useRef<{ type: 'vertex' | 'edge' | 'curve'; index: number; last: { x: number; y: number } } | null>(null);
 
-  // 편집 모드 진입 시 현재 폴리곤 복제, 종료 시 정리
+  // 편집 모드 진입 시 현재 폴리곤+곡선 복제, 종료 시 정리
   useEffect(() => {
     if (shapeEditMode) {
-      setEditPoints(getBoothPolygon(booth).map((p) => ({ ...p })));
+      const pts = getBoothPolygon(booth).map((p) => ({ ...p }));
+      setEditPoints(pts);
+      const cv = getBoothCurves(booth);
+      setEditCurves(pts.map((_, i) => cv[i] ?? 0));
     } else {
       setEditPoints(null);
+      setEditCurves([]);
       setSelectedVertex(null);
       setHoverEdge(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shapeEditMode]);
   editPointsRef.current = editPoints;
+  editCurvesRef.current = editCurves;
 
   const activePolygon = shapeEditMode && editPoints ? editPoints : getBoothPolygon(booth);
-  const polygon = activePolygon;
-  const bounds = boundsFromPoints(activePolygon);
+  const activeCurves = shapeEditMode && editPoints ? editCurves : getBoothCurves(booth);
+  // 렌더용 외곽선(곡선 반영). 곡선 없으면 원본과 동일 → 무회귀.
+  const polygon = tessellatePolygon(activePolygon, activeCurves);
+  const bounds = boundsFromPoints(polygon);
   const isPolygon = getBoothShape(booth) === 'polygon' || (shapeEditMode && !!editPoints);
   const edges = getWallEdges(booth.openSide);
 
@@ -438,6 +449,12 @@ export default function BoothCanvas({
     dragRef.current = { type: 'edge', index, last: p ?? { x: 0, y: 0 } };
     setSelectedVertex(null);
   };
+  // 곡선(bulge) 핸들 드래그 시작 (v1.0.9)
+  const handleCurveDown = (index: number, e: Konva.KonvaEventObject<MouseEvent>) => {
+    e.cancelBubble = true;
+    dragRef.current = { type: 'curve', index, last: { x: 0, y: 0 } };
+    setSelectedVertex(null);
+  };
   const handleAddVertex = (edgeIndex: number, e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
     const pts = editPointsRef.current;
@@ -450,8 +467,13 @@ export default function BoothCanvas({
     };
     const next = [...pts];
     next.splice(edgeIndex + 1, 0, mid);
+    // 곡선 배열도 정렬 유지: 분할된 변은 직선(0)으로, 새 변(0) 삽입
+    const nextCurves = [...editCurvesRef.current];
+    nextCurves[edgeIndex] = 0;
+    nextCurves.splice(edgeIndex + 1, 0, 0);
     setEditPoints(next);
-    onBoothShapeChange?.(next);
+    setEditCurves(nextCurves);
+    onBoothShapeChange?.(next, nextCurves);
   };
 
   const handleShapeMouseMove = () => {
@@ -463,6 +485,23 @@ export default function BoothCanvas({
       const nx = snapMmToGrid(local.x, gridSizeMm);
       const ny = snapMmToGrid(local.y, gridSizeMm);
       setEditPoints((prev) => (prev ? prev.map((p, i) => (i === drag.index ? { xMm: nx, yMm: ny } : p)) : prev));
+    } else if (drag.type === 'curve') {
+      // 변 중점 기준 수직(법선) 거리를 bulge 로 (v1.0.9)
+      const pts = editPointsRef.current;
+      if (!pts) return;
+      const a = pts[drag.index];
+      const b = pts[(drag.index + 1) % pts.length];
+      const mx = (a.xMm + b.xMm) / 2;
+      const my = (a.yMm + b.yMm) / 2;
+      const dx = b.xMm - a.xMm;
+      const dy = b.yMm - a.yMm;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = dy / len;
+      const ny = -dx / len;
+      let bulge = (local.x - mx) * nx + (local.y - my) * ny;
+      const max = len * 1.5;
+      bulge = Math.max(-max, Math.min(max, bulge));
+      setEditCurves((prev) => prev.map((c, i) => (i === drag.index ? Math.round(bulge) : c)));
     } else {
       const dx = local.x - drag.last.x;
       const dy = local.y - drag.last.y;
@@ -489,7 +528,7 @@ export default function BoothCanvas({
       );
       setEditPoints(pts);
     }
-    onBoothShapeChange?.(pts);
+    onBoothShapeChange?.(pts, editCurvesRef.current);
   };
 
   // 편집 모드 키보드: Delete(선택 꼭짓점 삭제, 최소 3개), ESC(종료)
@@ -502,9 +541,11 @@ export default function BoothCanvas({
         const pts = editPointsRef.current;
         if (pts && pts.length > 3) {
           const next = pts.filter((_, i) => i !== selectedVertex);
+          const nextCurves = editCurvesRef.current.filter((_, i) => i !== selectedVertex);
           setEditPoints(next);
+          setEditCurves(nextCurves);
           setSelectedVertex(null);
-          onBoothShapeChange?.(next);
+          onBoothShapeChange?.(next, nextCurves);
         }
       }
     };
@@ -725,12 +766,14 @@ export default function BoothCanvas({
             <Layer ref={shapeLayerRef} {...layerRot}>
               <ShapeEditor
                 points={editPoints}
+                curves={editCurves}
                 scale={viewport.scale}
                 selectedVertex={selectedVertex}
                 hoverEdge={hoverEdge}
                 onVertexDown={handleVertexDown}
                 onEdgeDown={handleEdgeDown}
                 onAddVertex={handleAddVertex}
+                onCurveDown={handleCurveDown}
                 onEdgeEnter={setHoverEdge}
                 onEdgeLeave={() => setHoverEdge(null)}
               />

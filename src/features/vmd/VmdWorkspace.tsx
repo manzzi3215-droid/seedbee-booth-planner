@@ -62,6 +62,9 @@ export default function VmdWorkspace() {
   const uploadKind = useRef<'image' | 'qr' | 'pop' | 'logo'>('image');
   const [customW, setCustomW] = useState('900');
   const [customH, setCustomH] = useState('450');
+  // 보드 사이즈 입력 — 자유 입력용 로컬 문자열 state. 커밋(blur/Enter) 시에만 검증 (v1.0.9)
+  const [wStr, setWStr] = useState('900');
+  const [hStr, setHStr] = useState('450');
   const [presetQuery, setPresetQuery] = useState('');
   const [preview3dOpen, setPreview3dOpen] = useState(false);
   const [elMenuAnchor, setElMenuAnchor] = useState<null | HTMLElement>(null);
@@ -120,6 +123,14 @@ export default function VmdWorkspace() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedIds, currentBoard, setElements, removeElements, duplicateElements, reorderElement, undo, redo, setSelectedIds]);
 
+  // 보드 사이즈 입력 동기화 — 보드가 바뀌면 입력 문자열을 실제 값으로 리셋 (v1.0.9)
+  // (조건부 return 위에 두어 Hooks 순서 규칙 준수)
+  useEffect(() => {
+    setWStr(currentBoard ? String(currentBoard.widthMm) : customW);
+    setHStr(currentBoard ? String(currentBoard.heightMm) : customH);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBoard?.id, currentBoard?.widthMm, currentBoard?.heightMm]);
+
   if (loading) {
     return <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>;
   }
@@ -128,6 +139,21 @@ export default function VmdWorkspace() {
   }
 
   const board = currentBoard;
+
+  // 커밋 시에만 검증(최소 50mm). 빈 값/수정 중 상태는 그대로 두어 자유 입력 가능.
+  const commitBoardSize = (axis: 'w' | 'h') => {
+    const raw = axis === 'w' ? wStr : hStr;
+    const n = Number(raw);
+    if (raw.trim() === '' || Number.isNaN(n)) {
+      // 빈 값/비정상: 현재 값으로 되돌림
+      const cur = board ? (axis === 'w' ? board.widthMm : board.heightMm) : Number(axis === 'w' ? customW : customH) || 900;
+      if (axis === 'w') setWStr(String(cur)); else setHStr(String(cur));
+      return;
+    }
+    const v = Math.max(50, Math.round(n));
+    if (axis === 'w') { setWStr(String(v)); setCustomW(String(v)); if (board) patchCurrentBoard({ widthMm: v }); }
+    else { setHStr(String(v)); setCustomH(String(v)); if (board) patchCurrentBoard({ heightMm: v }); }
+  };
 
   // ---- 요소 추가 ----
   const addProductEl = (productId: string) => {
@@ -303,9 +329,17 @@ export default function VmdWorkspace() {
 
           <Typography variant="caption" sx={{ fontWeight: 800 }}>사이즈 (mm, 자유 입력)</Typography>
           <Stack direction="row" spacing={0.5} sx={{ mb: 1, mt: 0.5, alignItems: 'center' }}>
-            <TextField size="small" type="number" label="W" value={board?.widthMm ?? customW} onChange={(e) => { const v = Math.max(50, Number(e.target.value) || 0); setCustomW(String(v)); board && patchCurrentBoard({ widthMm: v }); }} sx={{ width: 90 }} />
+            <TextField size="small" type="number" label="W" value={wStr}
+              onChange={(e) => setWStr(e.target.value)}
+              onBlur={() => commitBoardSize('w')}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitBoardSize('w'); } }}
+              sx={{ width: 90 }} />
             <Typography variant="caption">×</Typography>
-            <TextField size="small" type="number" label="H" value={board?.heightMm ?? customH} onChange={(e) => { const v = Math.max(50, Number(e.target.value) || 0); setCustomH(String(v)); board && patchCurrentBoard({ heightMm: v }); }} sx={{ width: 90 }} />
+            <TextField size="small" type="number" label="H" value={hStr}
+              onChange={(e) => setHStr(e.target.value)}
+              onBlur={() => commitBoardSize('h')}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitBoardSize('h'); } }}
+              sx={{ width: 90 }} />
           </Stack>
 
           {/* 사용자 템플릿 (§1) */}

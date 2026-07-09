@@ -73,6 +73,7 @@ export default function FixtureFormDialog({
   const [shape, setShape] = useState<FixtureShape>('rectangle');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [opacity, setOpacity] = useState(1);
+  const [category, setCategory] = useState('');
   const [memo, setMemo] = useState('');
   const [cornerRadiusMm, setCornerRadiusMm] = useState('');
   const [svgPath, setSvgPath] = useState('');
@@ -90,6 +91,7 @@ export default function FixtureFormDialog({
     setShape(fixture?.shape ?? 'rectangle');
     setColor(fixture?.color ?? DEFAULT_COLOR);
     setOpacity(fixture?.opacity ?? 1); // 하위 호환: 없으면 1
+    setCategory(fixture?.category ?? '');
     setMemo(fixture?.memo ?? '');
     setCornerRadiusMm(
       fixture?.cornerRadiusMm != null ? String(fixture.cornerRadiusMm) : '',
@@ -155,6 +157,8 @@ export default function FixtureFormDialog({
         heightMm: h.value,
         color,
         opacity,
+        category: category.trim() || undefined,
+        order: fixture?.order,
         memo: memo.trim() || undefined,
         cornerRadiusMm: shape === 'roundedRectangle' ? corner : undefined,
         svgPath: shape === 'customPath' ? svgPath.trim() : undefined,
@@ -228,6 +232,15 @@ export default function FixtureFormDialog({
               slotProps={{ input: { endAdornment: mm } }}
             />
           </Stack>
+
+          <TextField
+            label="폴더/카테고리 (선택)"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            fullWidth
+            placeholder="예) 진열장, 카운터, 소품"
+            helperText="라이브러리에서 폴더로 묶어 필터할 수 있습니다."
+          />
 
           <TextField
             select

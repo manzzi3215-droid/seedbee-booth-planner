@@ -30,6 +30,61 @@ export function getBoothPolygon(booth: BoothConfig): PointMm[] {
   ];
 }
 
+/** 각 변의 곡선 bulge(mm). polygonPoints 와 같은 개수 (v1.0.9). 없으면 빈 배열 = 전부 직선 */
+export function getBoothCurves(booth: BoothConfig): number[] {
+  return booth.edgeCurves ?? [];
+}
+
+/** 곡선(bulge) 이 하나라도 있으면 true (v1.0.9) */
+export function hasBoothCurves(booth: BoothConfig): boolean {
+  return (booth.edgeCurves ?? []).some((c) => Math.abs(c) > 0.5);
+}
+
+/**
+ * 폴리곤을 곡선(변별 bulge) 반영해 촘촘한 외곽선으로 테셀레이션 (v1.0.9).
+ * 변 i(꼭짓점 i→i+1)의 bulge 가 0 이면 직선(시작점만), 아니면 2차 베지어 원호로 분할.
+ * bulge 가 전부 0/미지정이면 원본 폴리곤을 그대로 반환 → 기존 동작 100% 동일(무회귀).
+ */
+export function tessellatePolygon(points: PointMm[], curves: number[], segs = 20): PointMm[] {
+  if (points.length < 2 || !curves.some((c) => Math.abs(c) > 0.5)) return points;
+  const out: PointMm[] = [];
+  const n = points.length;
+  for (let i = 0; i < n; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % n];
+    const bulge = curves[i] ?? 0;
+    out.push({ xMm: a.xMm, yMm: a.yMm });
+    if (Math.abs(bulge) <= 0.5) continue; // 직선 변
+    // 2차 베지어: 제어점 = 변 중점 + 법선 * (2*bulge) → 곡선 정점 offset ≈ bulge
+    const mx = (a.xMm + b.xMm) / 2;
+    const my = (a.yMm + b.yMm) / 2;
+    const dx = b.xMm - a.xMm;
+    const dy = b.yMm - a.yMm;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = dy / len; // 오른손 법선
+    const ny = -dx / len;
+    const cxp = mx + nx * bulge * 2;
+    const cyp = my + ny * bulge * 2;
+    for (let s = 1; s < segs; s++) {
+      const t = s / segs;
+      const mt = 1 - t;
+      out.push({
+        xMm: mt * mt * a.xMm + 2 * mt * t * cxp + t * t * b.xMm,
+        yMm: mt * mt * a.yMm + 2 * mt * t * cyp + t * t * b.yMm,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 부스 외곽선(렌더/클립/판정용, mm) — 곡선을 반영해 테셀레이션한 폴리곤 (v1.0.9).
+ * 곡선이 없으면 getBoothPolygon 과 동일한 점 배열을 반환합니다.
+ */
+export function getBoothOutline(booth: BoothConfig, segs = 20): PointMm[] {
+  return tessellatePolygon(getBoothPolygon(booth), getBoothCurves(booth), segs);
+}
+
 export interface BoothBounds {
   minX: number;
   minY: number;

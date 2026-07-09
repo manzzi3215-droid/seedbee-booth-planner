@@ -42,6 +42,12 @@ export interface BoothConfig {
   boothShape?: BoothShape;
   /** boothShape === 'polygon' 일 때 꼭짓점(mm). 시계/반시계 순서 */
   polygonPoints?: PointMm[];
+  /**
+   * 각 변(꼭짓점 i → i+1)의 곡선 bulge(mm) — v1.0.9 (optional, 하위 호환).
+   * polygonPoints 와 같은 개수. 0/미지정이면 직선. 양수=바깥쪽, 음수=안쪽으로 부풀린 원호(2차 베지어).
+   * 렌더링(2D 바닥/벽·3D 바닥·출력)은 getBoothOutline 로 촘촘히 테셀레이션해 반영합니다.
+   */
+  edgeCurves?: number[];
 
   /**
    * 사용할 벽면 ON/OFF (v0.7.3). 누락/undefined 인 벽면은 ON 으로 취급(하위 호환).
@@ -169,6 +175,10 @@ export interface FixtureDef {
   /** 3D 재질 (v0.9.2). 누락 시 'matte' — 하위 호환 */
   material?: FixtureMaterial;
   memo?: string;
+  /** 폴더/그룹(카테고리) — 라이브러리 그룹화·필터용 (v1.0.9, optional) */
+  category?: string;
+  /** 정렬 순서 — 드래그 정렬용 (v1.0.9, optional). 미지정 시 추가 순서 */
+  order?: number;
 
   // --- shape 별 파라미터 (해당 shape 일 때만 사용) ---
   cornerRadiusMm?: number; // roundedRectangle
@@ -254,11 +264,16 @@ export interface TextureTransform {
   opacity: number; // 0~1
 }
 
-/** 한 면의 매핑 (에셋 참조 + 방식 + 변형) */
+/** 한 면(레이어)의 매핑 (에셋 참조 + 방식 + 변형) */
 export interface FaceMapping {
   assetId: string;
   mode: MappingMode;
   transform: TextureTransform;
+  /**
+   * 이 레이어가 렌더될 면 목록 (v1.0.9). 미지정(기존 데이터)이면 자기 버킷 면에만 적용.
+   * 예: ['front','back','left','right','top','bottom'] = 모든 면, ['front'] = 정면만.
+   */
+  faces?: BoxFace[];
 }
 
 /** 집기 전체 디자인 매핑 */

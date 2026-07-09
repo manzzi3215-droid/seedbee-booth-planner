@@ -18,26 +18,41 @@ export const MAPPING_MODES: { value: FaceMapping['mode']; label: string }[] = [
   { value: 'tile', label: 'Tile' },
 ];
 
-/** 특정 면의 매핑을 해석 (applyAll 이면 front 를 사용) */
-export function resolveFaceMapping(design: DesignMapping | undefined, face: BoxFace): FaceMapping | null {
-  if (!design) return null;
-  if (design.applyAll) return design.faces.front ?? firstFace(design) ?? null;
-  return design.faces[face] ?? null;
-}
-
-function firstFace(design: DesignMapping): FaceMapping | null {
-  for (const f of BOX_FACES) {
-    const m = design.faces[f.value];
-    if (m) return m;
+/**
+ * 특정 면에 렌더할 레이어 스택(아래→위). (v1.0.9)
+ *
+ * 각 레이어(FaceMapping)는 optional `faces`(적용 면 목록)로 자기가 보일 면을 지정할 수 있습니다.
+ *  - `faces` 지정: 그 면 목록에만 렌더 (레이어별 면 적용).
+ *  - `faces` 미지정(기존 데이터): 자기 버킷 면에만. 단 design.applyAll(레거시) 이면 front 버킷은 모든 면에 렌더.
+ * 버킷 순회 순서(front→…→bottom)로 안정적 z-order 를 만들어, 흰 배경(front 작성) 위에 면별 레이어가 겹칩니다.
+ */
+export function layersForFace(design: DesignMapping | undefined, face: BoxFace): FaceMapping[] {
+  if (!design) return [];
+  const out: FaceMapping[] = [];
+  for (const fb of BOX_FACES) {
+    const bucket = fb.value;
+    const base = design.faces[bucket];
+    const extra = design.overlays?.[bucket] ?? [];
+    const stack = base ? [base, ...extra] : extra;
+    for (const L of stack) {
+      const applies = L.faces
+        ? L.faces.includes(face)
+        : bucket === face || (design.applyAll && bucket === 'front');
+      if (applies) out.push(L);
+    }
   }
-  return null;
+  return out;
 }
 
-/** 평면도(위에서 내려다봄)용 매핑: top 우선, 없으면 applyAll/첫 면 */
+/** 특정 면의 대표(최상단) 매핑 한 장 — 단일 이미지 소비처(출력물/곡면 wrap)용 (v1.0.9) */
+export function resolveFaceMapping(design: DesignMapping | undefined, face: BoxFace): FaceMapping | null {
+  const layers = layersForFace(design, face);
+  return layers.length > 0 ? layers[layers.length - 1] : null;
+}
+
+/** 평면도(위에서 내려다봄)용 매핑: 윗면(top)의 최상단 레이어 */
 export function planFaceMapping(design: DesignMapping | undefined): FaceMapping | null {
-  if (!design) return null;
-  if (design.applyAll) return design.faces.front ?? firstFace(design);
-  return design.faces.top ?? firstFace(design);
+  return resolveFaceMapping(design, 'top');
 }
 
 export function assetById(assets: DesignAsset[] | undefined, id: string): DesignAsset | null {

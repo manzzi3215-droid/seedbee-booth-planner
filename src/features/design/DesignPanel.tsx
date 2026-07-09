@@ -11,6 +11,7 @@ import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Divider from '@mui/material/Divider';
 import Alert from '@mui/material/Alert';
+import Chip from '@mui/material/Chip';
 import Paper from '@mui/material/Paper';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
@@ -47,16 +48,18 @@ export default function DesignPanel({ fixture }: { fixture: PlacedFixture }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const design = fixture.design;
-  const applyAll = design?.applyAll ?? false;
-  const face: BoxFace = applyAll ? 'front' : activeFace;
+  const face: BoxFace = activeFace; // 편집 중인 홈 면 (레이어가 저장되는 버킷)
 
-  // 선택 면의 레이어 스택 (아래→위)
+  // 선택 면(홈 버킷)의 레이어 스택 (아래→위)
   const stackOf = (f: BoxFace): FaceMapping[] => {
     const base = design?.faces[f];
     const extra = design?.overlays?.[f] ?? [];
     return base ? [base, ...extra] : [...extra];
   };
   const stack = stackOf(face);
+
+  // 레이어의 적용 면 목록 (미지정 레거시면 홈 버킷 면으로 간주)
+  const layerFaces = (m: FaceMapping, homeFace: BoxFace): BoxFace[] => m.faces ?? [homeFace];
 
   const writeStack = (f: BoxFace, next: FaceMapping[]) => {
     const nextFaces = { ...(design?.faces ?? {}) };
@@ -71,8 +74,9 @@ export default function DesignPanel({ fixture }: { fixture: PlacedFixture }) {
     }
     const overlays = Object.keys(nextOverlays).length > 0 ? nextOverlays : undefined;
     const hasAny = Object.keys(nextFaces).length > 0 || overlays;
+    // applyAll(레거시 전역)은 기존 값 보존 — 레이어별 faces 로 대체됨 (v1.0.9)
     const nextDesign: DesignMapping | undefined =
-      hasAny || applyAll ? { applyAll, faces: nextFaces, overlays } : undefined;
+      hasAny ? { applyAll: design?.applyAll ?? false, faces: nextFaces, overlays } : undefined;
     updateFixtureDesign(fixture.id, nextDesign);
   };
 
@@ -80,6 +84,20 @@ export default function DesignPanel({ fixture }: { fixture: PlacedFixture }) {
     const next = [...stack];
     next[idx] = m;
     writeStack(face, next);
+  };
+  // 레이어별 적용 면 토글 (v1.0.9)
+  const toggleLayerFace = (idx: number, target: BoxFace) => {
+    const m = stack[idx];
+    if (!m) return;
+    const cur = layerFaces(m, face);
+    const has = cur.includes(target);
+    const next = has ? cur.filter((x) => x !== target) : [...cur, target];
+    // 최소 1개 면은 유지 (모두 해제 방지)
+    updateLayer(idx, { ...m, faces: next.length > 0 ? next : [target] });
+  };
+  const setLayerAllFaces = (idx: number) => {
+    const m = stack[idx];
+    if (m) updateLayer(idx, { ...m, faces: BOX_FACES.map((b) => b.value) });
   };
   const patchLayerTransform = (idx: number, patch: Partial<FaceMapping['transform']>) => {
     const m = stack[idx];
@@ -102,8 +120,8 @@ export default function DesignPanel({ fixture }: { fixture: PlacedFixture }) {
     try {
       const a = await uploadDesignAsset(file);
       addDesignAsset(a);
-      // 새 레이어를 맨 위에 추가
-      writeStack(face, [...stackOf(face), { assetId: a.id, mode: 'contain', transform: { ...DEFAULT_TEXTURE_TRANSFORM } }]);
+      // 새 레이어를 맨 위에 추가 (기본 적용 면 = 현재 편집 면)
+      writeStack(face, [...stackOf(face), { assetId: a.id, mode: 'contain', transform: { ...DEFAULT_TEXTURE_TRANSFORM }, faces: [face] }]);
     } catch (e) {
       setError(e instanceof Error ? e.message : '이미지 처리 실패');
     } finally {
@@ -152,6 +170,26 @@ export default function DesignPanel({ fixture }: { fixture: PlacedFixture }) {
           </TextField>
         </Stack>
 
+        {/* 적용 면 (레이어별) — v1.0.9 */}
+        <Stack direction="row" sx={{ alignItems: 'center', mb: 0.5, flexWrap: 'wrap', gap: 0.4 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 0.25 }}>적용 면</Typography>
+          {BOX_FACES.map((f) => {
+            const on = layerFaces(m, face).includes(f.value);
+            return (
+              <Chip
+                key={f.value}
+                label={f.label}
+                size="small"
+                color={on ? 'primary' : 'default'}
+                variant={on ? 'filled' : 'outlined'}
+                onClick={() => toggleLayerFace(idx, f.value)}
+                sx={{ height: 20, fontSize: 10 }}
+              />
+            );
+          })}
+          <Chip label="모든 면" size="small" variant="outlined" onClick={() => setLayerAllFaces(idx)} sx={{ height: 20, fontSize: 10, fontWeight: 700 }} />
+        </Stack>
+
         <Typography variant="caption" color="text.secondary">크기 {m.transform.scale.toFixed(2)}×</Typography>
         <Slider size="small" min={0.1} max={3} step={0.05} value={m.transform.scale} onChange={(_, v) => patchLayerTransform(idx, { scale: v as number })} />
         <Stack direction="row" spacing={1}>
@@ -174,32 +212,20 @@ export default function DesignPanel({ fixture }: { fixture: PlacedFixture }) {
     <Box sx={{ mt: 1 }}>
       <Divider sx={{ my: 1 }} />
       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
-        디자인 (Design) · {faceLabelKo(face)} 레이어 {stack.length}개
+        디자인 (Design) · {faceLabelKo(face)} 편집 · 레이어 {stack.length}개
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+        레이어마다 <b>적용 면</b>을 선택하세요. (예: 흰 배경 = 모든 면, 로고 = 정면, 장식 = 상판)
       </Typography>
 
-      {/* 모든 면 동일 적용 */}
-      <FormControlLabel
-        control={
-          <Switch
-            size="small"
-            checked={applyAll}
-            onChange={(e) => updateFixtureDesign(fixture.id, { applyAll: e.target.checked, faces: design?.faces ?? {}, overlays: design?.overlays })}
-          />
-        }
-        label={<Typography variant="caption">모든 면 동일 적용</Typography>}
-        sx={{ ml: 0, mb: 0.5 }}
-      />
-
-      {/* 면 선택 */}
-      {!applyAll && (
-        <ToggleButtonGroup exclusive size="small" value={activeFace} onChange={(_, v) => v && setActiveFace(v as BoxFace)} sx={{ flexWrap: 'wrap', mb: 1 }}>
-          {BOX_FACES.map((f) => (
-            <ToggleButton key={f.value} value={f.value} sx={{ px: 1, py: 0.25 }}>
-              {f.label}{stackOf(f.value).length > 0 ? ` ●${stackOf(f.value).length}` : ''}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      )}
+      {/* 편집 면(홈 버킷) 선택 */}
+      <ToggleButtonGroup exclusive size="small" value={activeFace} onChange={(_, v) => v && setActiveFace(v as BoxFace)} sx={{ flexWrap: 'wrap', mb: 1 }}>
+        {BOX_FACES.map((f) => (
+          <ToggleButton key={f.value} value={f.value} sx={{ px: 1, py: 0.25 }}>
+            {f.label}{stackOf(f.value).length > 0 ? ` ●${stackOf(f.value).length}` : ''}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
 
       {error && <Alert severity="warning" sx={{ mb: 1 }}>{error}</Alert>}
 

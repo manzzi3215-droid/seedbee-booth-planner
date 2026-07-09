@@ -43,6 +43,7 @@ import { stylingFromPreset } from '../styling/styling';
 import { snapMmToGrid } from '../canvas/coords';
 import { DEFAULT_GRID_SIZE_MM } from '../canvas/constants';
 import { computeFixtureAABB } from '../canvas/fixtureGeometry';
+import { tessellatePolygon } from '../canvas/boothGeometry';
 import { convertSvgElement } from '../svg/SvgConverter';
 import {
   DEFAULT_TEXT_CONTENT,
@@ -128,8 +129,8 @@ interface EditorContextValue {
   // 부스 외곽 편집 (CAD 스타일) — v0.8.6
   shapeEditMode: boolean;
   setShapeEditMode: (v: boolean) => void;
-  /** 부스 외곽 폴리곤(mm) 갱신 → boothShape=polygon + bbox 저장(디바운스 저장) */
-  updateBoothShape: (points: PointMm[]) => void;
+  /** 부스 외곽 폴리곤(mm) + 변별 곡선(curves, mm) 갱신 → boothShape=polygon + bbox 저장(디바운스) */
+  updateBoothShape: (points: PointMm[], curves?: number[]) => void;
   /** 부스 스타일링(바닥/벽 재질·환경) 갱신 (v0.9.8) */
   updateBoothStyling: (patch: Partial<BoothStyling>) => void;
   /** 스타일 프리셋 원클릭 적용 (v0.9.8) */
@@ -706,11 +707,15 @@ export function EditorProvider({
     };
     const applyStylePreset = (id: StylePresetId) => updateBoothStyling(stylingFromPreset(id));
 
-    // 부스 외곽 폴리곤 갱신 (드래그 중 자주 호출) → 상태 즉시, 저장은 디바운스
-    const updateBoothShape = (points: PointMm[]) => {
+    // 부스 외곽 폴리곤(+곡선) 갱신 (드래그 중 자주 호출) → 상태 즉시, 저장은 디바운스
+    const updateBoothShape = (points: PointMm[], curves?: number[]) => {
       if (!project || points.length < 3) return;
-      const xs = points.map((p) => p.xMm);
-      const ys = points.map((p) => p.yMm);
+      const rounded = curves?.map((c) => Math.round(c)) ?? [];
+      const hasCurve = rounded.some((c) => Math.abs(c) > 0.5);
+      // bbox 는 곡선(bulge) 반영한 외곽선 기준 (바깥쪽 곡선이 잘리지 않도록, v1.0.9)
+      const outline = hasCurve ? tessellatePolygon(points, rounded) : points;
+      const xs = outline.map((p) => p.xMm);
+      const ys = outline.map((p) => p.yMm);
       const widthMm = Math.max(...xs) - Math.min(...xs);
       const depthMm = Math.max(...ys) - Math.min(...ys);
       const updated: Project = {
@@ -719,6 +724,7 @@ export function EditorProvider({
           ...project.boothConfig,
           boothShape: 'polygon',
           polygonPoints: points.map((p) => ({ xMm: Math.round(p.xMm), yMm: Math.round(p.yMm) })),
+          edgeCurves: hasCurve ? rounded : undefined,
           widthMm: Math.round(widthMm),
           depthMm: Math.round(depthMm),
         },

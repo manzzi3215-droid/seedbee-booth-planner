@@ -2,12 +2,10 @@ import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import Slider from '@mui/material/Slider';
-import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
@@ -19,7 +17,7 @@ import { useEditor } from '../editor/EditorContext';
  * 썸네일 · 이름 · 투명도 · 잠금 · 삭제 · 선택. 도면은 배치안에 저장(Cloud/Auto Save/Undo 자동).
  */
 export default function DrawingsPanel() {
-  const { planBackgrounds, selectBackground, updatePlanBackground, deleteBackground, openImportWizard, canEdit } = useEditor();
+  const { planBackgrounds, selectBackground, updatePlanBackground, deleteBackground } = useEditor();
 
   return (
     <Box sx={{ p: 1.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -28,9 +26,10 @@ export default function DrawingsPanel() {
         <Chip label={`${planBackgrounds.length}개`} size="small" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
       </Stack>
 
-      <Button variant="contained" size="small" fullWidth startIcon={<AddPhotoAlternateRoundedIcon />} onClick={openImportWizard} disabled={!canEdit} sx={{ mb: 1 }}>
-        도면 가져오기 (PDF/이미지)
-      </Button>
+      {/* 도면 가져오기는 v1.0.9 부터 '새 프로젝트 만들기' 단계에서 추가합니다. */}
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+        도면은 새 프로젝트 만들기 단계에서 추가합니다. 여기서는 투명도·잠금·삭제로 관리하세요.
+      </Typography>
 
       <Stack spacing={1} sx={{ overflowY: 'auto', pr: 0.5 }}>
         {planBackgrounds.map((bg) => (

@@ -15,37 +15,69 @@ import { edgeLengthMm, cornerAngleDeg } from './boothGeometry';
  */
 export default function ShapeEditor({
   points,
+  curves,
   scale,
   selectedVertex,
   hoverEdge,
   onVertexDown,
   onEdgeDown,
   onAddVertex,
+  onCurveDown,
   onEdgeEnter,
   onEdgeLeave,
 }: {
   points: PointMm[];
+  /** 변별 곡선 bulge(mm) — v1.0.9 (points 와 같은 개수) */
+  curves: number[];
   scale: number;
   selectedVertex: number | null;
   hoverEdge: number | null;
   onVertexDown: (index: number, e: Konva.KonvaEventObject<MouseEvent>) => void;
   onEdgeDown: (index: number, e: Konva.KonvaEventObject<MouseEvent>) => void;
   onAddVertex: (edgeIndex: number, e: Konva.KonvaEventObject<MouseEvent>) => void;
+  /** 곡선(bulge) 핸들 드래그 시작 — v1.0.9 */
+  onCurveDown: (edgeIndex: number, e: Konva.KonvaEventObject<MouseEvent>) => void;
   onEdgeEnter: (index: number) => void;
   onEdgeLeave: () => void;
 }) {
   const px = (v: number) => v / scale; // 화면 고정 px → mm
   const n = points.length;
 
+  // 변 i(a→b)의 법선(오른손) 단위벡터
+  const edgeNormal = (a: PointMm, b: PointMm) => {
+    const dx = b.xMm - a.xMm;
+    const dy = b.yMm - a.yMm;
+    const len = Math.hypot(dx, dy) || 1;
+    return { nx: dy / len, ny: -dx / len, len };
+  };
+  // 곡선 변을 2차 베지어로 샘플링한 화면 점 배열 (곡선 표시용)
+  const edgeLinePoints = (a: PointMm, b: PointMm, bulge: number): number[] => {
+    if (Math.abs(bulge) <= 0.5) return [a.xMm, a.yMm, b.xMm, b.yMm];
+    const mx = (a.xMm + b.xMm) / 2;
+    const my = (a.yMm + b.yMm) / 2;
+    const { nx, ny } = edgeNormal(a, b);
+    const cx = mx + nx * bulge * 2;
+    const cy = my + ny * bulge * 2;
+    const out: number[] = [];
+    const SEG = 18;
+    for (let s = 0; s <= SEG; s++) {
+      const t = s / SEG;
+      const mt = 1 - t;
+      out.push(mt * mt * a.xMm + 2 * mt * t * cx + t * t * b.xMm);
+      out.push(mt * mt * a.yMm + 2 * mt * t * cy + t * t * b.yMm);
+    }
+    return out;
+  };
+
   return (
     <Group>
-      {/* Edge 라인 (드래그 + hover 길이) */}
+      {/* Edge 라인 (곡선 반영 · 드래그 + hover 길이) */}
       {points.map((a, i) => {
         const b = points[(i + 1) % n];
         return (
           <Line
             key={`edge-${i}`}
-            points={[a.xMm, a.yMm, b.xMm, b.yMm]}
+            points={edgeLinePoints(a, b, curves[i] ?? 0)}
             stroke={hoverEdge === i ? '#2563eb' : '#3b82f6'}
             strokeWidth={hoverEdge === i ? 3 : 2}
             strokeScaleEnabled={false}
@@ -68,6 +100,24 @@ export default function ShapeEditor({
             <Circle radius={r} fill="#ffffff" stroke="#2563eb" strokeWidth={1.5} strokeScaleEnabled={false} />
             <Line points={[-px(4), 0, px(4), 0]} stroke="#2563eb" strokeWidth={1.5} strokeScaleEnabled={false} listening={false} />
             <Line points={[0, -px(4), 0, px(4)]} stroke="#2563eb" strokeWidth={1.5} strokeScaleEnabled={false} listening={false} />
+          </Group>
+        );
+      })}
+
+      {/* Edge 곡선(bulge) 핸들 — 주황, 중점에서 법선 방향으로 드래그 (v1.0.9) */}
+      {points.map((a, i) => {
+        const b = points[(i + 1) % n];
+        const mx = (a.xMm + b.xMm) / 2;
+        const my = (a.yMm + b.yMm) / 2;
+        const { nx, ny } = edgeNormal(a, b);
+        const bulge = curves[i] ?? 0;
+        const off = Math.abs(bulge) > 0.5 ? bulge : px(20); // 직선이면 바깥쪽으로 살짝 띄움
+        const hx = mx + nx * off;
+        const hy = my + ny * off;
+        return (
+          <Group key={`curve-${i}`}>
+            <Line points={[mx, my, hx, hy]} stroke="#f59e0b" strokeWidth={1} strokeScaleEnabled={false} dash={[px(4), px(3)]} listening={false} />
+            <Circle x={hx} y={hy} radius={px(7)} fill="#f59e0b" stroke="#ffffff" strokeWidth={1.5} strokeScaleEnabled={false} onMouseDown={(e) => onCurveDown(i, e)} />
           </Group>
         );
       })}

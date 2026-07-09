@@ -27,7 +27,6 @@ import PrintWorkspace from '../print/PrintWorkspace';
 import MerchandisingWorkspace from '../products/MerchandisingWorkspace';
 import MultiActionToolbar from '../tools/MultiActionToolbar';
 import IsoPreviewDialog from '../iso/IsoPreviewDialog';
-import FloorplanImportWizard from '../floorplan/FloorplanImportWizard';
 import CommandPalette, { type Command } from './CommandPalette';
 import SettingsDialog from './SettingsDialog';
 import EditorStatusBar from './EditorStatusBar';
@@ -118,9 +117,6 @@ export default function EditorCanvasArea() {
     alignFixtures,
     layouts,
     currentLayoutId,
-    importWizardOpen,
-    openImportWizard,
-    closeImportWizard,
   } = useEditor();
 
   const [wallMenuAnchor, setWallMenuAnchor] = useState<null | HTMLElement>(null);
@@ -192,7 +188,6 @@ export default function EditorCanvasArea() {
     { id: '3d', label: '3D 미리보기 열기', group: '보기', keywords: '3d preview iso lighting', run: () => setIsoOpen(true) },
     // 출력물 제작 커맨드는 v1.0.7 에서 숨김(기능/코드 유지)
     { id: 'merch', label: '진열 관리 열기', group: '보기', keywords: 'merchandising display guide', run: () => setMerchOpen(true) },
-    { id: 'import', label: '도면 가져오기 (Floorplan)', group: '도면', keywords: 'import floorplan pdf drawing 도면', disabled: !canEdit, run: openImportWizard },
     { id: 'settings', label: '설정 열기', group: '보기', keywords: 'settings grid snap', run: () => setSettingsOpen(true) },
     { id: 'expPng', label: 'PNG 내보내기', group: '내보내기', keywords: 'export png image', run: () => void runExport('png') },
     { id: 'expPdf', label: 'PDF 내보내기', group: '내보내기', keywords: 'export pdf', run: () => void runExport('pdf') },
@@ -431,7 +426,6 @@ export default function EditorCanvasArea() {
     <MerchandisingWorkspace open={merchOpen} onClose={() => setMerchOpen(false)} />
     <IsoPreviewDialog open={isoOpen} onClose={() => setIsoOpen(false)} />
     <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    <FloorplanImportWizard open={importWizardOpen} onClose={closeImportWizard} />
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
     </>
   );

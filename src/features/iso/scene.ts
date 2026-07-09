@@ -13,11 +13,11 @@ import type {
   WallItems,
   WallSide,
 } from '../../types';
-import { getBoothPolygon, getBoothBounds } from '../canvas/boothGeometry';
+import { getBoothOutline, getBoothBounds } from '../canvas/boothGeometry';
 import { getFixtureCorners } from '../canvas/fixtureGeometry';
 import { generateGeometry } from './geometry/GeometryGenerator';
 import { isWallEnabled } from '../wall/constants';
-import { planFaceMapping, resolveFaceMapping, assetById } from '../design/mapping';
+import { layersForFace, assetById } from '../design/mapping';
 import { productImageUrl } from '../products/productModel';
 import { productRenderGeo, productMaterialToFixture } from '../products/productGeometry';
 
@@ -181,7 +181,8 @@ export function buildIsoScene(
   products: Product[] = [],
   extras: RenderExtras = {},
 ): IsoScene {
-  const floorPolygon: V3[] = getBoothPolygon(booth).map((p) => ({ x: p.xMm, y: p.yMm, z: 0 }));
+  // 바닥은 곡선(변별 bulge)을 반영한 외곽선으로 (v1.0.9). 곡선 없으면 기존과 동일.
+  const floorPolygon: V3[] = getBoothOutline(booth).map((p) => ({ x: p.xMm, y: p.yMm, z: 0 }));
 
   const boxes: IsoBox[] = [];
   for (const p of placed) {
@@ -189,7 +190,7 @@ export function buildIsoScene(
     if (!def) continue;
     // 2D Shape → 3D extrude 지오메트리
     const geo = generateGeometry(p, def);
-    // 면별 디자인 텍스처 해석 (base + 추가 레이어 overlays, v1.0.6)
+    // 면별 디자인 텍스처 해석 — 레이어별 적용 면(faces) 반영 (base + overlays, v1.0.9)
     let faces: IsoBox['faces'];
     let faceOverlays: IsoBox['faceOverlays'];
     let wrapTexture: IsoFaceTexture | undefined;
@@ -201,24 +202,22 @@ export function buildIsoScene(
         const t = m.transform;
         return { url: a.url, opacity: t.opacity, flipH: t.flipH, scale: t.scale, offsetX: t.offsetX, offsetY: t.offsetY };
       };
-      const overlaysFor = (face: BoxFace): FaceMapping[] =>
-        (design.applyAll ? design.overlays?.front : design.overlays?.[face]) ?? [];
       const f: NonNullable<IsoBox['faces']> = {};
       const fov: NonNullable<IsoBox['faceOverlays']> = {};
-      const buildFace = (key: 'top' | BoxFace, base: FaceMapping | null, ovFace: BoxFace) => {
-        const bt = base ? toTex(base) : null;
-        if (bt) f[key] = bt;
-        const ovs = overlaysFor(ovFace).map(toTex).filter((x): x is IsoFaceTexture => !!x);
-        if (ovs.length) fov[key] = ovs;
+      // 면별로 렌더할 레이어 스택(아래→위)을 layersForFace 로 수집 → base + overlays 로 분리
+      const buildFace = (key: 'top' | BoxFace) => {
+        const layers = layersForFace(design, key).map(toTex).filter((x): x is IsoFaceTexture => !!x);
+        if (layers.length === 0) return;
+        f[key] = layers[0];
+        if (layers.length > 1) fov[key] = layers.slice(1);
       };
-      buildFace('top', planFaceMapping(design), 'top');
-      for (const side of ['front', 'back', 'left', 'right'] as BoxFace[]) buildFace(side, resolveFaceMapping(design, side), side);
+      (['top', 'front', 'back', 'left', 'right'] as const).forEach(buildFace);
       if (Object.keys(f).length > 0) faces = f;
       if (Object.keys(fov).length > 0) faceOverlays = fov;
-      // 곡면 측면 wrap: 대표 면(front/applyAll/첫 면) 텍스처를 둘레에 감쌈
+      // 곡면 측면 wrap: 정면 최상단 레이어를 둘레에 감쌈
       if (geo.curved) {
-        const wm = resolveFaceMapping(design, 'front');
-        const wt = wm ? toTex(wm) : null;
+        const wl = layersForFace(design, 'front');
+        const wt = wl.length ? toTex(wl[wl.length - 1]) : null;
         if (wt) wrapTexture = wt;
       }
     }

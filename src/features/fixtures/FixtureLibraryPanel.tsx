@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -9,6 +9,9 @@ import Chip from '@mui/material/Chip';
 import Checkbox from '@mui/material/Checkbox';
 import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip from '@mui/material/Tooltip';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
@@ -147,6 +150,25 @@ export default function FixtureLibraryPanel() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [fixOpen, setFixOpen] = useState(true);
   const [assetOpen, setAssetOpen] = useState(false);
+  // 검색 · 폴더(카테고리) 필터 (v1.0.9)
+  const [query, setQuery] = useState('');
+  const [catFilter, setCatFilter] = useState<string>('all'); // 'all' | 'none' | <category>
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of fixtures) if (f.category) set.add(f.category);
+    return [...set].sort();
+  }, [fixtures]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return fixtures.filter((f) => {
+      if (catFilter === 'none' && f.category) return false;
+      if (catFilter !== 'all' && catFilter !== 'none' && f.category !== catFilter) return false;
+      if (!q) return true;
+      return [f.name, f.category, f.memo].filter(Boolean).some((s) => s!.toLowerCase().includes(q));
+    });
+  }, [fixtures, query, catFilter]);
 
   const openAdd = () => {
     setEditing(null);
@@ -206,6 +228,29 @@ export default function FixtureLibraryPanel() {
             집기 추가
           </Button>
 
+          {/* 검색 (v1.0.9) */}
+          {!fixturesLoading && fixtures.length > 0 && (
+            <TextField
+              size="small"
+              placeholder="집기명 · 카테고리 검색"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              sx={{ mb: 1, flexShrink: 0 }}
+              slotProps={{ input: { startAdornment: (<InputAdornment position="start"><SearchRoundedIcon sx={{ fontSize: 18 }} /></InputAdornment>) } }}
+            />
+          )}
+
+          {/* 폴더(카테고리) 필터 (v1.0.9) */}
+          {categories.length > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1, flexShrink: 0 }}>
+              <Chip label="전체" size="small" color={catFilter === 'all' ? 'primary' : 'default'} variant={catFilter === 'all' ? 'filled' : 'outlined'} onClick={() => setCatFilter('all')} sx={{ height: 22, fontSize: 11 }} />
+              {categories.map((c) => (
+                <Chip key={c} label={c} size="small" color={catFilter === c ? 'primary' : 'default'} variant={catFilter === c ? 'filled' : 'outlined'} onClick={() => setCatFilter(c)} sx={{ height: 22, fontSize: 11 }} />
+              ))}
+              <Chip label="미분류" size="small" color={catFilter === 'none' ? 'primary' : 'default'} variant={catFilter === 'none' ? 'filled' : 'outlined'} onClick={() => setCatFilter('none')} sx={{ height: 22, fontSize: 11 }} />
+            </Box>
+          )}
+
           {/* 다중 선택 컨트롤 */}
           {!fixturesLoading && fixtures.length > 0 && (
             <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1, pl: 0.25, flexShrink: 0 }}>
@@ -229,7 +274,7 @@ export default function FixtureLibraryPanel() {
             </Box>
           ) : (
             <Stack spacing={1} sx={{ flex: 1, minHeight: 0, overflowY: 'auto', pr: 0.5 }}>
-              {fixtures.map((f) => (
+              {filtered.map((f) => (
                 <FixtureCard
                   key={f.id}
                   fixture={f}
@@ -244,6 +289,11 @@ export default function FixtureLibraryPanel() {
               {fixtures.length === 0 && (
                 <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
                   등록된 집기가 없습니다.
+                </Typography>
+              )}
+              {fixtures.length > 0 && filtered.length === 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                  검색 결과가 없습니다.
                 </Typography>
               )}
             </Stack>

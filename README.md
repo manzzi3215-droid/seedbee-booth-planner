@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.0.8 - 다중 선택·그룹·마우스 회전 · 집기명 라벨 · 실무시안 치수/사람 실루엣**
+> **v1.0.9 - 레이어별 면 매핑 · VMD 입력 수정 · 라이브러리 검색/폴더 · 도면 생성단계 이동 · 곡선 부스**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,15 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**레이어별 면 매핑 · 라이브러리 · 곡선 부스 (v1.0.9)**
+- **디자인 매핑 레이어별 면 적용:** 각 이미지 레이어마다 **적용 면**(Front/Back/Left/Right/Top/Bottom, "모든 면")을 개별 선택.
+  같은 집기에서 흰 배경은 전체 면, 로고는 정면, 장식은 상판처럼 레이어별로 다르게 표시. `FaceMapping.faces?`(optional)로 저장(기존 매핑 100% 호환).
+- **VMD 사이즈 입력 수정:** 보드 W/H 를 자유롭게 입력(빈 값·수정 중 안정), **커밋(blur/Enter) 시에만** 최소 50mm 검증.
+- **집기 라이브러리 검색·폴더:** 집기명·카테고리 **검색** + **폴더(카테고리) 칩** 필터. 디자인 에셋도 검색. `category?`·`order?`(optional) 추가.
+- **도면 가져오기 → 새 프로젝트 만들기 단계로 이동:** 편집 화면의 도면 가져오기 버튼 제거, 새 프로젝트에서 도면 첨부+미리보기 후 생성 시 배경 도면으로 자동 반영.
+- **곡선 부스 바닥:** 부스 편집에서 각 변에 **곡선(bulge) 핸들**을 드래그해 곡선 바닥 편집. 2D 평면도·3D 바닥·실무시안·출력에 반영(`edgeCurves?` optional, 3D 벽체 곡선은 다음 버전).
+- **탭명 변경:** `SVG 도면` → `SVG추가`.
 
 **편집 편의 개선 · 실무시안 강화 (v1.0.8)**
 - **다중 선택 & 일괄 이동:** `Shift/Ctrl+클릭` 또는 빈 곳 **드래그 박스(마퀴)** 로 여러 집기 선택,
@@ -307,6 +316,17 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.0.9 — Per-layer Face Mapping · VMD Input Fix · Library Search/Folders · Floorplan-at-Creation · Curved Booth**
+- **[1] 레이어별 면 매핑:** `FaceMapping.faces?: BoxFace[]`(optional) 추가. `mapping.layersForFace(design, face)` 로 렌더 시 면별 레이어 수집,
+  scene(3D)·planFaceMapping(2D)·resolveFaceMapping(출력/곡면 wrap) 모두 이 헬퍼 기반으로 통일. DesignPanel 은 전역 "모든 면" 스위치 → 레이어별 [적용 면] 칩으로 교체.
+  기존 데이터(faces 미지정/applyAll)는 동일하게 렌더(오프라인 로직 테스트 통과).
+- **[2] VMD 입력:** 보드 W/H 를 로컬 문자열 state 로 자유 입력, `commitBoardSize`(blur/Enter)에서만 min 50 clamp. (Hooks 순서 준수 위해 sync effect 를 조건부 return 위로 배치)
+- **[3] 탭명:** `SVG 도면` → `SVG추가`.
+- **[4] 라이브러리:** `FixtureDef.category?`·`order?`(optional). 집기 패널에 검색 TextField + 카테고리 폴더 칩(전체/미분류/카테고리) 필터, 폼에 카테고리 입력. 디자인 에셋 패널에 검색.
+- **[5] 도면 위저드 이동:** 편집기의 도면 버튼(툴바·DrawingsPanel·커맨드·FloorplanImportWizard) 제거, NewProjectPage 에 파일 업로드+미리보기 추가 → 생성 시 초기 배치안 planBackgrounds 로 첨부(브라우저 E2E 확인).
+- **[6] 곡선 부스:** `BoothConfig.edgeCurves?: number[]`(optional). `boothGeometry.tessellatePolygon/getBoothOutline`(곡선 없으면 원본 참조 그대로=무회귀). ShapeEditor 곡선(bulge) 핸들 + BoothCanvas 곡선 드래그, 2D/3D 바닥·출력 반영. 3D 벽체 곡선은 범위 밖.
+- **호환성:** 추가 필드 전부 optional → 기존 프로젝트/집기/매핑 100% 호환. Build 성공 · pure 로직(layersForFace·tessellatePolygon) 오프라인 검증 · VMD 입력/도면/검색 브라우저 검증 완료.
 
 **v1.0.8 — Multi-select/Group/Mouse-rotate · Fixture-name Label · Practical Dimensions & Human Silhouette**
 - **[1] 정렬 UI 정리:** MultiActionToolbar·Command Palette 에서 좌우/상하 미러·미러 복사·균등 분배 버튼 숨김.

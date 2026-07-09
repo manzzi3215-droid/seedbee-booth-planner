@@ -24,7 +24,7 @@ import {
 } from '../canvas/constants';
 import {
   getBoothShape,
-  getBoothPolygon,
+  getBoothOutline,
   getBoothBounds,
   flattenPolygon,
 } from '../canvas/boothGeometry';
@@ -69,7 +69,7 @@ export function createBoothDrawingDataURL(
 ): string {
   const gridSizeMm = options.gridSizeMm ?? DEFAULT_GRID_SIZE_MM;
   const isPolygon = getBoothShape(booth) === 'polygon';
-  const polygon = getBoothPolygon(booth);
+  const polygon = getBoothOutline(booth); // 곡선(bulge) 반영 외곽선 (v1.0.9)
   const bounds = getBoothBounds(booth);
   const { minX, minY, maxX, maxY, widthMm: boothW, depthMm: boothD } = bounds;
 

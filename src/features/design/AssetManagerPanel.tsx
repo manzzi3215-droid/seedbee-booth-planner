@@ -6,6 +6,9 @@ import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Paper from '@mui/material/Paper';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useEditor } from '../editor/EditorContext';
@@ -22,6 +25,9 @@ export default function AssetManagerPanel({ embedded = false }: { embedded?: boo
   const usage = countAssetUsage(placed);
   const fileRef = useRef<HTMLInputElement>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [query, setQuery] = useState(''); // 에셋 검색 (v1.0.9)
+  const q = query.trim().toLowerCase();
+  const shown = q ? designAssets.filter((a) => a.name.toLowerCase().includes(q)) : designAssets;
 
   // 그룹(embedded) 안에서는 0개여도 안내 문구를 표시(그룹 헤더가 개수를 보여줌)
   if (designAssets.length === 0) {
@@ -78,8 +84,19 @@ export default function AssetManagerPanel({ embedded = false }: { embedded?: boo
           디자인 에셋 <Chip label={designAssets.length} size="small" variant="outlined" sx={{ height: 18, fontSize: 11 }} />
         </Typography>
       )}
+      {designAssets.length > 3 && (
+        <TextField
+          size="small"
+          fullWidth
+          placeholder="에셋 검색"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          sx={{ mb: 1 }}
+          slotProps={{ input: { startAdornment: (<InputAdornment position="start"><SearchRoundedIcon sx={{ fontSize: 18 }} /></InputAdornment>) } }}
+        />
+      )}
       <Stack spacing={1}>
-        {designAssets.map((a) => (
+        {shown.map((a) => (
           <Paper key={a.id} elevation={0} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Box sx={{ width: 40, height: 40, flexShrink: 0, border: '1px solid', borderColor: 'divider', borderRadius: 0.5, overflow: 'hidden', bgcolor: 'action.hover' }}>
