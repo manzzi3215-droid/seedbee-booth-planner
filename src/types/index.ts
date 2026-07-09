@@ -297,6 +297,11 @@ export interface PlacedFixture {
   rotationDeg: number; // 회전 각도(도)
   /** 디자인 매핑 (v0.8.7) — 인스턴스 단위 */
   design?: DesignMapping;
+  /**
+   * 그룹 id (v1.0.8). 같은 groupId 를 가진 집기는 한 번에 선택·이동됩니다.
+   * optional — 미지정 시 그룹 없음(하위 호환).
+   */
+  groupId?: string;
 }
 
 /** 텍스트 정렬 */

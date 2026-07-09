@@ -1,5 +1,6 @@
-import { Group, Rect, Ellipse, Line, Path, Text } from 'react-konva';
-import type Konva from 'konva';
+import { useMemo } from 'react';
+import { Group, Rect, Ellipse, Line, Path, Text, Circle } from 'react-konva';
+import Konva from 'konva';
 import type { FaceMapping, FixtureDef, PlacedFixture, PointMm } from '../../types';
 import { isFixtureOutOfBounds } from './fixtureGeometry';
 import { CUSTOM_PATH_VIEW } from '../fixtures/shapes';
@@ -97,6 +98,68 @@ function ShapeBody({ def }: { def: FixtureDef }) {
 
 /** 선택 핸들 화면 크기(px) — 배율과 무관하게 일정하게 보이도록 counter-scale */
 const HANDLE_PX = 9;
+/** 회전 핸들 화면 크기(px) 및 집기 위쪽 거리(px) — v1.0.8 */
+const ROTATE_HANDLE_PX = 11;
+const ROTATE_HANDLE_GAP_PX = 26;
+const ROTATE_COLOR = '#2563eb';
+
+/**
+ * 집기명 라벨 (v1.0.8) — 검정 라운드 배경 + 흰 글자.
+ * 텍스트 길이에 맞춰 배경이 자동 크기 조정되며, 집기 중앙에 배치됩니다.
+ * 집기와 함께 회전(Group 회전 상속)하지만 배경 덕분에 어느 배경 위에서도 읽힙니다.
+ */
+function FixtureName({
+  name,
+  widthMm,
+  depthMm,
+  fontMm,
+  selected,
+}: {
+  name: string;
+  widthMm: number;
+  depthMm: number;
+  fontMm: number;
+  selected: boolean;
+}) {
+  const fontStyle = selected ? 'bold' : 'normal';
+  const size = useMemo(() => {
+    const t = new Konva.Text({ text: name, fontSize: fontMm, fontStyle });
+    return { w: t.width(), h: t.height() };
+  }, [name, fontMm, fontStyle]);
+
+  const padX = fontMm * 0.4;
+  const padY = fontMm * 0.22;
+  const bgW = size.w + padX * 2;
+  const bgH = size.h + padY * 2;
+  const cx = widthMm / 2;
+  const cy = depthMm / 2;
+
+  return (
+    <Group listening={false}>
+      <Rect
+        x={cx - bgW / 2}
+        y={cy - bgH / 2}
+        width={bgW}
+        height={bgH}
+        fill="rgba(0,0,0,0.72)"
+        cornerRadius={fontMm * 0.28}
+      />
+      <Text
+        text={name}
+        x={cx - size.w / 2}
+        y={cy - size.h / 2}
+        width={size.w}
+        height={size.h}
+        align="center"
+        verticalAlign="middle"
+        wrap="none"
+        fontSize={fontMm}
+        fontStyle={fontStyle}
+        fill="#ffffff"
+      />
+    </Group>
+  );
+}
 
 interface FixtureNodeProps {
   placed: PlacedFixture;
@@ -113,10 +176,16 @@ interface FixtureNodeProps {
   designImage?: HTMLImageElement;
   /** additive=true 면 다중 선택 토글 (Ctrl/Shift/Cmd) — v0.9.0 */
   onSelect: (id: string, additive: boolean) => void;
+  /** 드래그 시작 — 그룹 이동 기준점 스냅샷용 (v1.0.8) */
+  onDragStartFixture?: (id: string) => void;
   /** 드래그 중 위치 보정(스마트 스냅). 보정된 좌표(mm) 반환 */
   onDragMove: (id: string, xMm: number, yMm: number, shiftKey: boolean) => { xMm: number; yMm: number };
   /** 드래그 종료. shiftKey(스마트 스냅) 여부 전달 */
   onDragEnd: (id: string, xMm: number, yMm: number, shiftKey: boolean) => void;
+  /** 마우스 회전 핸들 표시 여부 (단일 선택일 때만) — v1.0.8 */
+  showRotateHandle?: boolean;
+  /** 회전 콜백(절대 각도) — 마우스 회전 핸들 (v1.0.8) */
+  onRotate?: (id: string, deg: number) => void;
 }
 
 /** 선택된 집기의 네 모서리 핸들 */
@@ -173,8 +242,11 @@ export default function FixtureNode({
   designMapping,
   designImage,
   onSelect,
+  onDragStartFixture,
   onDragMove,
   onDragEnd,
+  showRotateHandle,
+  onRotate,
 }: FixtureNodeProps) {
   const oob = isFixtureOutOfBounds(placed, def, boothPolygon);
   const showBorder = selected || oob;
@@ -206,6 +278,21 @@ export default function FixtureNode({
   const isAdditive = (evt: MouseEvent | TouchEvent) =>
     'ctrlKey' in evt ? evt.ctrlKey || evt.metaKey || evt.shiftKey : false;
 
+  // 회전 핸들 (v1.0.8) — Group 로컬 좌표에서 각도 계산. Shift = 15° 스냅.
+  const handleGapMm = ROTATE_HANDLE_GAP_PX / scale;
+  const handleRestX = def.widthMm / 2;
+  const handleRestY = -handleGapMm;
+  const handleRotateMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    const node = e.target;
+    const lx = node.x();
+    const ly = node.y();
+    const phi = Math.atan2(ly - def.depthMm / 2, lx - def.widthMm / 2);
+    let next = placed.rotationDeg + (phi * 180) / Math.PI + 90;
+    if (e.evt.shiftKey) next = Math.round(next / 15) * 15;
+    onRotate?.(placed.id, next);
+    node.position({ x: handleRestX, y: handleRestY }); // 핸들은 항상 정위치로 복귀
+  };
+
   return (
     <Group
       x={placed.xMm}
@@ -214,7 +301,10 @@ export default function FixtureNode({
       draggable
       onMouseDown={(e) => onSelect(placed.id, isAdditive(e.evt))}
       onTouchStart={() => onSelect(placed.id, false)}
-      onDragStart={() => onSelect(placed.id, false)}
+      onDragStart={() => {
+        onDragStartFixture?.(placed.id);
+        onSelect(placed.id, false);
+      }}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
     >
@@ -223,23 +313,12 @@ export default function FixtureNode({
         <DesignTextureNode image={designImage} w={def.widthMm} d={def.depthMm} mapping={designMapping} />
       )}
       {nameVisible && (
-        <Text
-          text={def.name}
-          width={def.widthMm}
-          height={def.depthMm}
-          align="center"
-          verticalAlign="middle"
-          wrap="none"
-          ellipsis
-          fontSize={nameFontMm}
-          fontStyle={selected ? 'bold' : 'normal'}
-          fill="#ffffff"
-          stroke="rgba(0,0,0,0.7)"
-          strokeWidth={(selected ? 2.4 : 1.6) / scale}
-          fillAfterStrokeEnabled
-          opacity={selected ? 1 : 0.9}
-          listening={false}
-          padding={2}
+        <FixtureName
+          name={def.name}
+          widthMm={def.widthMm}
+          depthMm={def.depthMm}
+          fontMm={nameFontMm}
+          selected={selected}
         />
       )}
       {showBorder && (
@@ -263,6 +342,39 @@ export default function FixtureNode({
           scale={scale}
           color={borderColor}
         />
+      )}
+      {showRotateHandle && (
+        <>
+          {/* 집기 상단 중앙 → 회전 핸들 연결선 */}
+          <Line
+            points={[def.widthMm / 2, 0, handleRestX, handleRestY]}
+            stroke={ROTATE_COLOR}
+            strokeWidth={1.5}
+            strokeScaleEnabled={false}
+            listening={false}
+          />
+          <Circle
+            x={handleRestX}
+            y={handleRestY}
+            radius={ROTATE_HANDLE_PX / scale}
+            fill="#ffffff"
+            stroke={ROTATE_COLOR}
+            strokeWidth={2}
+            strokeScaleEnabled={false}
+            draggable
+            onMouseDown={(e) => {
+              e.cancelBubble = true;
+            }}
+            onDragStart={(e) => {
+              e.cancelBubble = true;
+            }}
+            onDragMove={handleRotateMove}
+            onDragEnd={(e) => {
+              e.cancelBubble = true;
+              e.target.position({ x: handleRestX, y: handleRestY });
+            }}
+          />
+        </>
       )}
     </Group>
   );

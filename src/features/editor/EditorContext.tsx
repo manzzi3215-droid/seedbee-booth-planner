@@ -349,6 +349,20 @@ interface EditorContextValue {
   duplicateFixtures: () => void;
   /** 다중 선택 삭제 */
   deleteFixtures: () => void;
+
+  // ---------- 다중 이동 / 그룹 / 마우스 회전 (v1.0.8) ----------
+  /** 여러 집기를 절대 좌표로 이동 (드래그 박스 그룹 이동용). 딸린 제품도 함께 이동 */
+  moveFixtures: (entries: { id: string; xMm: number; yMm: number }[]) => void;
+  /** 특정 집기 회전(절대 각도) — 마우스 회전 핸들용. 딸린 제품도 함께 회전 */
+  rotateFixtureTo: (id: string, deg: number) => void;
+  /** 여러 집기를 id 목록으로 한 번에 선택 (드래그 박스 선택). 그룹 자동 확장 */
+  selectMany: (ids: string[]) => void;
+  /** 다중 선택된 집기를 하나의 그룹으로 묶기 */
+  groupSelected: () => void;
+  /** 선택된 집기가 속한 그룹 해제 */
+  ungroupSelected: () => void;
+  /** 현재 선택이 단일 그룹으로 묶여 있으면 그 groupId, 아니면 null */
+  selectedGroupId: string | null;
 }
 
 /** 정렬 모드 */
@@ -783,16 +797,26 @@ export function EditorProvider({
       };
     };
     // 집기 선택 (additive=true 면 다중 선택 토글) — v0.9.0
+    // 그룹 소속 집기를 단일 클릭하면 그룹 전체가 선택됩니다 (v1.0.8).
     const select = (id: string | null, additive = false) => {
       if (id == null) {
         setSelectedItem(null);
         setSelectedFixtureIds([]);
         return;
       }
+      const pf = placed.find((p) => p.id === id);
+      const groupMembers =
+        pf?.groupId ? placed.filter((p) => p.groupId === pf.groupId).map((p) => p.id) : null;
       if (additive) {
         setSelectedFixtureIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
       } else {
-        setSelectedFixtureIds((prev) => (prev.length > 1 && prev.includes(id) ? prev : [id]));
+        setSelectedFixtureIds((prev) => {
+          // 이미 이 집기를 포함한 다중 선택(드래그 준비 상태)은 그대로 유지
+          if (prev.length > 1 && prev.includes(id)) return prev;
+          // 그룹 소속이면 그룹 전체 선택
+          if (groupMembers && groupMembers.length > 1) return groupMembers;
+          return [id];
+        });
       }
       setSelectedItem({ scope: 'plan', type: 'fixture', id });
     };
@@ -1669,9 +1693,90 @@ export function EditorProvider({
       const ids = selectedFixtureIds;
       if (ids.length === 0) return;
       setPlaced((prev) => prev.filter((p) => !ids.includes(p.id)));
+      // 함께 배치된 제품도 제거(바닥에 남지 않도록)
+      setPlacedProducts((prev) => prev.filter((pp) => !(pp.fixtureId != null && ids.includes(pp.fixtureId))));
       setSelectedFixtureIds([]);
       setSelectedItem(null);
     };
+
+    // ---------- 다중 이동 / 그룹 / 마우스 회전 (v1.0.8) ----------
+    // 여러 집기를 절대 좌표로 이동(드래그 박스/그룹 이동). 딸린 제품도 델타만큼 함께 이동.
+    const moveFixtures = (entries: { id: string; xMm: number; yMm: number }[]) => {
+      if (entries.length === 0) return;
+      const posMap = new Map(entries.map((e) => [e.id, e]));
+      const curMap = new Map(placed.map((p) => [p.id, p]));
+      const deltas = new Map<string, { dx: number; dy: number }>();
+      for (const e of entries) {
+        const p = curMap.get(e.id);
+        if (p) deltas.set(e.id, { dx: e.xMm - p.xMm, dy: e.yMm - p.yMm });
+      }
+      setPlaced((prev) =>
+        prev.map((p) => {
+          const e = posMap.get(p.id);
+          return e ? { ...p, xMm: e.xMm, yMm: e.yMm } : p;
+        }),
+      );
+      setPlacedProducts((prev) =>
+        prev.map((pp) => {
+          const d = pp.fixtureId != null ? deltas.get(pp.fixtureId) : undefined;
+          return d ? { ...pp, xMm: pp.xMm + d.dx, yMm: pp.yMm + d.dy } : pp;
+        }),
+      );
+    };
+
+    // 특정 집기를 절대 각도로 회전(마우스 회전 핸들). 딸린 제품도 함께 회전.
+    const rotateFixtureTo = (id: string, deg: number) => {
+      const cur = placed.find((p) => p.id === id);
+      const nd = ((deg % 360) + 360) % 360;
+      setPlaced((prev) => prev.map((p) => (p.id === id ? { ...p, rotationDeg: nd } : p)));
+      if (cur) rotateAttachedProducts(id, nd - cur.rotationDeg);
+    };
+
+    // 드래그 박스 선택 — 그룹 소속이면 그룹 전체로 확장
+    const selectMany = (ids: string[]) => {
+      if (ids.length === 0) {
+        setSelectedItem(null);
+        setSelectedFixtureIds([]);
+        return;
+      }
+      const expanded = new Set(ids);
+      for (const id of ids) {
+        const pf = placed.find((p) => p.id === id);
+        if (pf?.groupId) placed.forEach((p) => p.groupId === pf.groupId && expanded.add(p.id));
+      }
+      const arr = [...expanded];
+      setSelectedFixtureIds(arr);
+      setSelectedItem({ scope: 'plan', type: 'fixture', id: arr[0] });
+    };
+
+    // 다중 선택 → 하나의 그룹으로 묶기 (v1.0.8)
+    const groupSelected = () => {
+      const ids = selectedFixtureIds;
+      if (ids.length < 2) return;
+      const gid = generateId();
+      setPlaced((prev) => prev.map((p) => (ids.includes(p.id) ? { ...p, groupId: gid } : p)));
+    };
+
+    // 선택된 집기가 속한 모든 그룹 해제
+    const ungroupSelected = () => {
+      const ids = selectedFixtureIds;
+      if (ids.length === 0) return;
+      const gids = new Set(
+        placed.filter((p) => ids.includes(p.id) && p.groupId).map((p) => p.groupId as string),
+      );
+      if (gids.size === 0) return;
+      setPlaced((prev) =>
+        prev.map((p) => (p.groupId && gids.has(p.groupId) ? { ...p, groupId: undefined } : p)),
+      );
+    };
+
+    // 현재 선택이 단일 그룹으로 온전히 묶여 있으면 그 groupId
+    const selBoxesForGroup = placed.filter((p) => selectedFixtureIds.includes(p.id));
+    const selGids = new Set(selBoxesForGroup.map((p) => p.groupId ?? ''));
+    const selectedGroupId =
+      selBoxesForGroup.length > 0 && selGids.size === 1 && selBoxesForGroup[0].groupId
+        ? (selBoxesForGroup[0].groupId as string)
+        : null;
 
     // ---------- 배치안 저장/불러오기 ----------
     const currentLayout = layouts.find((l) => l.id === currentLayoutId) ?? null;
@@ -1960,6 +2065,13 @@ export function EditorProvider({
       arrayFixtures,
       duplicateFixtures,
       deleteFixtures,
+      // 다중 이동 / 그룹 / 마우스 회전 (v1.0.8)
+      moveFixtures,
+      rotateFixtureTo,
+      selectMany,
+      groupSelected,
+      ungroupSelected,
+      selectedGroupId,
     };
   }, [
     project,

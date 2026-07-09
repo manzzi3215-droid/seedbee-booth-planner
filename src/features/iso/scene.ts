@@ -87,6 +87,19 @@ export interface IsoBox {
   material?: import('../../types').FixtureMaterial;
   /** 바닥 기준 시작 높이(mm). 제품은 집기 상판 높이에서 시작 (v0.9.4) */
   baseZmm?: number;
+  /**
+   * 사이즈 표기용 실측 치수(mm) — 실무시안 치수 표기 옵션 (v1.0.8).
+   * 실제 집기에만 설정(제품/매트/사람 등은 미설정).
+   */
+  dims?: { wMm: number; dMm: number; hMm: number };
+}
+
+/** 스케일 참고용 사람 실루엣 (v1.0.8) — 부스 바깥쪽에 세워 크기 비교 */
+export interface IsoHuman {
+  /** 발 위치(바닥 z=0) */
+  x: number;
+  y: number;
+  heightMm: number;
 }
 
 /** 바닥 위 이미지 (z=0 평면) */
@@ -99,6 +112,8 @@ export interface IsoScene {
   walls: IsoWall[];
   boxes: IsoBox[];
   floorImages: IsoFloorImage[];
+  /** 스케일 참고용 사람 실루엣 (v1.0.8) */
+  humans?: IsoHuman[];
 }
 
 /** 실무 시안(Practical Render) 추가 요소 (v1.0.0-pre) */
@@ -207,12 +222,15 @@ export function buildIsoScene(
         if (wt) wrapTexture = wt;
       }
     }
+    const fxHeight = resolveFixtureHeight(def.heightMm, booth.heightMm);
     boxes.push({
       footprint: geo.footprint.map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
-      heightMm: resolveFixtureHeight(def.heightMm, booth.heightMm),
+      heightMm: fxHeight,
       color: def.color,
       opacity: def.opacity ?? 1,
       name: def.name,
+      // 사이즈 표기용 실측 치수(실무시안 치수 옵션, v1.0.8)
+      dims: { wMm: def.widthMm, dMm: def.depthMm, hMm: def.heightMm ?? fxHeight },
       faces,
       faceOverlays,
       // 윗면 이미지 매핑용 방향성 사각형(곡면/customPath 상단 매핑 정상화, v1.0.7)
@@ -303,25 +321,12 @@ export function buildIsoScene(
       material: 'matte',
     });
   }
+  // 스케일용 사람 실루엣(머리+몸통) — 부스 바깥쪽(앞쪽) 에 세워 크기 비교 (v1.0.8)
+  const humans: IsoHuman[] = [];
   if (extras.humanSilhouette) {
-    // 스케일용 사람 실루엣(얇은 세움 카드, 1700mm) — 부스 앞쪽 좌측
-    const hw = 450;
-    const hd = 180;
-    const hx = b.minX + Math.min(700, b.widthMm * 0.15);
-    const hy = b.maxY - hd - Math.min(500, b.depthMm * 0.12);
-    boxes.push({
-      footprint: [
-        { x: hx, y: hy, z: 0 },
-        { x: hx + hw, y: hy, z: 0 },
-        { x: hx + hw, y: hy + hd, z: 0 },
-        { x: hx, y: hy + hd, z: 0 },
-      ],
-      heightMm: 1700,
-      color: '#94a3b8',
-      opacity: 0.9,
-      name: '',
-      material: 'matte',
-    });
+    const gap = Math.max(400, b.depthMm * 0.12); // 부스 앞면(maxY) 바깥으로 이격
+    humans.push({ x: b.minX + b.widthMm * 0.28, y: b.maxY + gap, heightMm: 1700 });
+    humans.push({ x: b.minX + b.widthMm * 0.72, y: b.maxY + gap + 250, heightMm: 1650 });
   }
 
   return {
@@ -329,5 +334,6 @@ export function buildIsoScene(
     walls: buildWalls(booth, wallItems),
     boxes,
     floorImages: planImages.map((image) => ({ image })),
+    humans,
   };
 }

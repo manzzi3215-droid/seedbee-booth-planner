@@ -75,6 +75,9 @@ export default function EditorCanvasArea() {
     gridSizeMm,
     select,
     move,
+    moveFixtures,
+    selectMany,
+    rotateFixtureTo,
     selectText,
     moveText,
     selectDimension,
@@ -113,8 +116,6 @@ export default function EditorCanvasArea() {
     addText,
     addDimension,
     alignFixtures,
-    distributeFixtures,
-    mirrorFixtures,
     layouts,
     currentLayoutId,
     importWizardOpen,
@@ -185,10 +186,7 @@ export default function EditorCanvasArea() {
     { id: 'alignR', label: '오른쪽 정렬', group: '정렬', keywords: 'align right', disabled: selectedFixtureIds.length < 2, run: () => alignFixtures('right') },
     { id: 'alignCH', label: '가로 중앙 정렬', group: '정렬', keywords: 'align center', disabled: selectedFixtureIds.length < 2, run: () => alignFixtures('centerH') },
     { id: 'alignCV', label: '세로 중앙 정렬', group: '정렬', keywords: 'align middle', disabled: selectedFixtureIds.length < 2, run: () => alignFixtures('centerV') },
-    { id: 'distH', label: '가로 균등 분배', group: '정렬', keywords: 'distribute', disabled: selectedFixtureIds.length < 3, run: () => distributeFixtures('h') },
-    { id: 'distV', label: '세로 균등 분배', group: '정렬', keywords: 'distribute', disabled: selectedFixtureIds.length < 3, run: () => distributeFixtures('v') },
-    { id: 'mirrorH', label: '좌우 미러', group: '정렬', keywords: 'mirror flip', disabled: selectedFixtureIds.length < 1, run: () => mirrorFixtures('h', false) },
-    { id: 'mirrorHc', label: '좌우 미러 복사', group: '정렬', keywords: 'mirror copy', disabled: selectedFixtureIds.length < 1, run: () => mirrorFixtures('h', true) },
+    // 분배/미러 커맨드는 v1.0.8 에서 UI 숨김(EditorContext 함수는 유지)
     { id: 'addText', label: '텍스트 추가', group: '추가', keywords: 'text add', disabled: !canEdit, run: addText },
     { id: 'addDim', label: '치수선 추가', group: '추가', keywords: 'dimension', disabled: !canEdit, run: addDimension },
     { id: '3d', label: '3D 미리보기 열기', group: '보기', keywords: '3d preview iso lighting', run: () => setIsoOpen(true) },
@@ -407,6 +405,9 @@ export default function EditorCanvasArea() {
               gridSizeMm={gridSizeMm}
               onSelect={select}
               onMove={move}
+              onMoveFixtures={moveFixtures}
+              onSelectMany={selectMany}
+              onRotateFixture={rotateFixtureTo}
               onSelectText={selectText}
               onMoveText={moveText}
               onSelectDimension={selectDimension}

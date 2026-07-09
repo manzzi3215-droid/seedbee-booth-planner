@@ -47,6 +47,8 @@ export interface IsoRenderOptions {
   showNames: boolean;
   /** 그림자 표시 */
   showShadows: boolean;
+  /** 사이즈(치수) 표기 — 부스 전체 + 주요 집기 치수 (실무시안, v1.0.8) */
+  showDimensions?: boolean;
   /** 출력 긴 변 px */
   targetPx: number;
   /** 배경 테마 (기본 light). Presentation Dark 모드에서 dark (v0.8.8) */
@@ -204,6 +206,10 @@ export function renderIsoSceneToDataURL(
   }
   for (const box of scene.boxes) {
     for (const f of box.footprint) allPts.push(f, { ...f, z: (box.baseZmm ?? 0) + box.heightMm });
+  }
+  // 사람 실루엣 발/머리 지점도 fit 범위에 포함 (부스 바깥이라도 잘리지 않도록, v1.0.8)
+  for (const h of scene.humans ?? []) {
+    allPts.push({ x: h.x, y: h.y, z: 0 }, { x: h.x, y: h.y, z: h.heightMm });
   }
   const projected = allPts.map(rawProj);
   const minX = Math.min(...projected.map((p) => p.x));
@@ -481,6 +487,7 @@ export function renderIsoSceneToDataURL(
 
   // --- 집기 박스 ---
   const nameDraws: { screen: Pt; depth: number; text: string }[] = [];
+  const sizeDraws: { screen: Pt; depth: number; text: string }[] = [];
   for (const box of scene.boxes) {
     const fp = box.footprint;
     const topZ = (box.baseZmm ?? 0) + box.heightMm; // 상판 위 제품은 baseZ 만큼 올라감 (v0.9.4)
@@ -580,6 +587,24 @@ export function renderIsoSceneToDataURL(
         : { x: bcx, y: bcy, z: topZ };
       nameDraws.push({ screen: P(anchor), depth: boxDepth, text: box.name });
     }
+    // 집기 치수 표기 (실무시안, v1.0.8) — 실제 집기(dims 있는 것)만
+    if (options.showDimensions && box.dims) {
+      sizeDraws.push({
+        screen: P({ x: bcx, y: bcy, z: box.baseZmm ?? 0 }),
+        depth: boxDepth,
+        text: `${box.dims.wMm}×${box.dims.dMm}`,
+      });
+    }
+  }
+
+  // --- 사람 실루엣 (스케일 참고, v1.0.8) — 박스와 함께 깊이 정렬 ---
+  for (const h of scene.humans ?? []) {
+    const base: V3 = { x: h.x, y: h.y, z: 0 };
+    const head: V3 = { x: h.x, y: h.y, z: h.heightMm };
+    boxUnits.push({
+      depth: depthOf([base, head]),
+      draw: () => drawHuman(ctx, P(base), P(head)),
+    });
   }
 
   // z-order: 배경(바닥/그림자) → 벽(항상 뒤) → 집기(항상 앞). 각 그룹 내부는 깊이순.
@@ -598,7 +623,105 @@ export function renderIsoSceneToDataURL(
     for (const n of nameDraws) drawName(ctx, n.screen, n.text, fontPx);
   }
 
+  // --- 사이즈(치수) 표기 (실무시안, v1.0.8) — 부스 전체 + 주요 집기 ---
+  if (options.showDimensions) {
+    const fontPx = Math.max(10, options.targetPx / 92);
+    // 집기 치수 (집기명 아래쪽에 살짝 내려서)
+    sizeDraws.sort((a, b) => a.depth - b.depth);
+    const yOff = options.showNames ? fontPx * 1.7 : 0;
+    for (const s of sizeDraws) {
+      drawSizeLabel(ctx, { x: s.screen.x, y: s.screen.y + yOff }, s.text, fontPx);
+    }
+    // 부스 전체 치수 (앞쪽 바닥 중앙, 강조)
+    const boothW = Math.round(gMaxX - gMinX);
+    const boothD = Math.round(gMaxY - gMinY);
+    const boothH = Math.round(Math.max(0, ...scene.walls.map((w) => w.heightMm)));
+    const boothText = boothH > 0 ? `부스 ${boothW}×${boothD}×${boothH}mm` : `부스 ${boothW}×${boothD}mm`;
+    const boothAnchor = P({ x: cx, y: gMaxY, z: 0 });
+    drawSizeLabel(ctx, { x: boothAnchor.x, y: boothAnchor.y + fontPx * 1.6 }, boothText, fontPx * 1.15, true);
+  }
+
   return canvas.toDataURL('image/png');
+}
+
+/** 사이즈(치수) 라벨 (v1.0.8) — 파란 배경 + 흰 글자. emphasize 면 강조 스타일. */
+function drawSizeLabel(ctx: CanvasRenderingContext2D, at: Pt, text: string, fontPx: number, emphasize = false) {
+  if (!text) return;
+  ctx.save();
+  ctx.font = `bold ${fontPx}px ${TEXT_FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width;
+  const padX = fontPx * 0.5;
+  const h = fontPx * 1.5;
+  const rx = at.x - w / 2 - padX;
+  const ry = at.y - h / 2;
+  const rw = w + padX * 2;
+  const r = fontPx * 0.35;
+  ctx.beginPath();
+  ctx.moveTo(rx + r, ry);
+  ctx.arcTo(rx + rw, ry, rx + rw, ry + h, r);
+  ctx.arcTo(rx + rw, ry + h, rx, ry + h, r);
+  ctx.arcTo(rx, ry + h, rx, ry, r);
+  ctx.arcTo(rx, ry, rx + rw, ry, r);
+  ctx.closePath();
+  ctx.fillStyle = emphasize ? 'rgba(37,99,235,0.95)' : 'rgba(30,41,59,0.86)';
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(text, at.x, at.y);
+  ctx.restore();
+}
+
+/**
+ * 사람 실루엣 (v1.0.8) — 머리 원형 + 몸통. 발(base)→머리(top) 스크린 벡터를 따라 빌보드로 그림.
+ * 원근 투영에 맞춰 높이/폭이 자연스럽게 조정됩니다.
+ */
+function drawHuman(ctx: CanvasRenderingContext2D, base: Pt, top: Pt) {
+  const axX = top.x - base.x;
+  const axY = top.y - base.y;
+  const L = Math.hypot(axX, axY) || 1;
+  const ux = axX / L; // 위(머리) 방향 단위벡터
+  const uy = axY / L;
+  const px = -uy; // 수평(어깨) 단위벡터
+  const py = ux;
+  const W = L * 0.34; // 전체 어깨 폭
+  // 축 위 t(0=발, 1=머리) + 수평 오프셋 s(±) → 스크린 좌표
+  const pt = (t: number, s: number): Pt => ({
+    x: base.x + ux * L * t + px * s,
+    y: base.y + uy * L * t + py * s,
+  });
+  ctx.save();
+  ctx.fillStyle = 'rgba(71,85,105,0.9)';
+  ctx.strokeStyle = 'rgba(30,41,59,0.55)';
+  ctx.lineWidth = Math.max(1, L * 0.015);
+  // 몸통(어깨→허리→발) 실루엣 폴리곤
+  const shoulder = W * 0.5;
+  const waist = W * 0.34;
+  const foot = W * 0.28;
+  ctx.beginPath();
+  const p0 = pt(0.0, -foot);
+  ctx.moveTo(p0.x, p0.y);
+  for (const [t, s] of [
+    [0.0, foot],
+    [0.42, waist],
+    [0.72, shoulder],
+    [0.72, -shoulder],
+    [0.42, -waist],
+  ] as [number, number][]) {
+    const q = pt(t, s);
+    ctx.lineTo(q.x, q.y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // 머리(원형)
+  const headC = pt(0.87, 0);
+  const headR = W * 0.28;
+  ctx.beginPath();
+  ctx.arc(headC.x, headC.y, headR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawName(ctx: CanvasRenderingContext2D, at: Pt, text: string, fontPx: number) {

@@ -19,19 +19,19 @@ import AlignHorizontalRightIcon from '@mui/icons-material/AlignHorizontalRight';
 import AlignVerticalTopIcon from '@mui/icons-material/AlignVerticalTop';
 import AlignVerticalCenterIcon from '@mui/icons-material/AlignVerticalCenter';
 import AlignVerticalBottomIcon from '@mui/icons-material/AlignVerticalBottom';
-import ViewWeekRoundedIcon from '@mui/icons-material/ViewWeekRounded';
-import ViewStreamRoundedIcon from '@mui/icons-material/ViewStreamRounded';
-import FlipIcon from '@mui/icons-material/Flip';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
+import LinkOffRoundedIcon from '@mui/icons-material/LinkOffRounded';
 import { useEditor } from '../editor/EditorContext';
 import type { ArrayOptions } from '../editor/EditorContext';
 
 /**
  * 다중 선택 시 캔버스 상단에 뜨는 플로팅 툴바 (v0.9.0).
- * Align / Distribute / Mirror / Array / Duplicate / Delete 빠른 실행.
- * plan 모드 + 집기 1개 이상 선택 시 표시. 정렬/분배는 2·3개 이상에서 활성.
+ * Align / Group / Array / Duplicate / Delete 빠른 실행.
+ * 좌우·상하 미러, 미러 복사, 균등 분배는 v1.0.8 에서 UI 숨김(함수는 유지).
+ * plan 모드 + 집기 1개 이상 선택 시 표시. 정렬은 2개 이상에서 활성.
  */
 export default function MultiActionToolbar() {
   const {
@@ -39,11 +39,12 @@ export default function MultiActionToolbar() {
     canEdit,
     selectedFixtureIds,
     alignFixtures,
-    distributeFixtures,
-    mirrorFixtures,
     arrayFixtures,
     duplicateFixtures,
     deleteFixtures,
+    groupSelected,
+    ungroupSelected,
+    selectedGroupId,
   } = useEditor();
 
   const [arrayOpen, setArrayOpen] = useState(false);
@@ -52,7 +53,8 @@ export default function MultiActionToolbar() {
   if (viewMode !== 'plan' || !canEdit || n < 1) return null;
 
   const canAlign = n >= 2;
-  const canDistribute = n >= 3;
+  const canGroup = n >= 2 && selectedGroupId == null;
+  const canUngroup = selectedGroupId != null;
 
   return (
     <>
@@ -86,16 +88,12 @@ export default function MultiActionToolbar() {
 
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
-          {/* Distribute */}
-          <IconBtn title="가로 균등 분배" disabled={!canDistribute} onClick={() => distributeFixtures('h')}><ViewWeekRoundedIcon fontSize="small" /></IconBtn>
-          <IconBtn title="세로 균등 분배" disabled={!canDistribute} onClick={() => distributeFixtures('v')}><ViewStreamRoundedIcon fontSize="small" /></IconBtn>
-
-          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-
-          {/* Mirror */}
-          <IconBtn title="좌우 미러" onClick={() => mirrorFixtures('h', false)}><FlipIcon fontSize="small" /></IconBtn>
-          <IconBtn title="상하 미러" onClick={() => mirrorFixtures('v', false)}><FlipIcon fontSize="small" sx={{ transform: 'rotate(90deg)' }} /></IconBtn>
-          <IconBtn title="미러 복사(좌우)" onClick={() => mirrorFixtures('h', true)}><FlipIcon fontSize="small" color="primary" /></IconBtn>
+          {/* Group / Ungroup (v1.0.8) */}
+          {canUngroup ? (
+            <IconBtn title="그룹 해제" onClick={ungroupSelected} color="primary"><LinkOffRoundedIcon fontSize="small" /></IconBtn>
+          ) : (
+            <IconBtn title="그룹 만들기" disabled={!canGroup} onClick={groupSelected}><LinkRoundedIcon fontSize="small" /></IconBtn>
+          )}
 
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 

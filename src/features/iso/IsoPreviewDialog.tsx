@@ -85,6 +85,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
     human: false,
     mat: false,
     productImages: true,
+    sizeLabels: false, // 사이즈(치수) 표기 — 기본 OFF (v1.0.8)
   });
   const setPrac = (patch: Partial<typeof practical>) => setPractical((p) => ({ ...p, ...patch }));
 
@@ -123,6 +124,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       envBgTop: envTop,
       envBgBottom: envBot,
       transparentBg: forExport ? transparentBg || !!env.transparent : false,
+      // 사이즈 표기: 실무시안 ON + 사이즈 토글 ON 일 때만 (프리뷰/내보내기 공용, v1.0.8)
+      showDimensions: practical.on && practical.sizeLabels,
       azimuthDeg: az,
       elevationDeg: el,
       lighting,
@@ -414,6 +417,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
               <FormControlLabel control={<Switch size="small" checked={practical.productImages} onChange={(e) => setPrac({ productImages: e.target.checked })} />} label={<Typography variant="caption">제품이미지</Typography>} sx={{ ml: 0 }} />
               <FormControlLabel control={<Switch size="small" checked={opts.showNames} onChange={(e) => setOpt('showNames', e.target.checked)} />} label={<Typography variant="caption">라벨</Typography>} sx={{ ml: 0 }} />
               <FormControlLabel control={<Switch size="small" checked={opts.showShadows} onChange={(e) => setOpt('showShadows', e.target.checked)} />} label={<Typography variant="caption">그림자</Typography>} sx={{ ml: 0 }} />
+              <FormControlLabel control={<Switch size="small" checked={practical.sizeLabels} onChange={(e) => setPrac({ sizeLabels: e.target.checked })} />} label={<Typography variant="caption">사이즈 표기</Typography>} sx={{ ml: 0 }} />
             </>
           )}
         </Stack>

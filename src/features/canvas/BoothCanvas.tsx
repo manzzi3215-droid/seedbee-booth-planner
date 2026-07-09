@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Line, Text, Group, Transformer, Image as KonvaImage } from 'react-konva';
+import { Stage, Layer, Line, Rect, Text, Group, Transformer, Image as KonvaImage } from 'react-konva';
 import Konva from 'konva';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -30,7 +30,8 @@ import ProductNode from '../products/ProductNode';
 import { productById as findProduct, productImageUrl } from '../products/productModel';
 import SvgHighlightOverlay from '../svg/SvgRenderer';
 import { useContainerSize } from './useContainerSize';
-import { computeFit, zoomAtPoint, pxToMm, snapMmToGrid, type Viewport } from './coords';
+import { computeFit, zoomAtPoint, pxToMm, snapMmToGrid, screenToMm, type Viewport } from './coords';
+import { computeFixtureAABB } from './fixtureGeometry';
 import ShapeEditor from './ShapeEditor';
 import FixtureNode from './FixtureNode';
 import TextNode from './TextNode';
@@ -99,6 +100,12 @@ interface BoothCanvasProps {
   onExitShapeEdit?: () => void;
   onSelect: (id: string | null, additive?: boolean) => void;
   onMove: (id: string, xMm: number, yMm: number, snapToGrid?: boolean) => void;
+  /** 여러 집기 절대 좌표 이동 (그룹/다중 선택 드래그) — v1.0.8 */
+  onMoveFixtures?: (entries: { id: string; xMm: number; yMm: number }[]) => void;
+  /** 드래그 박스 다중 선택 — v1.0.8 */
+  onSelectMany?: (ids: string[]) => void;
+  /** 집기 회전(절대 각도, 마우스 회전 핸들) — v1.0.8 */
+  onRotateFixture?: (id: string, deg: number) => void;
   onSelectText: (id: string | null) => void;
   onMoveText: (id: string, xMm: number, yMm: number) => void;
   onSelectDimension: (id: string | null) => void;
@@ -151,6 +158,9 @@ export default function BoothCanvas({
   onExitShapeEdit,
   onSelect,
   onMove,
+  onMoveFixtures,
+  onSelectMany,
+  onRotateFixture,
   onSelectText,
   onMoveText,
   onSelectDimension,
@@ -230,6 +240,21 @@ export default function BoothCanvas({
     layer.batchDraw();
   };
 
+  // --- 그룹/다중 선택 드래그 (v1.0.8) ---
+  // 드래그 시작 시 선택 집기들의 시작 위치를 스냅샷 → 드래그 중 델타만큼 함께 이동.
+  const groupDragRef = useRef<{ origin: Map<string, { x: number; y: number }> } | null>(null);
+  const handleFixtureDragStart = (id: string) => {
+    const ids = selectedFixtureIds ?? [];
+    if (ids.length > 1 && ids.includes(id)) {
+      const origin = new Map(
+        placed.filter((p) => ids.includes(p.id)).map((p) => [p.id, { x: p.xMm, y: p.yMm }]),
+      );
+      groupDragRef.current = { origin };
+    } else {
+      groupDragRef.current = null;
+    }
+  };
+
   // 드래그 중: Shift 면 스마트 스냅, 아니면 자유 이동
   const handleFixtureDragMove = (
     id: string,
@@ -237,6 +262,25 @@ export default function BoothCanvas({
     rawY: number,
     shift: boolean,
   ): { xMm: number; yMm: number } => {
+    // 그룹/다중 선택 드래그: 시작 위치 기준 델타를 선택 집기 전체에 적용.
+    // (드래그 중인 집기도 함께 상태 갱신해야 re-render 시 위치가 튀지 않음)
+    const gd = groupDragRef.current;
+    if (gd) {
+      const start = gd.origin.get(id);
+      if (start && onMoveFixtures) {
+        const dx = rawX - start.x;
+        const dy = rawY - start.y;
+        const entries: { id: string; xMm: number; yMm: number }[] = [];
+        gd.origin.forEach((o, oid) => {
+          entries.push(
+            oid === id ? { id: oid, xMm: rawX, yMm: rawY } : { id: oid, xMm: o.x + dx, yMm: o.y + dy },
+          );
+        });
+        onMoveFixtures(entries);
+      }
+      drawGuides([]);
+      return { xMm: rawX, yMm: rawY };
+    }
     if (!shift) {
       drawGuides([]);
       return { xMm: rawX, yMm: rawY };
@@ -269,6 +313,12 @@ export default function BoothCanvas({
     shift: boolean,
   ) => {
     drawGuides([]);
+    if (groupDragRef.current) {
+      // 그룹 이동: 정렬 유지 위해 그리드 스냅 없이 커밋 (나머지는 드래그 중 이미 반영됨)
+      onMove(id, xMm, yMm, false);
+      groupDragRef.current = null;
+      return;
+    }
     onMove(id, xMm, yMm, !shift);
   };
 
@@ -313,12 +363,65 @@ export default function BoothCanvas({
     setViewport((vp) => zoomAtPoint(vp, center, factor));
   };
 
-  // 빈 공간(Stage 자체) 클릭 시 선택 해제
+  // --- 드래그 박스(마퀴) 선택 (v1.0.8) — 회전 보기(viewRotationDeg=0)에서만 활성 ---
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const marqueeRef = useRef<{ x0: number; y0: number } | null>(null);
+  const marqueeEnabled = interactive && !shapeEditMode && viewRotationDeg % 360 === 0;
+
+  // 빈 공간(Stage 자체) 클릭/드래그 시작
   const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (e.target === e.target.getStage()) {
-      if (shapeEditMode) setSelectedVertex(null);
-      else onSelect(null);
+    if (e.target !== e.target.getStage()) return;
+    if (shapeEditMode) {
+      setSelectedVertex(null);
+      return;
     }
+    if (marqueeEnabled) {
+      const ptr = e.target.getStage()?.getPointerPosition();
+      if (ptr) {
+        const m = screenToMm(ptr, viewport);
+        marqueeRef.current = { x0: m.xMm, y0: m.yMm };
+        setMarquee({ x0: m.xMm, y0: m.yMm, x1: m.xMm, y1: m.yMm });
+        return; // 선택 해제는 mouseup 에서 판정(클릭 vs 드래그)
+      }
+    }
+    onSelect(null);
+  };
+
+  // 마퀴 드래그 진행/종료 (Stage mousemove/up 에 합류)
+  const handleMarqueeMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (!marqueeRef.current) return;
+    const ptr = e.target.getStage()?.getPointerPosition();
+    if (!ptr) return;
+    const m = screenToMm(ptr, viewport);
+    setMarquee({ x0: marqueeRef.current.x0, y0: marqueeRef.current.y0, x1: m.xMm, y1: m.yMm });
+  };
+  const handleMarqueeUp = () => {
+    const start = marqueeRef.current;
+    marqueeRef.current = null;
+    if (!start || !marquee) {
+      setMarquee(null);
+      return;
+    }
+    const rx0 = Math.min(marquee.x0, marquee.x1);
+    const rx1 = Math.max(marquee.x0, marquee.x1);
+    const ry0 = Math.min(marquee.y0, marquee.y1);
+    const ry1 = Math.max(marquee.y0, marquee.y1);
+    setMarquee(null);
+    const threshMm = 4 / viewport.scale; // 4px 미만 이동은 클릭으로 간주
+    if (rx1 - rx0 < threshMm && ry1 - ry0 < threshMm) {
+      onSelect(null);
+      return;
+    }
+    const ids = placed
+      .filter((p) => {
+        const def = fixturesById.get(p.fixtureDefId);
+        if (!def) return false;
+        const a = computeFixtureAABB(p, def);
+        return a.minX <= rx1 && a.maxX >= rx0 && a.minY <= ry1 && a.maxY >= ry0;
+      })
+      .map((p) => p.id);
+    if (ids.length) onSelectMany?.(ids);
+    else onSelect(null);
   };
 
   // --- 부스 외곽 편집: 꼭짓점/Edge 드래그 (layer.getRelativePointerPosition 으로 회전까지 반영) ---
@@ -435,8 +538,14 @@ export default function BoothCanvas({
           y={viewport.y}
           onWheel={handleWheel}
           onMouseDown={handleStageMouseDown}
-          onMouseMove={handleShapeMouseMove}
-          onMouseUp={handleShapeMouseUp}
+          onMouseMove={(e) => {
+            handleShapeMouseMove();
+            handleMarqueeMove(e);
+          }}
+          onMouseUp={() => {
+            handleShapeMouseUp();
+            handleMarqueeUp();
+          }}
         >
           {/* 배경 레이어: 바닥/그리드/벽체/치수 (이벤트 비수신) */}
           <Layer listening={false} {...layerRot}>
@@ -524,7 +633,13 @@ export default function BoothCanvas({
                   showName={showFixtureNames}
                   designMapping={dm}
                   designImage={asset ? imageMap.get(asset.url) : undefined}
+                  showRotateHandle={
+                    (selectedFixtureIds?.includes(p.id) ?? p.id === selectedFixtureId) &&
+                    (selectedFixtureIds?.length ?? 1) <= 1
+                  }
+                  onRotate={onRotateFixture}
                   onSelect={onSelect}
+                  onDragStartFixture={handleFixtureDragStart}
                   onDragMove={handleFixtureDragMove}
                   onDragEnd={handleFixtureDragEnd}
                 />
@@ -576,6 +691,23 @@ export default function BoothCanvas({
 
           {/* 스냅 가이드라인 레이어 (명령형으로 그림, 드래그 종료 시 비움) */}
           <Layer ref={guideLayerRef} listening={false} {...layerRot} />
+
+          {/* 드래그 박스(마퀴) 선택 오버레이 (v1.0.8) */}
+          {marquee && (
+            <Layer listening={false}>
+              <Rect
+                x={Math.min(marquee.x0, marquee.x1)}
+                y={Math.min(marquee.y0, marquee.y1)}
+                width={Math.abs(marquee.x1 - marquee.x0)}
+                height={Math.abs(marquee.y1 - marquee.y0)}
+                fill="rgba(37,99,235,0.10)"
+                stroke="#2563eb"
+                strokeWidth={1}
+                strokeScaleEnabled={false}
+                dash={[6, 4]}
+              />
+            </Layer>
+          )}
 
           {/* SVG 구조 검사 하이라이트 (읽기 전용, 상호작용 없음) */}
           {selectedSvgDoc && (

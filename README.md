@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.0.7 - SVG Top-Face Mapping Fix & Print UI Hidden**
+> **v1.0.8 - 다중 선택·그룹·마우스 회전 · 집기명 라벨 · 실무시안 치수/사람 실루엣**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,19 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**편집 편의 개선 · 실무시안 강화 (v1.0.8)**
+- **다중 선택 & 일괄 이동:** `Shift/Ctrl+클릭` 또는 빈 곳 **드래그 박스(마퀴)** 로 여러 집기 선택,
+  한 번에 드래그 이동. 다중 선택 테두리 하이라이트.
+- **그룹:** 다중 선택 → **[그룹 만들기]**, 그룹 소속 집기 클릭 시 그룹 전체 선택·이동, **[그룹 해제]**.
+  `groupId`(optional)로 저장(기존 데이터 하위 호환).
+- **마우스 자유 회전:** 선택 집기 위 **회전 핸들**을 드래그해 자유 회전(`Shift` = 15° 스냅). 숫자 입력 방식도 유지.
+- **집기명 가독성:** 평면도 집기명에 **검정 라운드 배경 + 흰 글자**(텍스트 길이에 맞춰 자동 크기). 어떤 배경/색상 위에서도 선명.
+- **실무시안 사이즈 표기:** 3D 미리보기의 **실무 시안** 모드에 **[사이즈 표기]** 토글(기본 OFF) —
+  부스 전체 치수 + 주요 집기 치수를 함께 표기(내보내기에도 반영).
+- **실무시안 사람 실루엣:** 사각형 카드 대신 **머리+몸통 실루엣**으로 표시, **부스 바깥쪽**에 세워 크기 비교.
+- **좌우 선택정보 패널 접기/펼치기:** 디자인 매핑·색상 · 기타(VMD) 섹션을 접이식으로(기본 접힘, 상태 유지).
+- **정렬 UI 정리:** 좌우/상하 미러 · 미러 복사 · 균등 분배 버튼을 UI에서 숨김(정렬은 유지, 함수 코드는 보존).
 
 **SVG 집기 상단 매핑 수정 · 출력물 제작 UI 숨김 (v1.0.7)**
 - **SVG(customPath) 집기 상단 면 디자인 매핑 수정:** 곡면/커스텀 경로 집기의 윗면에 디자인이 3D에서 정상 출력(기존엔 흰색).
@@ -294,6 +307,22 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.0.8 — Multi-select/Group/Mouse-rotate · Fixture-name Label · Practical Dimensions & Human Silhouette**
+- **[1] 정렬 UI 정리:** MultiActionToolbar·Command Palette 에서 좌우/상하 미러·미러 복사·균등 분배 버튼 숨김.
+  정렬(Align)은 유지. `distributeFixtures`/`mirrorFixtures` 등 EditorContext 함수·데이터·단축키는 그대로 보존.
+- **[2] 집기명 라벨:** `FixtureNode` 의 집기명을 검정 라운드 배경(자동 크기) + 흰 글자로 변경(Konva `Text` 측정으로 배경 크기 산출).
+  집기 회전 시 함께 회전(기존 방향 처리 유지). 작은 집기 자동 숨김 로직 유지.
+- **[3] 실무시안 사이즈 표기:** `IsoRenderOptions.showDimensions` 추가 + IsoPreviewDialog 실무 시안에 [사이즈 표기] 토글(기본 OFF).
+  `IsoBox.dims`(실측 치수)를 scene 에 실어 부스 전체 + 집기 치수 라벨 렌더. 프리뷰/PNG 내보내기 공용 옵션이라 출력에도 반영.
+- **[4] 사람 실루엣:** `IsoScene.humans` + `drawHuman`(머리 원형 + 몸통 폴리곤 빌보드)으로 교체. 부스 앞면 바깥쪽(maxY 밖)에 배치해 크기 비교.
+- **[5] 다중 선택·일괄 이동·드래그 박스:** Shift/Ctrl+클릭(기존) + 마퀴 드래그 선택(`onSelectMany`/`computeFixtureAABB` 교차),
+  그룹/다중 선택 드래그 시 시작 위치 스냅샷 기준으로 전체를 절대좌표 이동(`moveFixtures`, 딸린 제품 동반).
+- **[6] 그룹:** `PlacedFixture.groupId?`(optional, 하위 호환) 추가. `groupSelected`/`ungroupSelected`/`selectedGroupId`,
+  그룹 소속 집기 단일 클릭 시 그룹 전체 선택. 배치안 저장에 자동 포함.
+- **[7] 선택정보 패널 접기:** `SelectionPanel` 에 `CollapsibleSection`(localStorage 상태 유지). 디자인 매핑·색상 / 기타·VMD 는 기본 접힘, 기본정보·위치·회전은 열림.
+- **[8] 마우스 자유 회전:** `FixtureNode` 회전 핸들(단일 선택 시) 드래그 → `rotateFixtureTo` 절대 각도 회전, `Shift` 15° 스냅. 숫자 입력 방식 유지.
+- **호환성:** 기존 배치안/집기/단축키 100% 호환(추가 필드는 optional). Build 성공 · Console Error 0. 브라우저 검증(집기명 라벨·3D 치수/사람·마퀴 3개 선택·그룹 토글·패널 접기·회전 핸들 렌더) 완료.
 
 **v1.0.7 — SVG Top-Face Mapping Fix & Print UI Hidden**
 - **[수정1] SVG 집기 상단 매핑 오류 수정:** customPath/곡면 집기의 footprint 는 점이 많아, renderIso 가 윗면 이미지를 `top[0/1/3]`
