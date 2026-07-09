@@ -11,6 +11,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
+import TextField from '@mui/material/TextField';
 import { useEditor } from './EditorContext';
 
 const GRID_OPTIONS = [100, 250, 500, 1000];
@@ -19,7 +20,7 @@ const GRID_OPTIONS = [100, 250, 500, 1000];
  * 설정(Settings) 다이얼로그 (v0.9.5) — Grid / Snap / 집기명 등 작업 환경 설정.
  */
 export default function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { gridSizeMm, setGridSizeMm, snapEnabled, setSnapEnabled, showFixtureNames, setShowFixtureNames } = useEditor();
+  const { gridSizeMm, setGridSizeMm, snapEnabled, setSnapEnabled, showFixtureNames, setShowFixtureNames, project, updateProjectInfo } = useEditor();
 
   const Row = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
     <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
@@ -47,6 +48,19 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
           <Row label="그리드 스냅" hint="이동 시 격자에 맞춤 (Shift 드래그: 스마트 스냅)">
             <Switch checked={snapEnabled} onChange={(e) => setSnapEnabled(e.target.checked)} />
           </Row>
+
+          <Divider />
+          <Typography variant="overline" color="text.secondary">프로젝트 정보</Typography>
+          <TextField size="small" label="행사명" value={project?.name ?? ''} onChange={(e) => updateProjectInfo({ name: e.target.value })} fullWidth />
+          <Stack direction="row" spacing={1}>
+            <TextField size="small" label="브랜드" value={project?.brand ?? ''} onChange={(e) => updateProjectInfo({ brand: e.target.value })} fullWidth />
+            <TextField size="small" label="담당자" value={project?.manager ?? ''} onChange={(e) => updateProjectInfo({ manager: e.target.value })} fullWidth />
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            <TextField size="small" label="행사 기간" value={project?.eventPeriod ?? ''} onChange={(e) => updateProjectInfo({ eventPeriod: e.target.value })} placeholder="예) 2026-03-01 ~ 03-05" fullWidth />
+            <TextField size="small" label="장소" value={project?.place ?? ''} onChange={(e) => updateProjectInfo({ place: e.target.value })} fullWidth />
+          </Stack>
+          <TextField size="small" label="메모" value={project?.projectMemo ?? ''} onChange={(e) => updateProjectInfo({ projectMemo: e.target.value })} fullWidth multiline minRows={2} />
 
           <Divider />
           <Typography variant="overline" color="text.secondary">표시</Typography>

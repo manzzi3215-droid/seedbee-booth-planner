@@ -556,6 +556,46 @@ export default function BoothCanvas({
   const ready =
     size.width > 0 && size.height > 0 && bounds.widthMm > 0 && bounds.depthMm > 0;
 
+  // --- 확대 UX (v1.1.0): 화면맞춤 배율 기준 + 핸드툴 + 더블클릭 줌 ---
+  const fitVp = ready
+    ? computeFit(size.width, size.height, fb.widthMm, fb.depthMm, fb.minX, fb.minY)
+    : { scale: 1, x: 0, y: 0 };
+  // 화면맞춤(=100%) 대비 상대 배율을 상태바로 보고 → "확대 100%" 가 전체보기
+  useEffect(() => {
+    onZoomChange?.(viewport.scale / (fitVp.scale || 1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewport.scale, fitVp.scale]);
+  // Fit 배율의 배수로 줌(중앙 기준)
+  const zoomToFitMultiple = (mult: number) => {
+    const center = { x: size.width / 2, y: size.height / 2 };
+    setViewport(zoomAtPoint(fitVp, center, mult));
+  };
+  // Space 누르는 동안 핸드툴(Stage 패닝)
+  const [spacePan, setSpacePan] = useState(false);
+  useEffect(() => {
+    const isTyping = (el: EventTarget | null) => {
+      const n = el as HTMLElement | null;
+      return !!n && (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.isContentEditable);
+    };
+    const down = (e: KeyboardEvent) => { if (e.code === 'Space' && !isTyping(e.target)) { e.preventDefault(); setSpacePan(true); } };
+    const up = (e: KeyboardEvent) => { if (e.code === 'Space') setSpacePan(false); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, []);
+  const handMode = spacePan && !shapeEditMode;
+  // 더블클릭 → 클릭 지점 기준 확대
+  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const ptr = e.target.getStage()?.getPointerPosition();
+    if (!ptr) return;
+    setViewport((vp) => zoomAtPoint(vp, ptr, e.evt.altKey ? 1 / ZOOM_STEP : ZOOM_STEP));
+  };
+  // 핸드툴 Stage 드래그 종료 → 뷰포트 위치 반영
+  const handleStageDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (e.target !== e.target.getStage()) return;
+    setViewport((vp) => ({ ...vp, x: e.target.x(), y: e.target.y() }));
+  };
+
   return (
     <Box
       ref={ref}
@@ -567,6 +607,8 @@ export default function BoothCanvas({
         bgcolor: CANVAS_COLORS.background,
         borderRadius: 2,
         overflow: 'hidden',
+        cursor: handMode ? 'grab' : 'default',
+        '&:active': handMode ? { cursor: 'grabbing' } : undefined,
       }}
     >
       {ready && (
@@ -577,16 +619,21 @@ export default function BoothCanvas({
           scaleY={viewport.scale}
           x={viewport.x}
           y={viewport.y}
+          draggable={handMode}
           onWheel={handleWheel}
-          onMouseDown={handleStageMouseDown}
+          onDblClick={handleDblClick}
+          onMouseDown={handMode ? undefined : handleStageMouseDown}
           onMouseMove={(e) => {
+            if (handMode) return;
             handleShapeMouseMove();
             handleMarqueeMove(e);
           }}
           onMouseUp={() => {
+            if (handMode) return;
             handleShapeMouseUp();
             handleMarqueeUp();
           }}
+          onDragEnd={handleStageDragEnd}
         >
           {/* 배경 레이어: 바닥/그리드/벽체/치수 (이벤트 비수신) */}
           <Layer listening={false} {...layerRot}>
@@ -610,7 +657,7 @@ export default function BoothCanvas({
           </Layer>
 
           {/* 집기/텍스트/이미지/배경 레이어: 드래그/선택 상호작용 (회전/읽기전용/외곽편집 시 비활성) */}
-          <Layer listening={interactive && !shapeEditMode} {...layerRot}>
+          <Layer listening={interactive && !shapeEditMode && !handMode} {...layerRot}>
             {/* SVG 배경 (맨 아래). 잠금 시 비상호작용 */}
             {backgrounds.map((bg) =>
               bg.locked ? (
@@ -796,10 +843,19 @@ export default function BoothCanvas({
             </IconButton>
           </Tooltip>
           <Button size="small" startIcon={<FitScreenRoundedIcon />} onClick={fit} sx={{ ml: 0.5 }}>
-            화면 맞춤
+            Fit
           </Button>
+          <Button size="small" onClick={() => zoomToFitMultiple(1)} sx={{ minWidth: 0, px: 0.75 }}>100%</Button>
+          <Button size="small" onClick={() => zoomToFitMultiple(2)} sx={{ minWidth: 0, px: 0.75 }}>200%</Button>
         </Stack>
       </Paper>
+
+      {/* 핸드툴(패닝) 안내 — Space 누르는 동안 */}
+      {handMode && (
+        <Paper elevation={2} sx={{ position: 'absolute', top: 12, left: 12, px: 1, py: 0.5 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700 }}>✋ 핸드툴 — 드래그로 이동</Typography>
+        </Paper>
+      )}
 
       {/* 좌하단 배율 표시 */}
       <Typography

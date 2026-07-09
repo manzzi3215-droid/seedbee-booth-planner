@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.0.9 - 레이어별 면 매핑 · VMD 입력 수정 · 라이브러리 검색/폴더 · 도면 생성단계 이동 · 곡선 부스**
+> **v1.1.0 - 자동저장 상태 · 스타일 복사 · 정렬 업그레이드 · 확대 UX · 프로젝트 정보**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -38,6 +38,13 @@
   가이드라인 표시(threshold 50mm)
 - **편집 편의** — 90도 회전 · 복사 · 삭제 · 위치/회전 직접 입력,
   단축키(Delete 삭제 · R 회전 · Ctrl/Cmd+D 복사 · 방향키 이동)
+
+**실무 완성도·UX 향상 (v1.1.0)**
+- **자동 저장 상태 표시:** 하단 상태바에 `●저장중… / ✓저장완료·HH:MM:SS / 변경됨 / 저장 실패` 표시. (자동 저장 로직은 기존 5초 debounce, Undo/Redo 는 이미 완비 — Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, 200단계)
+- **스타일 복사/붙여넣기:** 선택 집기의 색상·투명도·재질·높이·디자인 매핑을 복사 → 다른 집기(들)에 적용(위치 제외).
+- **정렬 업그레이드:** 다중 선택 툴바에 가로/세로 **동일 간격**, **동일 크기·높이·회전**(기준=첫 선택) 추가.
+- **확대 UX:** **Space+드래그 핸드툴**, **더블클릭 확대**(Alt+더블클릭 축소), **Fit / 100% / 200%** 버튼(100%=화면맞춤 기준 상대 배율), 마우스 위치 기준 휠 줌.
+- **프로젝트 정보:** 브랜드·행사기간·장소·담당자·메모(모두 optional). 새 프로젝트 만들기 + 설정에서 편집, 출력물 헤더에 포함.
 
 **레이어별 면 매핑 · 라이브러리 · 곡선 부스 (v1.0.9)**
 - **디자인 매핑 레이어별 면 적용:** 각 이미지 레이어마다 **적용 면**(Front/Back/Left/Right/Top/Bottom, "모든 면")을 개별 선택.
@@ -316,6 +323,15 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.1.0 — Auto-save Status · Style Copy/Paste · Align Upgrade · Zoom UX · Project Info**
+- **조사 결과:** Undo/Redo(#1)는 v0.9.0부터 이미 완비(Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, 200단계 스냅샷 — 이동·회전·삭제·복사·그룹·매핑·색상·부스·치수 커버)라 재작업 없음. Auto Save·Smart Snap·치수선도 기존 존재. 이번 버전은 사용자 협의로 **저위험 완성 세트(#2·#7·#8·#9·#10)**를 구현.
+- **[2] Auto Save 상태 UI:** `EditorContext.lastSavedAt` 추가, `EditorStatusBar` 에 SaveIndicator(저장중/저장완료+시각/변경됨/실패). 기존 5초 자동 저장 로직과 충돌 없음.
+- **[7] Style Copy/Paste:** `copyFixtureStyle`/`pasteFixtureStyle`/`hasStyleClip` + 모듈 클립보드. 디자인 매핑은 인스턴스 단위, 색상·투명도·재질·높이는 대상 def 에 적용(로컬/전역 자동, def 중복 제거). 위치 제외.
+- **[8] 정렬 업그레이드:** `matchFixtures('size'|'height'|'rotation')`(기준=첫 선택) + 기존 `distributeFixtures`(동일 간격) 노출. MultiActionToolbar 버튼 5종 추가.
+- **[9] 확대 UX:** BoothCanvas 에 Space 핸드툴(Stage 패닝), onDblClick 줌, Fit/100%/200%(fit 배율 기준), 상태바 확대%를 fit 상대값으로 리포트.
+- **[10] 프로젝트 정보:** Project 에 brand·eventPeriod·place·manager·projectMemo(optional) + `updateProjectInfo`(디바운스 저장). NewProjectPage·SettingsDialog 편집, 출력물 헤더 포함.
+- **호환성:** 추가 필드 전부 optional → 기존 프로젝트 100% 호환. 단축키 유지. Auto Save·Undo 충돌 없음. Build 성공 · 브라우저 검증(저장완료 표시·Fit/100/200%·핸드툴·정렬 툴바·스타일 복사·프로젝트 정보 저장) 완료.
 
 **v1.0.9 — Per-layer Face Mapping · VMD Input Fix · Library Search/Folders · Floorplan-at-Creation · Curved Booth**
 - **[1] 레이어별 면 매핑:** `FaceMapping.faces?: BoxFace[]`(optional) 추가. `mapping.layersForFace(design, face)` 로 렌더 시 면별 레이어 수집,

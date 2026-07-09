@@ -13,6 +13,8 @@ import InputAdornment from '@mui/material/InputAdornment';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import Rotate90DegreesCwRoundedIcon from '@mui/icons-material/Rotate90DegreesCwRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import FormatColorFillRoundedIcon from '@mui/icons-material/FormatColorFillRounded';
+import ColorizeRoundedIcon from '@mui/icons-material/ColorizeRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import DashboardCustomizeRoundedIcon from '@mui/icons-material/DashboardCustomizeRounded';
@@ -142,6 +144,9 @@ function FixtureInfoPanel() {
     deleteSelected,
     setSelectedPosition,
     setSelectedRotation,
+    copyFixtureStyle,
+    pasteFixtureStyle,
+    hasStyleClip,
   } = useEditor();
   const navigate = useNavigate();
 
@@ -359,6 +364,15 @@ function FixtureInfoPanel() {
         >
           복사
         </Button>
+        {/* 스타일 복사/붙여넣기 (색상·재질·높이·디자인, 위치 제외) — v1.1.0 */}
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" size="small" startIcon={<ColorizeRoundedIcon />} onClick={copyFixtureStyle} sx={{ flex: 1 }}>
+            스타일 복사
+          </Button>
+          <Button variant="outlined" size="small" startIcon={<FormatColorFillRoundedIcon />} onClick={pasteFixtureStyle} disabled={!hasStyleClip} sx={{ flex: 1 }}>
+            붙여넣기
+          </Button>
+        </Stack>
         <Button
           variant="outlined"
           color="error"

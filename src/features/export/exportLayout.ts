@@ -140,9 +140,17 @@ async function buildReportDataURL(input: ExportInput): Promise<string> {
 
   ctx.fillStyle = '#475569';
   ctx.font = font(3.4);
+  // 프로젝트 관리 정보(있을 때만) — 출력물 헤더에 포함 (v1.1.0)
+  const meta: string[] = [];
+  if (project.brand) meta.push(`브랜드 ${project.brand}`);
+  if (project.eventPeriod) meta.push(`기간 ${project.eventPeriod}`);
+  if (project.place) meta.push(`장소 ${project.place}`);
+  if (project.manager) meta.push(`담당 ${project.manager}`);
+  const metaStr = meta.length ? '  ·  ' + meta.join('  ·  ') : '';
   const info =
     `부스 ${getBoothSizeLabel(booth)}  ·  오픈 ${booth.openSide}면  ·  ` +
-    `바닥 ${getFloorLabel(booth)}  ·  생성 ${formatDate(input.createdAt)}  ·  수정 ${formatDate(input.updatedAt)}`;
+    `바닥 ${getFloorLabel(booth)}  ·  생성 ${formatDate(input.createdAt)}  ·  수정 ${formatDate(input.updatedAt)}` +
+    metaStr;
   ctx.fillText(info, mm(PAD), mm(41));
 
   // 구분선

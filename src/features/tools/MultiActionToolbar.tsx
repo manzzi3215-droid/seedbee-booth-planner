@@ -19,6 +19,11 @@ import AlignHorizontalRightIcon from '@mui/icons-material/AlignHorizontalRight';
 import AlignVerticalTopIcon from '@mui/icons-material/AlignVerticalTop';
 import AlignVerticalCenterIcon from '@mui/icons-material/AlignVerticalCenter';
 import AlignVerticalBottomIcon from '@mui/icons-material/AlignVerticalBottom';
+import ViewWeekRoundedIcon from '@mui/icons-material/ViewWeekRounded';
+import ViewStreamRoundedIcon from '@mui/icons-material/ViewStreamRounded';
+import AspectRatioRoundedIcon from '@mui/icons-material/AspectRatioRounded';
+import HeightRoundedIcon from '@mui/icons-material/HeightRounded';
+import RotateRightRoundedIcon from '@mui/icons-material/RotateRightRounded';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
@@ -39,6 +44,8 @@ export default function MultiActionToolbar() {
     canEdit,
     selectedFixtureIds,
     alignFixtures,
+    distributeFixtures,
+    matchFixtures,
     arrayFixtures,
     duplicateFixtures,
     deleteFixtures,
@@ -53,6 +60,8 @@ export default function MultiActionToolbar() {
   if (viewMode !== 'plan' || !canEdit || n < 1) return null;
 
   const canAlign = n >= 2;
+  const canDistribute = n >= 3;
+  const canMatch = n >= 2;
   const canGroup = n >= 2 && selectedGroupId == null;
   const canUngroup = selectedGroupId != null;
 
@@ -85,6 +94,15 @@ export default function MultiActionToolbar() {
           <IconBtn title="위 정렬" disabled={!canAlign} onClick={() => alignFixtures('top')}><AlignVerticalTopIcon fontSize="small" /></IconBtn>
           <IconBtn title="세로 중앙 정렬" disabled={!canAlign} onClick={() => alignFixtures('centerV')}><AlignVerticalCenterIcon fontSize="small" /></IconBtn>
           <IconBtn title="아래 정렬" disabled={!canAlign} onClick={() => alignFixtures('bottom')}><AlignVerticalBottomIcon fontSize="small" /></IconBtn>
+
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+          {/* 동일 간격 / 크기 / 높이 / 회전 (v1.1.0) */}
+          <IconBtn title="가로 동일 간격" disabled={!canDistribute} onClick={() => distributeFixtures('h')}><ViewWeekRoundedIcon fontSize="small" /></IconBtn>
+          <IconBtn title="세로 동일 간격" disabled={!canDistribute} onClick={() => distributeFixtures('v')}><ViewStreamRoundedIcon fontSize="small" /></IconBtn>
+          <IconBtn title="동일 크기(기준=첫 선택)" disabled={!canMatch} onClick={() => matchFixtures('size')}><AspectRatioRoundedIcon fontSize="small" /></IconBtn>
+          <IconBtn title="동일 높이(기준=첫 선택)" disabled={!canMatch} onClick={() => matchFixtures('height')}><HeightRoundedIcon fontSize="small" /></IconBtn>
+          <IconBtn title="동일 회전(기준=첫 선택)" disabled={!canMatch} onClick={() => matchFixtures('rotation')}><RotateRightRoundedIcon fontSize="small" /></IconBtn>
 
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 

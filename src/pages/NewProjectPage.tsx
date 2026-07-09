@@ -78,6 +78,13 @@ export default function NewProjectPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
 
+  // 프로젝트 관리 정보 (선택, v1.1.0)
+  const [brand, setBrand] = useState('');
+  const [eventPeriod, setEventPeriod] = useState('');
+  const [place, setPlace] = useState('');
+  const [manager, setManager] = useState('');
+  const [projectMemo, setProjectMemo] = useState('');
+
   // 도면(선택) — 새 프로젝트 생성 시 배경 도면 첨부 (v1.0.9)
   const [drawing, setDrawing] = useState<FloorplanImage | null>(null);
   const [drawingName, setDrawingName] = useState('');
@@ -247,6 +254,12 @@ export default function NewProjectPage() {
         name: name.trim(),
         boothConfig: result.boothConfig,
         layouts,
+        // 관리 정보(선택) — 입력값이 있을 때만 저장 (하위 호환)
+        brand: brand.trim() || undefined,
+        eventPeriod: eventPeriod.trim() || undefined,
+        place: place.trim() || undefined,
+        manager: manager.trim() || undefined,
+        projectMemo: projectMemo.trim() || undefined,
         createdAt: now,
         updatedAt: now,
       };
@@ -280,6 +293,21 @@ export default function NewProjectPage() {
             error={Boolean(errors.name)}
             helperText={errors.name}
           />
+
+          <Divider textAlign="left">
+            <Typography variant="caption" color="text.secondary">
+              관리 정보 (선택)
+            </Typography>
+          </Divider>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField label="브랜드" value={brand} onChange={(e) => setBrand(e.target.value)} fullWidth />
+            <TextField label="담당자" value={manager} onChange={(e) => setManager(e.target.value)} fullWidth />
+          </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField label="행사 기간" value={eventPeriod} onChange={(e) => setEventPeriod(e.target.value)} placeholder="예) 2026-03-01 ~ 03-05" fullWidth />
+            <TextField label="장소" value={place} onChange={(e) => setPlace(e.target.value)} fullWidth />
+          </Stack>
+          <TextField label="메모" value={projectMemo} onChange={(e) => setProjectMemo(e.target.value)} fullWidth multiline minRows={2} />
 
           <Divider textAlign="left">
             <Typography variant="caption" color="text.secondary">

@@ -743,6 +743,18 @@ export interface Project extends BaseEntity {
   boothConfig: BoothConfig;
   layouts: Layout[];
 
+  // --- 프로젝트 관리 정보 (v1.1.0, optional — 하위 호환) ---
+  /** 브랜드/클라이언트 */
+  brand?: string;
+  /** 행사 기간 (자유 텍스트, 예: 2026-03-01 ~ 03-05) */
+  eventPeriod?: string;
+  /** 장소/행사장 */
+  place?: string;
+  /** 담당자 */
+  manager?: string;
+  /** 메모 */
+  projectMemo?: string;
+
   // --- Digital Merchandising (v0.9.3) — 행사(프로젝트) 단위 제품 라이브러리 ---
   /** 제품 정의 라이브러리 */
   products?: Product[];

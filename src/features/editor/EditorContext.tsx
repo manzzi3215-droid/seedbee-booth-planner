@@ -125,6 +125,8 @@ interface EditorContextValue {
 
   /** 사용할 벽면 ON/OFF 변경 (프로젝트에 저장) — v0.7.3 */
   setWallEnabled: (side: WallSide, enabled: boolean) => Promise<void>;
+  /** 프로젝트 관리 정보(행사명·브랜드·기간·장소·담당자·메모) 갱신 — v1.1.0 (디바운스 저장) */
+  updateProjectInfo: (patch: Partial<Pick<Project, 'name' | 'brand' | 'eventPeriod' | 'place' | 'manager' | 'projectMemo'>>) => void;
 
   // 부스 외곽 편집 (CAD 스타일) — v0.8.6
   shapeEditMode: boolean;
@@ -142,6 +144,8 @@ interface EditorContextValue {
   dirty: boolean;
   /** 저장 상태(수동/자동) */
   saveStatus: SaveStatus;
+  /** 마지막 저장 완료 시각(ms). 없으면 null (v1.1.0) */
+  lastSavedAt: number | null;
   /** Firestore(클라우드) 저장소 사용 중 여부 */
   isCloud: boolean;
   saveCurrent: () => Promise<void>;
@@ -340,8 +344,16 @@ interface EditorContextValue {
   selectFixture: (id: string | null, additive?: boolean) => void;
   /** 다중 선택 정렬 */
   alignFixtures: (mode: AlignMode) => void;
-  /** 다중 선택 균등 분배 */
+  /** 다중 선택 균등 분배 (동일 간격) */
   distributeFixtures: (axis: 'h' | 'v') => void;
+  /** 다중 선택을 첫 선택 집기 기준으로 통일 (크기/높이/회전) — v1.1.0 */
+  matchFixtures: (mode: 'size' | 'height' | 'rotation') => void;
+  /** 선택 집기의 스타일(색상·투명도·재질·높이·디자인 매핑) 복사 — v1.1.0 */
+  copyFixtureStyle: () => void;
+  /** 복사한 스타일을 선택 집기(들)에 붙여넣기 (위치 제외) — v1.1.0 */
+  pasteFixtureStyle: () => void;
+  /** 스타일 클립보드 보유 여부 (붙여넣기 버튼 활성용) */
+  hasStyleClip: boolean;
   /** 선택 미러 (copy=true 면 복제) */
   mirrorFixtures: (axis: 'h' | 'v', copy: boolean) => void;
   /** 배열 복사 (Linear/Circular) */
@@ -368,6 +380,15 @@ interface EditorContextValue {
 
 /** 정렬 모드 */
 export type AlignMode = 'left' | 'right' | 'top' | 'bottom' | 'centerH' | 'centerV';
+
+/** 스타일 복사 클립보드 (v1.1.0) — 위치는 제외 */
+interface StyleClip {
+  color: string;
+  opacity?: number;
+  material?: import('../../types').FixtureMaterial;
+  heightMm?: number;
+  design?: DesignMapping;
+}
 
 /** 배열 복사 옵션 */
 export interface ArrayOptions {
@@ -506,11 +527,15 @@ export function EditorProvider({
   // 부스 외곽 편집 모드 (CAD 스타일 Shape Editor) — v0.8.6
   const [shapeEditMode, setShapeEditMode] = useState(false);
   const shapeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const infoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFixtureNames, setShowFixtureNames] = useState(true);
 
   const [layouts, setLayouts] = useState<Layout[]>([]);
   const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  // 스타일 복사/붙여넣기 클립보드 (v1.1.0) — 색상·투명도·재질·높이·디자인 매핑
+  const [styleClip, setStyleClip] = useState<StyleClip | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -690,6 +715,17 @@ export function EditorProvider({
       // 현재 보고 있는 벽면을 끄면 평면도로 전환 (출력/캔버스 일관성)
       if (!enabled && viewMode === side) setViewMode('plan');
       await storage.saveProject(updated);
+    };
+
+    // 프로젝트 관리 정보 갱신 (v1.1.0) — 상태 즉시 반영, 저장은 디바운스(800ms)
+    const updateProjectInfo = (
+      patch: Partial<Pick<Project, 'name' | 'brand' | 'eventPeriod' | 'place' | 'manager' | 'projectMemo'>>,
+    ) => {
+      if (!project) return;
+      const updated: Project = { ...project, ...patch, updatedAt: Date.now() };
+      setProject(updated);
+      if (infoSaveTimer.current) clearTimeout(infoSaveTimer.current);
+      infoSaveTimer.current = setTimeout(() => void storage.saveProject(updated), 800);
     };
 
     // 부스 스타일링(바닥/벽 재질·환경) 갱신 (v0.9.8) → boothConfig 에 임베드(자동 저장/Undo/공유)
@@ -1603,6 +1639,88 @@ export function EditorProvider({
       applyDelta(deltas);
     };
 
+    // 다중 선택을 첫 선택(기준) 집기에 맞춰 통일 (크기/높이/회전) — v1.1.0
+    const matchFixtures = (mode: 'size' | 'height' | 'rotation') => {
+      const ids = selectedFixtureIds;
+      if (ids.length < 2) return;
+      const refP = placed.find((p) => p.id === ids[0]);
+      const refDef = refP ? fixturesById.get(refP.fixtureDefId) : null;
+      if (!refP || !refDef) return;
+
+      if (mode === 'rotation') {
+        setPlaced((prev) => prev.map((p) => (ids.includes(p.id) ? { ...p, rotationDeg: refP.rotationDeg } : p)));
+        // 딸린 제품도 함께 회전
+        for (const id of ids) {
+          if (id === refP.id) continue;
+          const cur = placed.find((p) => p.id === id);
+          if (cur) rotateAttachedProducts(id, refP.rotationDeg - cur.rotationDeg);
+        }
+        return;
+      }
+      // size / height → 대상 집기의 정의(FixtureDef) 치수를 기준에 맞춤 (로컬/전역 자동 판별)
+      const patch: Partial<FixtureDef> =
+        mode === 'size'
+          ? { widthMm: refDef.widthMm, depthMm: refDef.depthMm }
+          : { heightMm: refDef.heightMm };
+      const doneDefs = new Set<string>([refDef.id]);
+      for (const id of ids) {
+        const p = placed.find((x) => x.id === id);
+        const def = p ? fixturesById.get(p.fixtureDefId) : null;
+        if (!def || doneDefs.has(def.id)) continue;
+        doneDefs.add(def.id);
+        if (localFixtures.some((f) => f.id === def.id)) updateLocalFixture(def.id, patch);
+        else void saveFixture({ ...def, ...patch });
+      }
+    };
+
+    // ---------- 스타일 복사/붙여넣기 (v1.1.0) ----------
+    const copyFixtureStyle = () => {
+      const id = selectedFixtureId;
+      const pf = id ? placed.find((p) => p.id === id) : null;
+      const def = pf ? fixturesById.get(pf.fixtureDefId) : null;
+      if (!pf || !def) return;
+      setStyleClip({
+        color: def.color,
+        opacity: def.opacity,
+        material: def.material,
+        heightMm: def.heightMm,
+        design: pf.design ? JSON.parse(JSON.stringify(pf.design)) : undefined,
+      });
+    };
+    const pasteFixtureStyle = () => {
+      if (!styleClip) return;
+      const targets = selectedFixtureIds.length > 0
+        ? selectedFixtureIds
+        : selectedFixtureId
+        ? [selectedFixtureId]
+        : [];
+      if (targets.length === 0) return;
+      // 디자인 매핑은 인스턴스 단위(안전) — 대상별로 복제 적용
+      setPlaced((prev) =>
+        prev.map((p) =>
+          targets.includes(p.id)
+            ? { ...p, design: styleClip.design ? JSON.parse(JSON.stringify(styleClip.design)) : undefined }
+            : p,
+        ),
+      );
+      // 색상·투명도·재질·높이는 대상 집기 정의에 적용 (로컬/전역 자동, def 중복 제거)
+      const patch: Partial<FixtureDef> = {
+        color: styleClip.color,
+        opacity: styleClip.opacity,
+        material: styleClip.material,
+        heightMm: styleClip.heightMm,
+      };
+      const doneDefs = new Set<string>();
+      for (const id of targets) {
+        const p = placed.find((x) => x.id === id);
+        const def = p ? fixturesById.get(p.fixtureDefId) : null;
+        if (!def || doneDefs.has(def.id)) continue;
+        doneDefs.add(def.id);
+        if (localFixtures.some((f) => f.id === def.id)) updateLocalFixture(def.id, patch);
+        else void saveFixture({ ...def, ...patch });
+      }
+    };
+
     const mirrorFixtures = (axis: 'h' | 'v', copy: boolean) => {
       const boxes = selectedBoxes();
       if (boxes.length === 0) return;
@@ -1833,6 +1951,7 @@ export function EditorProvider({
           await persistLayout({ id: generateId(), name: suggestLayoutName(), ...snapshot(), createdAt: now, updatedAt: now });
         }
         setSaveStatus('saved');
+        setLastSavedAt(Date.now());
       } catch {
         setSaveStatus('error');
       }
@@ -1843,6 +1962,7 @@ export function EditorProvider({
       try {
         await persistLayout({ id: generateId(), name: name.trim() || suggestLayoutName(), ...snapshot(), createdAt: now, updatedAt: now });
         setSaveStatus('saved');
+        setLastSavedAt(Date.now());
       } catch {
         setSaveStatus('error');
       }
@@ -1927,6 +2047,7 @@ export function EditorProvider({
       setViewRotationDeg,
       canEdit: !readOnly, // v0.8.4: 회전 상태와 무관하게 편집 가능
       setWallEnabled,
+      updateProjectInfo,
       shapeEditMode,
       setShapeEditMode,
       updateBoothShape,
@@ -1936,6 +2057,7 @@ export function EditorProvider({
       currentLayoutId,
       dirty,
       saveStatus,
+      lastSavedAt,
       isCloud: isCloudStorage,
       saveCurrent,
       saveAs,
@@ -2067,6 +2189,10 @@ export function EditorProvider({
       selectFixture: select,
       alignFixtures,
       distributeFixtures,
+      matchFixtures,
+      copyFixtureStyle,
+      pasteFixtureStyle,
+      hasStyleClip: !!styleClip,
       mirrorFixtures,
       arrayFixtures,
       duplicateFixtures,
@@ -2128,6 +2254,8 @@ export function EditorProvider({
     layouts,
     currentLayoutId,
     saveStatus,
+    lastSavedAt,
+    styleClip,
     projectId,
     readOnly,
     viewRotationDeg,
