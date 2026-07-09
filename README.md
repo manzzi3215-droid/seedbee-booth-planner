@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.1.3 - Hotfix: 집기 라이브러리 순서 변경 안정화(이동 버튼 + 원자적 저장)**
+> **v1.1.4 - Hotfix: 커스텀 이미지 집기 3D 세운 이미지 판넬/빌보드 렌더(투명 유지)**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -331,6 +331,14 @@ src/
 | 도면 가져오기(PDF/이미지)·스케일 보정 | ✅ |
 
 ### Changelog
+
+**v1.1.4 — Hotfix: Custom Image Fixture 3D Standing Panel/Billboard**
+- **원인:** v1.1.1 에서 `display3d='panel'/'billboard'` 커스텀 이미지 집기를 **회색 박스의 front/back 면에 텍스처**로 렌더 → 투명 PNG 영역에 회색 박스가 비치고, 옆/윗면은 회색, 이미지가 일부 면에만 작게 붙어 "세운 판넬"처럼 안 보임.
+- **수정 (세운 이미지 판넬 구조):** `IsoScene.panels`(`IsoPanel`) 신설. 커스텀 이미지 + panel/billboard(및 미지정 fallback)면 **박스 대신 바닥에 세운 평면 이미지**로 렌더.
+  - footprint(가로×깊이)는 유지, 이미지는 입력 높이 기준으로 **바닥부터 세워짐**(bottom-on-floor), 가로 중앙 + 비율 유지 **fit-contain**.
+  - `drawImage` 로 그려 **투명 PNG(alpha) 유지**(뒤에 채움 없음). `panel` 은 집기 회전과 함께 회전, `billboard` 는 항상 카메라를 향함. 이름 라벨·접지 그림자 표시.
+- **fallback:** 이미지 집기의 `display3d` 가 없거나(과거 데이터) panel/billboard 이면 판넬로 렌더. `box-texture`/`top-texture` 는 기존 박스 텍스처 방식 유지(회귀 없음). CustomFixtureDialog 이미지 기본값은 `panel`.
+- **브라우저 검증:** 터치TV(900×600×1650, 투명 PNG) → 3D 에서 회색 박스 아닌 TV 이미지가 바닥에 세워짐(파란 화면 픽셀 확인), 90° 회전 시 판넬도 회전(투영 폭 변화 확인), Console Error 0.
 
 **v1.1.3 — Hotfix: Stable Library Reorder (move buttons + atomic save)**
 - **근본 원인:** `reorderFixtures` 가 순서 변경 시 **개별 `saveFixture` 를 N개 병렬 호출** → 같은 Firestore 문서(`libraries/{uid}`)에 대한 read-modify-write **경쟁(race)** 으로 일부 `order` 만 반영 → 순서가 계속 튐(HTML5 드래그의 state 타이밍 문제와 겹쳐 v1.1.2 에서도 재발).

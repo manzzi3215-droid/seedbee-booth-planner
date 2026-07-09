@@ -102,6 +102,27 @@ export interface IsoHuman {
   heightMm: number;
 }
 
+/**
+ * 커스텀 이미지 집기의 세운 이미지 판넬/빌보드 (v1.1.4).
+ * 회색 박스 대신 바닥에 세운 평면 이미지로 렌더(투명 PNG alpha 유지).
+ */
+export interface IsoPanel {
+  /** 집기 중심(바닥, mm) */
+  cx: number;
+  cy: number;
+  /** 판넬 가로축 단위벡터(집기 회전 반영). billboard 면 렌더 시 카메라 기준으로 대체됨 */
+  wdx: number;
+  wdy: number;
+  widthMm: number;
+  heightMm: number;
+  /** 접지 그림자·fit 용 실제 footprint(회전 반영) */
+  footprint: V3[];
+  /** true 면 항상 카메라를 향함(빌보드), false 면 집기 방향 고정(판넬) */
+  billboard: boolean;
+  url: string;
+  name: string;
+}
+
 /** 바닥 위 이미지 (z=0 평면) */
 export interface IsoFloorImage {
   image: PlacedImage;
@@ -114,6 +135,8 @@ export interface IsoScene {
   floorImages: IsoFloorImage[];
   /** 스케일 참고용 사람 실루엣 (v1.0.8) */
   humans?: IsoHuman[];
+  /** 커스텀 이미지 판넬/빌보드 (v1.1.4) */
+  panels?: IsoPanel[];
 }
 
 /** 실무 시안(Practical Render) 추가 요소 (v1.0.0-pre) */
@@ -185,9 +208,38 @@ export function buildIsoScene(
   const floorPolygon: V3[] = getBoothOutline(booth).map((p) => ({ x: p.xMm, y: p.yMm, z: 0 }));
 
   const boxes: IsoBox[] = [];
+  const panels: IsoPanel[] = [];
   for (const p of placed) {
     const def = fixturesById.get(p.fixtureDefId);
     if (!def) continue;
+
+    // --- 커스텀 이미지 집기: panel/billboard(및 미지정 fallback) → 세운 이미지 판넬 (v1.1.4) ---
+    // display3d 가 box-texture/top-texture 인 경우만 기존 박스 텍스처 방식 유지.
+    const ca = def.customAsset;
+    if (!p.design && ca?.kind === 'image' && ca.fileUrl && ca.display3d !== 'box-texture' && ca.display3d !== 'top-texture') {
+      const corners = getFixtureCorners(p, def);
+      const cx = corners.reduce((s, c) => s + c.xMm, 0) / corners.length;
+      const cy = corners.reduce((s, c) => s + c.yMm, 0) / corners.length;
+      let wdx = corners[1].xMm - corners[0].xMm;
+      let wdy = corners[1].yMm - corners[0].yMm;
+      const wl = Math.hypot(wdx, wdy) || 1;
+      wdx /= wl;
+      wdy /= wl;
+      panels.push({
+        cx,
+        cy,
+        wdx,
+        wdy,
+        widthMm: def.widthMm,
+        heightMm: resolveFixtureHeight(def.heightMm, booth.heightMm),
+        footprint: corners.map((c) => ({ x: c.xMm, y: c.yMm, z: 0 })),
+        billboard: ca.display3d === 'billboard',
+        url: ca.fileUrl,
+        name: def.name,
+      });
+      continue; // 회색 박스 대신 판넬만 렌더
+    }
+
     // 2D Shape → 3D extrude 지오메트리
     const geo = generateGeometry(p, def);
     // 면별 디자인 텍스처 해석 — 레이어별 적용 면(faces) 반영 (base + overlays, v1.0.9)
@@ -355,5 +407,6 @@ export function buildIsoScene(
     boxes,
     floorImages: planImages.map((image) => ({ image })),
     humans,
+    panels,
   };
 }

@@ -211,6 +211,11 @@ export function renderIsoSceneToDataURL(
   for (const h of scene.humans ?? []) {
     allPts.push({ x: h.x, y: h.y, z: 0 }, { x: h.x, y: h.y, z: h.heightMm });
   }
+  // 커스텀 이미지 판넬(v1.1.4) footprint + 상단 지점
+  for (const pn of scene.panels ?? []) {
+    for (const f of pn.footprint) allPts.push(f, { ...f, z: pn.heightMm });
+    allPts.push({ x: pn.cx, y: pn.cy, z: pn.heightMm });
+  }
   const projected = allPts.map(rawProj);
   const minX = Math.min(...projected.map((p) => p.x));
   const maxX = Math.max(...projected.map((p) => p.x));
@@ -400,6 +405,10 @@ export function renderIsoSceneToDataURL(
         }
         castPolys.push(convexHull(ground));
       }
+    }
+    // 커스텀 이미지 판넬의 접지 그림자(바닥에 붙은 느낌, v1.1.4)
+    for (const pn of scene.panels ?? []) {
+      contactPolys.push(pn.footprint.map((f) => ({ x: f.x, y: f.y })));
     }
     if (off) {
       for (const w of scene.walls) {
@@ -605,6 +614,40 @@ export function renderIsoSceneToDataURL(
       depth: depthOf([base, head]),
       draw: () => drawHuman(ctx, P(base), P(head)),
     });
+  }
+
+  // --- 커스텀 이미지 판넬/빌보드 (v1.1.4) — 회색 박스 대신 바닥에 세운 이미지(투명 유지) ---
+  for (const pn of scene.panels ?? []) {
+    const el = imageElements.get(pn.url);
+    // 판넬 가로축: billboard 는 카메라를 향하도록(화면 수평), panel 은 집기 방향 고정
+    const wdx = pn.billboard ? ca : pn.wdx;
+    const wdy = pn.billboard ? -sa : pn.wdy;
+    const iw = el ? el.naturalWidth || el.width || 1 : 1;
+    const ih = el ? el.naturalHeight || el.height || 1 : 1;
+    // fit-contain: 판넬(widthMm×heightMm) 안에 비율 유지, 하단 바닥 정렬 + 가로 중앙
+    const fit = Math.min(pn.widthMm / iw, pn.heightMm / ih);
+    const drawW = iw * fit;
+    const drawH = ih * fit;
+    const uL = (pn.widthMm - drawW) / 2;
+    const ox = pn.cx - wdx * (pn.widthMm / 2);
+    const oy = pn.cy - wdy * (pn.widthMm / 2);
+    const pt = (u: number, v: number): V3 => ({ x: ox + wdx * u, y: oy + wdy * u, z: v });
+    const sp00 = P(pt(uL, drawH)); // 이미지 좌상단
+    const sp10 = P(pt(uL + drawW, drawH)); // 우상단
+    const sp01 = P(pt(uL, 0)); // 좌하단(바닥)
+    const depth = depthOf([pt(uL, 0), pt(uL + drawW, 0)]);
+    boxUnits.push({
+      depth,
+      draw: () => {
+        if (!el) return;
+        // drawImage 로 그려 PNG 투명(alpha) 유지 — 뒤에 채움 없음
+        drawAffineImage(ctx, el, sp00, sp10, sp01, iw, ih, 1);
+        reset();
+      },
+    });
+    if (options.showNames) {
+      nameDraws.push({ screen: P({ x: pn.cx, y: pn.cy, z: pn.heightMm }), depth, text: pn.name });
+    }
   }
 
   // z-order: 배경(바닥/그림자) → 벽(항상 뒤) → 집기(항상 앞). 각 그룹 내부는 깊이순.
