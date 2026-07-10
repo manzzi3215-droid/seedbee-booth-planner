@@ -262,22 +262,7 @@ export function createBoothDrawingDataURL(
           fill: CANVAS_COLORS.dimText,
         }),
       );
-      // 부스 전체 치수 라벨(파란 배경) — 바닥 중앙 하단, 화면과 동일 스타일
-      const pillFont = 26 / scale;
-      const pillText = `부스  ${boothW} × ${boothD} mm`;
-      const ptw = new Konva.Text({ text: pillText, fontSize: pillFont, fontStyle: 'bold' }).width();
-      const ppadX = pillFont * 0.6;
-      const ppadY = pillFont * 0.34;
-      const pbgW = ptw + ppadX * 2;
-      const pbgH = pillFont + ppadY * 2;
-      const pcx = (minX + maxX) / 2;
-      const pTop = maxY + 26 / scale + labelFont + 16 / scale;
-      layer.add(
-        new Konva.Rect({ x: pcx - pbgW / 2, y: pTop, width: pbgW, height: pbgH, fill: '#2563eb', cornerRadius: pillFont * 0.36 }),
-      );
-      layer.add(
-        new Konva.Text({ x: pcx - ptw / 2, y: pTop + ppadY, text: pillText, fontSize: pillFont, fontStyle: 'bold', fill: '#ffffff', listening: false }),
-      );
+      // 부스 전체 크기 파란 라벨은 v1.2.2에서 제거 — 외곽 치수선 + 숫자만 유지(화면과 동일)
     }
 
     return stage.toDataURL({ pixelRatio: options.pixelRatio ?? 2 });

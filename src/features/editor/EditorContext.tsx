@@ -761,14 +761,39 @@ export function EditorProvider({
       shapeSaveTimer.current = setTimeout(() => void storage.saveProject(updated), 800);
     };
 
-    // 부스 크기(가로/세로/높이) 직접 수정 (v1.2.0) — 사각형 부스 대상. 즉시 반영 + 디바운스 저장.
-    // height 는 null 허용(높이 미설정). 최소 100mm.
+    // 부스 크기(가로/세로/높이) 직접 수정 (v1.2.0, v1.2.2 polygon 지원) — 즉시 반영 + 디바운스 저장.
+    //  - 사각형: widthMm/depthMm 직접 설정.
+    //  - 다각형: 새 가로/세로에 맞춰 polygonPoints(+edgeCurves)를 bbox 기준 비례 스케일 → 형태 유지하며 크기 변경.
+    //  - height 는 null 허용(높이 미설정), 최소 100mm. 부스가 작아져도 집기는 삭제하지 않음(사용자가 재배치).
     const updateBoothSize = (patch: { widthMm?: number; depthMm?: number; heightMm?: number | null }) => {
       if (!project) return;
       const bc = project.boothConfig;
       const next = { ...bc };
-      if (patch.widthMm != null && patch.widthMm >= 100) next.widthMm = Math.round(patch.widthMm);
-      if (patch.depthMm != null && patch.depthMm >= 100) next.depthMm = Math.round(patch.depthMm);
+      const newW = patch.widthMm != null && patch.widthMm >= 100 ? Math.round(patch.widthMm) : bc.widthMm;
+      const newD = patch.depthMm != null && patch.depthMm >= 100 ? Math.round(patch.depthMm) : bc.depthMm;
+
+      if (bc.boothShape === 'polygon' && bc.polygonPoints && bc.polygonPoints.length >= 3 && (newW !== bc.widthMm || newD !== bc.depthMm)) {
+        // 다각형: 현재 bbox 기준으로 비례 스케일
+        const xs = bc.polygonPoints.map((p) => p.xMm);
+        const ys = bc.polygonPoints.map((p) => p.yMm);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minY = Math.min(...ys), maxY = Math.max(...ys);
+        const curW = Math.max(1, maxX - minX);
+        const curD = Math.max(1, maxY - minY);
+        const sx = newW / curW;
+        const sy = newD / curD;
+        next.polygonPoints = bc.polygonPoints.map((p) => ({
+          xMm: Math.round(minX + (p.xMm - minX) * sx),
+          yMm: Math.round(minY + (p.yMm - minY) * sy),
+        }));
+        // 곡선(bulge)도 평균 배율로 스케일해 시각적 비율 유지
+        if (bc.edgeCurves && bc.edgeCurves.some((c) => Math.abs(c) > 0.5)) {
+          const sAvg = (sx + sy) / 2;
+          next.edgeCurves = bc.edgeCurves.map((c) => Math.round(c * sAvg));
+        }
+      }
+      next.widthMm = newW;
+      next.depthMm = newD;
       if (patch.heightMm !== undefined) {
         next.heightMm = patch.heightMm == null ? null : Math.max(100, Math.round(patch.heightMm));
       }

@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -13,9 +12,9 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
-import InputAdornment from '@mui/material/InputAdornment';
 import { useEditor } from './EditorContext';
 import { resetCenterLayout } from './ResizableSplit';
+import BoothSizeFields from './BoothSizeFields';
 
 const GRID_OPTIONS = [100, 250, 500, 1000];
 
@@ -26,33 +25,11 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
   const {
     gridSizeMm, setGridSizeMm, snapEnabled, setSnapEnabled,
     showFixtureNames, setShowFixtureNames, showDimensions, setShowDimensions,
-    project, updateProjectInfo, updateBoothSize,
+    project, updateProjectInfo,
   } = useEditor();
 
   const bc = project?.boothConfig;
   const isPolygon = bc?.boothShape === 'polygon';
-
-  // 부스 크기 입력(로컬 상태, blur/Enter 에서 커밋)
-  const [w, setW] = useState('');
-  const [d, setD] = useState('');
-  const [h, setH] = useState('');
-  useEffect(() => {
-    if (open && bc) {
-      setW(String(bc.widthMm));
-      setD(String(bc.depthMm));
-      setH(bc.heightMm == null ? '' : String(bc.heightMm));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, bc?.widthMm, bc?.depthMm, bc?.heightMm]);
-
-  const commitW = () => { const n = Number(w); if (n >= 100) updateBoothSize({ widthMm: n }); else setW(String(bc?.widthMm ?? '')); };
-  const commitD = () => { const n = Number(d); if (n >= 100) updateBoothSize({ depthMm: n }); else setD(String(bc?.depthMm ?? '')); };
-  const commitH = () => {
-    if (h.trim() === '') { updateBoothSize({ heightMm: null }); return; }
-    const n = Number(h);
-    if (n >= 100) updateBoothSize({ heightMm: n }); else setH(bc?.heightMm == null ? '' : String(bc.heightMm));
-  };
-  const onKey = (e: React.KeyboardEvent, commit: () => void) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); commit(); } };
 
   const Row = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
     <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
@@ -63,8 +40,6 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
       {children}
     </Stack>
   );
-
-  const mm = { endAdornment: <InputAdornment position="end">mm</InputAdornment> };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
@@ -85,16 +60,11 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
 
           <Divider />
           <Typography variant="overline" color="text.secondary">부스 크기</Typography>
-          {isPolygon ? (
+          <BoothSizeFields />
+          {isPolygon && (
             <Typography variant="caption" color="text.secondary">
-              다각형(polygon) 부스는 <b>부스 편집</b>(꼭짓점 드래그)에서 형태를 조절하세요. 가로·세로·높이 직접 입력은 사각형 부스에서만 지원됩니다.
+              다각형 부스는 가로·세로 변경 시 형태를 유지하며 비례로 조절됩니다.
             </Typography>
-          ) : (
-            <Stack direction="row" spacing={1}>
-              <TextField size="small" label="가로" type="number" value={w} onChange={(e) => setW(e.target.value)} onBlur={commitW} onKeyDown={(e) => onKey(e, commitW)} slotProps={{ input: mm }} fullWidth />
-              <TextField size="small" label="세로" type="number" value={d} onChange={(e) => setD(e.target.value)} onBlur={commitD} onKeyDown={(e) => onKey(e, commitD)} slotProps={{ input: mm }} fullWidth />
-              <TextField size="small" label="높이" type="number" value={h} onChange={(e) => setH(e.target.value)} onBlur={commitH} onKeyDown={(e) => onKey(e, commitH)} placeholder="미설정" slotProps={{ input: mm }} fullWidth />
-            </Stack>
           )}
 
           <Divider />

@@ -1132,59 +1132,6 @@ function Walls({
   );
 }
 
-/**
- * 통일 치수 라벨(파란 배경 · 흰 글자 · 라운드 · 그림자) — CAD/Figma 톤 (v1.1.8).
- * 화면상 일정 크기(px 기준 mm 환산). cx = 가로 중심(mm), topY = 라벨 상단(mm).
- */
-function DimPill({
-  cx,
-  topY,
-  text,
-  scale,
-  emphasize = false,
-}: {
-  cx: number;
-  topY: number;
-  text: string;
-  scale: number;
-  emphasize?: boolean;
-}) {
-  const vp: Viewport = { scale, x: 0, y: 0 };
-  const font = pxToMm(emphasize ? 13 : 11, vp);
-  // 텍스트 폭 측정 (배율 무관 mm)
-  const measured = new Konva.Text({ text, fontSize: font, fontStyle: 'bold' });
-  const tw = measured.width();
-  const th = measured.height();
-  const padX = font * 0.6;
-  const padY = font * 0.34;
-  const w = tw + padX * 2;
-  const h = th + padY * 2;
-  return (
-    <Group listening={false}>
-      <Rect
-        x={cx - w / 2}
-        y={topY}
-        width={w}
-        height={h}
-        fill={CANVAS_COLORS.dimLabelBg}
-        cornerRadius={font * 0.36}
-        shadowColor="#000000"
-        shadowBlur={pxToMm(4, vp)}
-        shadowOpacity={0.25}
-        shadowOffsetY={pxToMm(1, vp)}
-      />
-      <Text
-        x={cx - tw / 2}
-        y={topY + padY}
-        text={text}
-        fontSize={font}
-        fontStyle="bold"
-        fill={CANVAS_COLORS.dimLabelText}
-      />
-    </Group>
-  );
-}
-
 /** 가로/세로 치수(mm) 표시 — 바운딩 박스 기준 */
 function Dimensions({ bounds, scale }: { bounds: BoothBounds; scale: number }) {
   const { minX, minY, maxX, maxY, widthMm, depthMm } = bounds;
@@ -1233,15 +1180,7 @@ function Dimensions({ bounds, scale }: { bounds: BoothBounds; scale: number }) {
         fontSize={font}
         fill={CANVAS_COLORS.dimText}
       />
-
-      {/* 부스 전체 치수 라벨(파란 배경) — 바닥 중앙 하단 (v1.1.8) */}
-      <DimPill
-        cx={(minX + maxX) / 2}
-        topY={yb + font + pxToMm(8, vp)}
-        text={`부스  ${widthMm} × ${depthMm} mm`}
-        scale={scale}
-        emphasize
-      />
+      {/* 부스 전체 크기 파란 라벨은 v1.2.2에서 제거 — 외곽 치수선 + 숫자만 유지 */}
     </>
   );
 }
