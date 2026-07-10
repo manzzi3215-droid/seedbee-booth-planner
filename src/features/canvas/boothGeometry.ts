@@ -94,9 +94,13 @@ export interface BoothBounds {
   depthMm: number;
 }
 
-/** 부스 폴리곤의 바운딩 박스(mm) */
+/**
+ * 부스 외곽선의 바운딩 박스(mm).
+ * 곡선(edgeCurves)이 있으면 테셀레이션된 외곽선 기준 → 화면(2D)·3D·출력·치수가 모두 동일한 extent 사용.
+ * 곡선이 없으면 getBoothOutline == 원본 폴리곤이라 무회귀. (v1.2.4)
+ */
 export function getBoothBounds(booth: BoothConfig): BoothBounds {
-  const pts = getBoothPolygon(booth);
+  const pts = getBoothOutline(booth);
   const xs = pts.map((p) => p.xMm);
   const ys = pts.map((p) => p.yMm);
   const minX = Math.min(...xs);

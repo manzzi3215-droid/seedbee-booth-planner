@@ -43,7 +43,7 @@ import { stylingFromPreset } from '../styling/styling';
 import { snapMmToGrid } from '../canvas/coords';
 import { DEFAULT_GRID_SIZE_MM } from '../canvas/constants';
 import { computeFixtureAABB } from '../canvas/fixtureGeometry';
-import { tessellatePolygon } from '../canvas/boothGeometry';
+import { tessellatePolygon, getBoothOutline } from '../canvas/boothGeometry';
 import { convertSvgElement } from '../svg/SvgConverter';
 import {
   DEFAULT_TEXT_CONTENT,
@@ -776,29 +776,31 @@ export function EditorProvider({
         const newD = patch.depthMm != null && patch.depthMm >= 100 ? Math.round(patch.depthMm) : bc.depthMm;
 
         if (bc.boothShape === 'polygon' && bc.polygonPoints && bc.polygonPoints.length >= 3 && (newW !== bc.widthMm || newD !== bc.depthMm)) {
-          // 다각형: 현재 bbox 기준 비례 스케일 → 형태 유지하며 크기 변경
-          const xs = bc.polygonPoints.map((p) => p.xMm);
-          const ys = bc.polygonPoints.map((p) => p.yMm);
-          const minX = Math.min(...xs), maxX = Math.max(...xs);
-          const minY = Math.min(...ys), maxY = Math.max(...ys);
+          // 다각형: 현재 "외곽선"(곡선 반영) bbox 기준 비례 스케일 → 형태 유지하며 크기 변경.
+          // 스케일 원점/기준을 외곽선 bbox 로 두면, 스케일 후 외곽선 bbox 가 정확히 newW×newD 가 됨.
+          const outline = getBoothOutline(bc);
+          const oxs = outline.map((p) => p.xMm);
+          const oys = outline.map((p) => p.yMm);
+          const minX = Math.min(...oxs), maxX = Math.max(...oxs);
+          const minY = Math.min(...oys), maxY = Math.max(...oys);
           const curW = Math.max(1, maxX - minX);
           const curD = Math.max(1, maxY - minY);
           const sx = newW / curW;
           const sy = newD / curD;
-          const scaled = bc.polygonPoints.map((p) => ({
+          next.polygonPoints = bc.polygonPoints.map((p) => ({
             xMm: Math.round(minX + (p.xMm - minX) * sx),
             yMm: Math.round(minY + (p.yMm - minY) * sy),
           }));
-          next.polygonPoints = scaled;
           if (bc.edgeCurves && bc.edgeCurves.some((c) => Math.abs(c) > 0.5)) {
             const sAvg = (sx + sy) / 2;
             next.edgeCurves = bc.edgeCurves.map((c) => Math.round(c * sAvg));
           }
-          // widthMm/depthMm 를 실제 스케일된 폴리곤 bbox 로 재계산 → 숫자 필드와 렌더가 정확히 일치
-          const nxs = scaled.map((p) => p.xMm);
-          const nys = scaled.map((p) => p.yMm);
-          next.widthMm = Math.max(...nxs) - Math.min(...nxs);
-          next.depthMm = Math.max(...nys) - Math.min(...nys);
+          // widthMm/depthMm 를 스케일된 외곽선 bbox 로 재계산 → 숫자 필드 = getBoothBounds = 2D/3D/출력 완전 일치
+          const scaledOutline = getBoothOutline(next);
+          const sxs = scaledOutline.map((p) => p.xMm);
+          const sys = scaledOutline.map((p) => p.yMm);
+          next.widthMm = Math.round(Math.max(...sxs) - Math.min(...sxs));
+          next.depthMm = Math.round(Math.max(...sys) - Math.min(...sys));
         } else {
           next.widthMm = newW;
           next.depthMm = newD;

@@ -14,6 +14,7 @@ import type {
 } from '../../types';
 import { DEFAULT_TEXTURE_TRANSFORM } from '../../types';
 import { getWallColor } from '../wall/constants';
+import { formatFixtureDims } from '../../utils/dims';
 import { planFaceMapping, assetById, computeFitRect } from '../design/mapping';
 import { productById as findProduct, productImageUrl, productSize, DEFAULT_PRODUCT_COLOR } from '../products/productModel';
 import { TEXT_FONT_FAMILY } from '../texts/constants';
@@ -465,10 +466,10 @@ function buildFixtureGroup(
     );
   }
 
-  // 사이즈 라벨 (v1.1.8, #6) — 집기 "아래쪽"(하단 바깥), 파란 통일 라벨.
+  // 사이즈 라벨 (v1.1.8, #6 · v1.2.4 높이 포함) — 집기 "아래쪽"(하단 바깥), 파란 통일 라벨.
   if (showDimensions) {
     const sizeFont = 15 / scale;
-    const text = `${Math.round(w)}×${Math.round(d)}`;
+    const text = formatFixtureDims(w, d, def.heightMm);
     const tw = new Konva.Text({ text, fontSize: sizeFont, fontStyle: 'bold' }).width();
     const padX = sizeFont * 0.5;
     const padY = sizeFont * 0.3;

@@ -7,7 +7,7 @@ import GridOnRoundedIcon from '@mui/icons-material/GridOnRounded';
 import CloudDoneRoundedIcon from '@mui/icons-material/CloudDoneRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import { useEditor } from './EditorContext';
-import { getBoothPolygon, polygonAreaMm2 } from '../canvas/boothGeometry';
+import { getBoothOutline, polygonAreaMm2 } from '../canvas/boothGeometry';
 
 /** 마지막 저장 시각을 HH:MM:SS 로 (v1.1.0) */
 function formatTime(ms: number): string {
@@ -67,7 +67,7 @@ export default function EditorStatusBar({ zoom }: { zoom: number }) {
     selectedItem,
   } = useEditor();
 
-  const areaM2 = project ? polygonAreaMm2(getBoothPolygon(project.boothConfig)) / 1_000_000 : 0;
+  const areaM2 = project ? polygonAreaMm2(getBoothOutline(project.boothConfig)) / 1_000_000 : 0;
   const selCount = selectedFixtureIds.length > 1 ? selectedFixtureIds.length : selectedItem ? 1 : 0;
 
   const Item = ({ label, value }: { label: string; value: string }) => (

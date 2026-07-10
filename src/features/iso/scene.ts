@@ -93,7 +93,7 @@ export interface IsoBox {
    * 사이즈 표기용 실측 치수(mm) — 실무시안 치수 표기 옵션 (v1.0.8).
    * 실제 집기에만 설정(제품/매트/사람 등은 미설정).
    */
-  dims?: { wMm: number; dMm: number; hMm: number };
+  dims?: { wMm: number; dMm: number; hMm?: number };
 }
 
 /** 스케일 참고용 사람 실루엣 (v1.0.8) — 부스 바깥쪽에 세워 크기 비교 */
@@ -351,8 +351,8 @@ export function buildIsoScene(
       color: def.color,
       opacity: def.opacity ?? 1,
       name: def.name,
-      // 사이즈 표기용 실측 치수(실무시안 치수 옵션, v1.0.8)
-      dims: { wMm: def.widthMm, dMm: def.depthMm, hMm: def.heightMm ?? fxHeight },
+      // 사이즈 표기용 실측 치수(v1.0.8, v1.2.4 높이=집기 정의 실측값, 없으면 라벨에서 생략)
+      dims: { wMm: def.widthMm, dMm: def.depthMm, hMm: def.heightMm },
       faces,
       faceOverlays,
       // 윗면 이미지 매핑용 방향성 사각형(곡면/customPath 상단 매핑 정상화, v1.0.7)

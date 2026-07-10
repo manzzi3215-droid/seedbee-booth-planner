@@ -43,7 +43,7 @@ import RotateLeftRoundedIcon from '@mui/icons-material/RotateLeftRounded';
 import RotateRightRoundedIcon from '@mui/icons-material/RotateRightRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import PolylineRoundedIcon from '@mui/icons-material/PolylineRounded';
-import { getBoothPolygon, polygonAreaMm2 } from '../canvas/boothGeometry';
+import { getBoothPolygon, getBoothOutline, polygonAreaMm2 } from '../canvas/boothGeometry';
 import { isFixtureOutOfBounds } from '../canvas/fixtureGeometry';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
@@ -137,7 +137,7 @@ export default function EditorToolbar({
   } = useEditor();
 
   // 부스 넓이(m²) + 외곽 밖 집기 경고 (실시간)
-  const boothAreaM2 = project ? polygonAreaMm2(getBoothPolygon(project.boothConfig)) / 1_000_000 : 0;
+  const boothAreaM2 = project ? polygonAreaMm2(getBoothOutline(project.boothConfig)) / 1_000_000 : 0;
   const oobCount = project
     ? placed.filter((p) => {
         const def = fixturesById.get(p.fixtureDefId);

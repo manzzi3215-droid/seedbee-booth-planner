@@ -1,6 +1,7 @@
 import type { BoxFace, PlacedDimension, PlacedText } from '../../types';
 import { dimensionDisplayLabel } from '../dimensions/constants';
 import { TEXT_FONT_FAMILY } from '../texts/constants';
+import { formatFixtureDims } from '../../utils/dims';
 import type { IsoScene, IsoWall, V3 } from './scene';
 import {
   type LightingConfig,
@@ -645,7 +646,7 @@ export function renderIsoSceneToDataURL(
       sizeDraws.push({
         screen: P({ x: bcx, y: bcy, z: box.baseZmm ?? 0 }),
         depth: boxDepth,
-        text: `${box.dims.wMm}×${box.dims.dMm}`,
+        text: formatFixtureDims(box.dims.wMm, box.dims.dMm, box.dims.hMm),
       });
     }
   }

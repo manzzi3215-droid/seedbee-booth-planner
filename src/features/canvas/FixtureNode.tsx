@@ -5,6 +5,7 @@ import type { FaceMapping, FixtureDef, PlacedFixture, PointMm } from '../../type
 import { isFixtureOutOfBounds } from './fixtureGeometry';
 import { CUSTOM_PATH_VIEW } from '../fixtures/shapes';
 import { fillColor } from '../colors/palette';
+import { formatFixtureDims } from '../../utils/dims';
 import DesignTextureNode from '../design/DesignTextureNode';
 
 const SELECT_COLOR = '#2563eb';
@@ -169,13 +170,15 @@ const DIM_LABEL_BG = '#2563eb';
 function FixtureSize({
   widthMm,
   depthMm,
+  heightMm,
   fontMm,
 }: {
   widthMm: number;
   depthMm: number;
+  heightMm?: number;
   fontMm: number;
 }) {
-  const text = `${Math.round(widthMm)}×${Math.round(depthMm)}`;
+  const text = formatFixtureDims(widthMm, depthMm, heightMm);
   const size = useMemo(() => {
     const t = new Konva.Text({ text, fontSize: fontMm, fontStyle: 'bold' });
     return { w: t.width(), h: t.height() };
@@ -388,7 +391,7 @@ export default function FixtureNode({
         />
       )}
       {sizeVisible && (
-        <FixtureSize widthMm={def.widthMm} depthMm={def.depthMm} fontMm={sizeFontMm} />
+        <FixtureSize widthMm={def.widthMm} depthMm={def.depthMm} heightMm={def.heightMm} fontMm={sizeFontMm} />
       )}
       {showBorder && (
         <Rect
