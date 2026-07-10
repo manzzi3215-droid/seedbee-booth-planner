@@ -31,10 +31,11 @@ import CommandPalette, { type Command } from './CommandPalette';
 import SettingsDialog from './SettingsDialog';
 import EditorStatusBar from './EditorStatusBar';
 import ResizableSplit from './ResizableSplit';
+import BoothSizeFields from './BoothSizeFields';
 import { useEffect, useMemo } from 'react';
 import { detectCollisions, productById as findProduct } from '../products/productModel';
 import { downloadLayoutPNG, downloadLayoutPDF, type ExportInput } from '../export/exportLayout';
-import { getBoothSizeLabel, getFloorLabel, hasBoothHeight } from '../../constants/booth';
+import { getFloorLabel, hasBoothHeight } from '../../constants/booth';
 import {
   VIEW_MODE_OPTIONS,
   WALL_SIDES,
@@ -336,17 +337,7 @@ export default function EditorCanvasArea() {
           storageKey="blp:centerTopH:wall"
           topSlot={
             <>
-              <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider', mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                  {getViewModeLabel(effectiveMode)} · {wallLengthMm} × {boothConfig.heightMm} mm
-                </Typography>
-              </Paper>
-
-              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: 'text.secondary', mb: 1, px: 0.5 }}>
-                <KeyboardRoundedIcon sx={{ fontSize: 16 }} />
-                <Typography variant="caption">벽면에 텍스트·치수선·이미지 추가 · Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동</Typography>
-              </Stack>
-
+              {/* 툴바를 상단에 배치 → 높이를 줄여도 툴바는 항상 보임 (v1.2.1) */}
               <EditorToolbar
                 onOpenPrint={() => setPrintOpen(true)}
                 onOpenMerchandising={() => setMerchOpen(true)}
@@ -354,6 +345,18 @@ export default function EditorCanvasArea() {
                 onOpenSettings={() => setSettingsOpen(true)}
                 onOpenPalette={() => setPaletteOpen(true)}
               />
+              <Paper elevation={0} sx={{ p: 1, border: '1px solid', borderColor: 'divider', mt: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800 }} noWrap>
+                    {getViewModeLabel(effectiveMode)}
+                  </Typography>
+                  <Chip size="small" variant="outlined" label={`${wallLengthMm} × ${boothConfig.heightMm} mm`} />
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+                    <KeyboardRoundedIcon sx={{ fontSize: 15 }} />
+                    <Typography variant="caption">텍스트·치수선·이미지 추가 · Delete · R · Ctrl+D · 방향키</Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
             </>
           }
           canvasSlot={
@@ -384,27 +387,7 @@ export default function EditorCanvasArea() {
             storageKey="blp:centerTopH:plan"
             topSlot={
               <>
-                <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider', mb: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>{project.name}</Typography>
-                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                    <Chip label={`치수 ${getBoothSizeLabel(boothConfig)}`} />
-                    <Chip variant="outlined" label={`오픈 ${boothConfig.openSide}면`} />
-                    <Chip variant="outlined" label={`바닥 ${getFloorLabel(boothConfig)}`} />
-                  </Stack>
-                  {!heightSet && (
-                    <Alert severity="info" sx={{ mt: 1.5 }}>
-                      부스 높이를 설정해야 벽면 전개도와 3D 미리보기를 사용할 수 있습니다.
-                    </Alert>
-                  )}
-                </Paper>
-
-                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: 'text.secondary', mb: 1, px: 0.5 }}>
-                  <KeyboardRoundedIcon sx={{ fontSize: 16 }} />
-                  <Typography variant="caption">
-                    Delete 삭제 · R 회전 · Ctrl+D 복사 · 방향키 이동(100mm) · Shift+방향키 500mm · Shift 드래그: 스마트 스냅
-                  </Typography>
-                </Stack>
-
+                {/* 툴바를 상단에 배치 → 높이를 줄여도 툴바는 항상 보임 (v1.2.1) */}
                 <EditorToolbar
                   onOpenPrint={() => setPrintOpen(true)}
                   onOpenMerchandising={() => setMerchOpen(true)}
@@ -412,6 +395,20 @@ export default function EditorCanvasArea() {
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenPalette={() => setPaletteOpen(true)}
                 />
+                {/* 컴팩트 정보 바 — 부스명 + 부스 크기 직접 입력 + 오픈/바닥 */}
+                <Paper elevation={0} sx={{ p: 1, border: '1px solid', borderColor: 'divider', mt: 1 }}>
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, maxWidth: 220 }} noWrap>{project.name}</Typography>
+                    <BoothSizeFields />
+                    <Chip size="small" variant="outlined" label={`오픈 ${boothConfig.openSide}면`} />
+                    <Chip size="small" variant="outlined" label={`바닥 ${getFloorLabel(boothConfig)}`} />
+                  </Stack>
+                  {!heightSet && (
+                    <Alert severity="info" sx={{ mt: 1, py: 0 }}>
+                      부스 높이를 설정해야 벽면 전개도와 3D 미리보기를 사용할 수 있습니다.
+                    </Alert>
+                  )}
+                </Paper>
               </>
             }
             canvasSlot={

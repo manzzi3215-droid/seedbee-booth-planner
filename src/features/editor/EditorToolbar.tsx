@@ -52,7 +52,9 @@ import type { SelectChangeEvent } from '@mui/material/Select';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import DashboardCustomizeRoundedIcon from '@mui/icons-material/DashboardCustomizeRounded';
 import { useNavigate } from 'react-router-dom';
+import HeightRoundedIcon from '@mui/icons-material/HeightRounded';
 import { useEditor } from './EditorContext';
+import { toggleWorkspaceExpand } from './ResizableSplit';
 import { parseSvgDocument } from '../svg/SvgParser';
 import {
   downloadLayoutPNG,
@@ -732,6 +734,12 @@ export default function EditorToolbar({
           sx={{ ml: 0 }}
         />
       )}
+
+      <Tooltip title="작업 공간 확장 (상단 영역 접기/펼치기)">
+        <IconButton size="small" onClick={() => toggleWorkspaceExpand()}>
+          <HeightRoundedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
