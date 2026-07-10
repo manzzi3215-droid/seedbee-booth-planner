@@ -46,6 +46,7 @@ function ResizableAside({
   children: ReactNode;
 }) {
   const [width, setWidth] = useState(() => readW(storageKey, defaultWidth));
+  const [active, setActive] = useState(false); // 드래그 중 Divider 하이라이트
   const dragging = useRef(false);
 
   useEffect(() => {
@@ -56,10 +57,22 @@ function ResizableAside({
     }
   }, [storageKey, width]);
 
+  // 화면이 작아지면 패널 폭 자동 보정 (메인 영역 최소 공간 확보)
+  useEffect(() => {
+    const onResize = () => {
+      const avail = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, window.innerWidth - 360));
+      setWidth((w) => Math.min(w, avail));
+    };
+    window.addEventListener('resize', onResize);
+    onResize();
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       dragging.current = true;
+      setActive(true);
       const startX = e.clientX;
       const startW = width;
       const onMove = (ev: MouseEvent) => {
@@ -69,6 +82,7 @@ function ResizableAside({
       };
       const onUp = () => {
         dragging.current = false;
+        setActive(false);
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
         document.body.style.cursor = '';
@@ -82,18 +96,28 @@ function ResizableAside({
     [side, width],
   );
 
+  // VSCode/Figma 스타일 리사이즈 핸들: 넓은 히트영역 + 가운데 얇은 라인, hover/drag 시 강조
   const handle = (
     <Box
       onMouseDown={onMouseDown}
       onDoubleClick={() => setWidth(defaultWidth)}
       title="드래그로 너비 조절 · 더블클릭 시 기본폭"
       sx={{
-        width: 6,
+        width: 10,
         flexShrink: 0,
         cursor: 'col-resize',
-        bgcolor: 'transparent',
-        transition: 'background-color 0.15s',
-        '&:hover': { bgcolor: 'primary.main', opacity: 0.4 },
+        position: 'relative',
+        display: 'flex',
+        justifyContent: 'center',
+        // 가운데 얇은 라인(항상 은은히 보임 → 발견성) + hover/drag 강조
+        '&::after': {
+          content: '""',
+          width: active ? '3px' : '1.5px',
+          height: '100%',
+          bgcolor: active ? 'primary.main' : 'divider',
+          transition: 'background-color 0.12s, width 0.12s',
+        },
+        '&:hover::after': { bgcolor: 'primary.main', width: '3px' },
       }}
     />
   );

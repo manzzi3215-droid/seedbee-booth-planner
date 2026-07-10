@@ -302,9 +302,9 @@ export default function BoothCanvas({
           layer.add(new Konva.Line({ points: [s.x1 - tick, s.y1, s.x1 + tick, s.y1], ...lineStyle }));
           layer.add(new Konva.Line({ points: [s.x2 - tick, s.y2, s.x2 + tick, s.y2], ...lineStyle }));
         }
-        // 숫자 라벨 (중앙 정렬, 배율 무관 고정 크기)
+        // 숫자 라벨 (중앙 정렬, 배율 무관 고정 크기) — 통일 파란 라벨 (v1.1.9)
         const label = new Konva.Label({ x: s.midX, y: s.midY, listening: false });
-        label.add(new Konva.Tag({ fill: CANVAS_COLORS.spacingLabelBg, cornerRadius: pad }));
+        label.add(new Konva.Tag({ fill: CANVAS_COLORS.dimLabelBg, cornerRadius: pad }));
         label.add(
           new Konva.Text({
             text: `${Math.round(s.distMm)}`,

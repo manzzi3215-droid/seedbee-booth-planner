@@ -58,7 +58,7 @@ const QUALITY_OPTIONS = [
  * 렌더는 Dialog 가 열릴 때만 수행하고, 닫으면 상태를 정리합니다(편집기 성능 무관).
  */
 export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, layouts, currentLayoutId, showDimensions } = useEditor();
+  const { project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, layouts, currentLayoutId, showDimensions, setShowDimensions, showFixtureNames, setShowFixtureNames } = useEditor();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -131,9 +131,11 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       envBgTop: envTop,
       envBgBottom: envBot,
       transparentBg: forExport ? transparentBg || !!env.transparent : false,
-      // 사이즈 표기: 실무시안 ON + 사이즈 토글 ON 일 때만 (프리뷰/내보내기 공용, v1.0.8)
-      showDimensions: practical.on && practical.sizeLabels,
-      // 벽면 치수(가로×높이) — [치수 표시] 토글을 따름 (v1.1.8)
+      // 치수(집기·부스 치수) + 이름을 편집기 토글과 통일 (v1.1.9)
+      //  - [치수] 토글 → 부스/벽/집기 치수 라벨 일괄 제어
+      //  - [집기명] 토글 → 집기 이름 (치수와 분리)
+      showDimensions,
+      showNames: showFixtureNames,
       showWallDims: showDimensions,
       azimuthDeg: az,
       elevationDeg: el,
@@ -256,7 +258,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, extras);
     const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(false), modelSprites, missingModelIds);
     setDataUrl(url);
-  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, modelSprites, missingModelIds, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, showDimensions]);
+  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, modelSprites, missingModelIds, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, showDimensions, showFixtureNames]);
 
   // 자동 회전(Auto Orbit) — 360° 연속 회전
   useEffect(() => {
@@ -417,15 +419,27 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
             label={<Typography variant="caption">체크 패턴</Typography>}
             sx={{ ml: 0 }}
           />
+          {/* 집기명·치수는 편집기 토글과 동일(단일 소스). 치수는 부스/벽/집기 치수 일괄 제어 (v1.1.9) */}
           <FormControlLabel
             control={
               <Switch
                 size="small"
-                checked={opts.showNames}
-                onChange={(e) => setOpt('showNames', e.target.checked)}
+                checked={showFixtureNames}
+                onChange={(e) => setShowFixtureNames(e.target.checked)}
               />
             }
             label={<Typography variant="caption">집기명</Typography>}
+            sx={{ ml: 0 }}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showDimensions}
+                onChange={(e) => setShowDimensions(e.target.checked)}
+              />
+            }
+            label={<Typography variant="caption">치수</Typography>}
             sx={{ ml: 0 }}
           />
 
@@ -483,9 +497,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
               <FormControlLabel control={<Switch size="small" checked={practical.human} onChange={(e) => setPrac({ human: e.target.checked })} />} label={<Typography variant="caption">사람</Typography>} sx={{ ml: 0 }} />
               <FormControlLabel control={<Switch size="small" checked={practical.mat} onChange={(e) => setPrac({ mat: e.target.checked })} />} label={<Typography variant="caption">바닥매트</Typography>} sx={{ ml: 0 }} />
               <FormControlLabel control={<Switch size="small" checked={practical.productImages} onChange={(e) => setPrac({ productImages: e.target.checked })} />} label={<Typography variant="caption">제품이미지</Typography>} sx={{ ml: 0 }} />
-              <FormControlLabel control={<Switch size="small" checked={opts.showNames} onChange={(e) => setOpt('showNames', e.target.checked)} />} label={<Typography variant="caption">라벨</Typography>} sx={{ ml: 0 }} />
               <FormControlLabel control={<Switch size="small" checked={opts.showShadows} onChange={(e) => setOpt('showShadows', e.target.checked)} />} label={<Typography variant="caption">그림자</Typography>} sx={{ ml: 0 }} />
-              <FormControlLabel control={<Switch size="small" checked={practical.sizeLabels} onChange={(e) => setPrac({ sizeLabels: e.target.checked })} />} label={<Typography variant="caption">사이즈 표기</Typography>} sx={{ ml: 0 }} />
+              {/* '라벨'(집기명)·'사이즈 표기'는 상단 [집기명]·[치수] 토글로 통합 (v1.1.9) */}
             </>
           )}
         </Stack>

@@ -839,7 +839,8 @@ function drawSizeLabel(ctx: CanvasRenderingContext2D, at: Pt, text: string, font
   ctx.arcTo(rx, ry + h, rx, ry, r);
   ctx.arcTo(rx, ry, rx + rw, ry, r);
   ctx.closePath();
-  ctx.fillStyle = emphasize ? 'rgba(37,99,235,0.95)' : 'rgba(30,41,59,0.86)';
+  // 통일 치수 라벨 색: 파란 배경 · 흰 글자 (부스·벽·집기 동일, v1.1.9). emphasize 는 크기만 차등.
+  ctx.fillStyle = emphasize ? 'rgba(37,99,235,0.98)' : 'rgba(37,99,235,0.92)';
   ctx.fill();
   ctx.fillStyle = '#ffffff';
   ctx.fillText(text, at.x, at.y);
