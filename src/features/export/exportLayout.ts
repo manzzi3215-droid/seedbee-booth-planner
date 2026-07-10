@@ -19,6 +19,8 @@ export interface ExportInput {
   images: PlacedImage[];
   backgrounds: PlacedImage[];
   showFixtureNames: boolean;
+  /** 치수 표시 여부(부스 치수선) — [치수] 토글 반영 (v1.1.8). 미지정 시 true */
+  showDimensions?: boolean;
   fixturesById: Map<string, FixtureDef>;
   /** 평면도 보기 회전(deg). 현재 화면 기준 출력용 (v0.8.3) */
   viewRotationDeg?: number;
@@ -76,7 +78,7 @@ export async function downloadLayoutPNG(input: ExportInput): Promise<void> {
     imageEls,
     input.fixturesById,
     input.showFixtureNames,
-    { designAssets, placedProducts, products },
+    { designAssets, placedProducts, products, showDimensions: input.showDimensions },
   );
   const url = await rotateDataUrl(base, input.viewRotationDeg ?? 0);
   downloadDataURL(url, `${buildBaseName(input.project.name, input.layoutName)}_layout.png`);
@@ -192,7 +194,7 @@ async function buildReportDataURL(input: ExportInput): Promise<string> {
   ]);
   const boothImg = await loadImage(
     await rotateDataUrl(
-      createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2, designAssets, placedProducts, products }),
+      createBoothDrawingDataURL(booth, input.placed, input.texts, input.dimensions, input.images, input.backgrounds, imageEls, input.fixturesById, input.showFixtureNames, { pixelRatio: 2, designAssets, placedProducts, products, showDimensions: input.showDimensions }),
       input.viewRotationDeg ?? 0,
     ),
   );

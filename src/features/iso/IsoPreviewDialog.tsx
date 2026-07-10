@@ -58,7 +58,7 @@ const QUALITY_OPTIONS = [
  * 렌더는 Dialog 가 열릴 때만 수행하고, 닫으면 상태를 정리합니다(편집기 성능 무관).
  */
 export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, layouts, currentLayoutId } = useEditor();
+  const { project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, layouts, currentLayoutId, showDimensions } = useEditor();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -133,8 +133,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       transparentBg: forExport ? transparentBg || !!env.transparent : false,
       // 사이즈 표기: 실무시안 ON + 사이즈 토글 ON 일 때만 (프리뷰/내보내기 공용, v1.0.8)
       showDimensions: practical.on && practical.sizeLabels,
-      // 벽면 치수(가로×높이) — 부스 3D 미리보기에서 항상 표기 (v1.1.7)
-      showWallDims: true,
+      // 벽면 치수(가로×높이) — [치수 표시] 토글을 따름 (v1.1.8)
+      showWallDims: showDimensions,
       azimuthDeg: az,
       elevationDeg: el,
       lighting,
@@ -256,7 +256,7 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
     const scene = buildIsoScene(project.boothConfig, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, extras);
     const url = renderIsoSceneToDataURL(scene, imageElsRef.current, practicalRenderOpts(false), modelSprites, missingModelIds);
     setDataUrl(url);
-  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, modelSprites, missingModelIds, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products]);
+  }, [open, ready, opts, environment, wallColor, practical, azimuthDeg, elevationDeg, lighting, modelSprites, missingModelIds, project, placed, fixturesById, planImages, wallItems, designAssets, placedProducts, products, showDimensions]);
 
   // 자동 회전(Auto Orbit) — 360° 연속 회전
   useEffect(() => {

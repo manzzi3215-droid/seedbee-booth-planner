@@ -40,6 +40,8 @@ export const CANVAS_COLORS = {
   spacing: '#0ea5e9', // 집기 간 간격 치수선 (sky)
   spacingBoundary: '#64748b', // 부스 외곽 경계까지의 간격 (slate)
   spacingLabelBg: 'rgba(15,23,42,0.88)', // 간격 숫자 배경
+  dimLabelBg: '#2563eb', // 통일 치수 라벨 배경(부스·집기) — 파란 배경 (v1.1.8)
+  dimLabelText: '#ffffff', // 통일 치수 라벨 글자
 } as const;
 
 /**

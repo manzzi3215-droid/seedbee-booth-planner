@@ -111,13 +111,11 @@ const ROTATE_COLOR = '#2563eb';
 function FixtureName({
   name,
   widthMm,
-  depthMm,
   fontMm,
   selected,
 }: {
   name: string;
   widthMm: number;
-  depthMm: number;
   fontMm: number;
   selected: boolean;
 }) {
@@ -132,13 +130,15 @@ function FixtureName({
   const bgW = size.w + padX * 2;
   const bgH = size.h + padY * 2;
   const cx = widthMm / 2;
-  const cy = depthMm / 2;
+  // 집기명 = 집기 "위쪽"(상단 바깥). 라벨 하단이 top edge 위 gap 만큼 (v1.1.8, #6)
+  const gap = fontMm * 0.45;
+  const bgY = -bgH - gap;
 
   return (
     <Group listening={false}>
       <Rect
         x={cx - bgW / 2}
-        y={cy - bgH / 2}
+        y={bgY}
         width={bgW}
         height={bgH}
         fill="rgba(0,0,0,0.72)"
@@ -147,7 +147,7 @@ function FixtureName({
       <Text
         text={name}
         x={cx - size.w / 2}
-        y={cy - size.h / 2}
+        y={bgY + padY}
         width={size.w}
         height={size.h}
         align="center"
@@ -155,6 +155,63 @@ function FixtureName({
         wrap="none"
         fontSize={fontMm}
         fontStyle={fontStyle}
+        fill="#ffffff"
+      />
+    </Group>
+  );
+}
+
+/**
+ * 집기 사이즈 라벨 (v1.1.8, #6) — 집기 "아래쪽"(하단 바깥)에 파란 통일 치수 라벨.
+ * 가로×세로(mm, 바운딩 박스). 배율 무관 고정 크기.
+ */
+const DIM_LABEL_BG = '#2563eb';
+function FixtureSize({
+  widthMm,
+  depthMm,
+  fontMm,
+}: {
+  widthMm: number;
+  depthMm: number;
+  fontMm: number;
+}) {
+  const text = `${Math.round(widthMm)}×${Math.round(depthMm)}`;
+  const size = useMemo(() => {
+    const t = new Konva.Text({ text, fontSize: fontMm, fontStyle: 'bold' });
+    return { w: t.width(), h: t.height() };
+  }, [text, fontMm]);
+  const padX = fontMm * 0.5;
+  const padY = fontMm * 0.28;
+  const bgW = size.w + padX * 2;
+  const bgH = size.h + padY * 2;
+  const cx = widthMm / 2;
+  const gap = fontMm * 0.45;
+  const bgY = depthMm + gap; // bottom edge 아래
+
+  return (
+    <Group listening={false}>
+      <Rect
+        x={cx - bgW / 2}
+        y={bgY}
+        width={bgW}
+        height={bgH}
+        fill={DIM_LABEL_BG}
+        cornerRadius={fontMm * 0.32}
+        shadowColor="#000000"
+        shadowBlur={fontMm * 0.25}
+        shadowOpacity={0.25}
+      />
+      <Text
+        text={text}
+        x={cx - size.w / 2}
+        y={bgY + padY}
+        width={size.w}
+        height={size.h}
+        align="center"
+        verticalAlign="middle"
+        wrap="none"
+        fontSize={fontMm}
+        fontStyle="bold"
         fill="#ffffff"
       />
     </Group>
@@ -171,6 +228,8 @@ interface FixtureNodeProps {
   scale: number;
   /** 집기명 표시 여부 */
   showName: boolean;
+  /** 집기 사이즈(치수) 라벨 표시 여부 (v1.1.8, #6) */
+  showSize?: boolean;
   /** 디자인 텍스처(2D) — 평면도 면 매핑 + 로드된 이미지 */
   designMapping?: FaceMapping | null;
   designImage?: HTMLImageElement;
@@ -239,6 +298,7 @@ export default function FixtureNode({
   boothPolygon,
   scale,
   showName,
+  showSize,
   designMapping,
   designImage,
   onSelect,
@@ -260,6 +320,13 @@ export default function FixtureNode({
     def.widthMm * scale >= NAME_MIN_W_PX &&
     def.depthMm * scale >= NAME_MIN_H_PX;
   const nameFontMm = NAME_PX / scale;
+
+  // 사이즈 라벨 표시: 치수 토글 ON + 화면상 충분히 클 때만 (v1.1.8)
+  const sizeVisible =
+    !!showSize &&
+    def.widthMm * scale >= NAME_MIN_W_PX &&
+    def.depthMm * scale >= NAME_MIN_H_PX;
+  const sizeFontMm = 11 / scale;
 
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
@@ -316,10 +383,12 @@ export default function FixtureNode({
         <FixtureName
           name={def.name}
           widthMm={def.widthMm}
-          depthMm={def.depthMm}
           fontMm={nameFontMm}
           selected={selected}
         />
+      )}
+      {sizeVisible && (
+        <FixtureSize widthMm={def.widthMm} depthMm={def.depthMm} fontMm={sizeFontMm} />
       )}
       {showBorder && (
         <Rect

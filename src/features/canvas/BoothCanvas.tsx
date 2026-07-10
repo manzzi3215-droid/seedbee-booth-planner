@@ -74,6 +74,8 @@ interface BoothCanvasProps {
   backgrounds: PlacedImage[];
   fixturesById: Map<string, FixtureDef>;
   showFixtureNames: boolean;
+  /** 치수(부스/집기 치수선·라벨·간격선) 표시 여부 (v1.1.8). 미지정 시 true */
+  showDimensions?: boolean;
   /** 디자인 에셋 (텍스처 참조) */
   designAssets?: DesignAsset[];
   /** 배치 제품 (v0.9.3 Merchandising) */
@@ -141,6 +143,7 @@ export default function BoothCanvas({
   backgrounds,
   fixturesById,
   showFixtureNames,
+  showDimensions = true,
   designAssets,
   placedProducts,
   products,
@@ -271,7 +274,8 @@ export default function BoothCanvas({
     const target = targetId ? placed.find((p) => p.id === targetId) : undefined;
     const tdef = target ? fixturesById.get(target.fixtureDefId) : undefined;
     const tAABB = liveAABB ?? (target && tdef ? computeFixtureAABB(target, tdef) : undefined);
-    if (targetId && tAABB) {
+    // 치수 표시 OFF 면 간격선도 숨김 (v1.1.8)
+    if (targetId && tAABB && showDimensions) {
       const others: AABB[] = placed
         .filter((p) => p.id !== targetId)
         .map((p) => {
@@ -324,7 +328,7 @@ export default function BoothCanvas({
     if (ids.length === 1) drawSpacing(ids[0]);
     else drawSpacing(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFixtureId, selectedFixtureIds, placed, viewport.scale, viewRotationDeg]);
+  }, [selectedFixtureId, selectedFixtureIds, placed, viewport.scale, viewRotationDeg, showDimensions]);
 
   // --- 그룹/다중 선택 드래그 (v1.0.8) ---
   // 드래그 시작 시 선택 집기들의 시작 위치를 스냅샷 → 드래그 중 델타만큼 함께 이동.
@@ -730,8 +734,8 @@ export default function BoothCanvas({
             </Group>
             {/* 벽체 */}
             <Walls polygon={polygon} bounds={bounds} isPolygon={isPolygon} edges={edges} booth={booth} />
-            {/* 치수 (바운딩 박스 기준) */}
-            <Dimensions bounds={bounds} scale={viewport.scale} />
+            {/* 치수 (바운딩 박스 기준) — [치수] 토글로 ON·OFF (v1.1.8) */}
+            {showDimensions && <Dimensions bounds={bounds} scale={viewport.scale} />}
           </Layer>
 
           {/* 집기/텍스트/이미지/배경 레이어: 드래그/선택 상호작용 (회전/읽기전용/외곽편집 시 비활성) */}
@@ -803,6 +807,7 @@ export default function BoothCanvas({
                   boothPolygon={polygon}
                   scale={viewport.scale}
                   showName={showFixtureNames}
+                  showSize={showDimensions}
                   designMapping={dm}
                   designImage={designImg}
                   showRotateHandle={
@@ -1095,6 +1100,59 @@ function Walls({
   );
 }
 
+/**
+ * 통일 치수 라벨(파란 배경 · 흰 글자 · 라운드 · 그림자) — CAD/Figma 톤 (v1.1.8).
+ * 화면상 일정 크기(px 기준 mm 환산). cx = 가로 중심(mm), topY = 라벨 상단(mm).
+ */
+function DimPill({
+  cx,
+  topY,
+  text,
+  scale,
+  emphasize = false,
+}: {
+  cx: number;
+  topY: number;
+  text: string;
+  scale: number;
+  emphasize?: boolean;
+}) {
+  const vp: Viewport = { scale, x: 0, y: 0 };
+  const font = pxToMm(emphasize ? 13 : 11, vp);
+  // 텍스트 폭 측정 (배율 무관 mm)
+  const measured = new Konva.Text({ text, fontSize: font, fontStyle: 'bold' });
+  const tw = measured.width();
+  const th = measured.height();
+  const padX = font * 0.6;
+  const padY = font * 0.34;
+  const w = tw + padX * 2;
+  const h = th + padY * 2;
+  return (
+    <Group listening={false}>
+      <Rect
+        x={cx - w / 2}
+        y={topY}
+        width={w}
+        height={h}
+        fill={CANVAS_COLORS.dimLabelBg}
+        cornerRadius={font * 0.36}
+        shadowColor="#000000"
+        shadowBlur={pxToMm(4, vp)}
+        shadowOpacity={0.25}
+        shadowOffsetY={pxToMm(1, vp)}
+      />
+      <Text
+        x={cx - tw / 2}
+        y={topY + padY}
+        text={text}
+        fontSize={font}
+        fontStyle="bold"
+        fill={CANVAS_COLORS.dimLabelText}
+      />
+    </Group>
+  );
+}
+
 /** 가로/세로 치수(mm) 표시 — 바운딩 박스 기준 */
 function Dimensions({ bounds, scale }: { bounds: BoothBounds; scale: number }) {
   const { minX, minY, maxX, maxY, widthMm, depthMm } = bounds;
@@ -1142,6 +1200,15 @@ function Dimensions({ bounds, scale }: { bounds: BoothBounds; scale: number }) {
         offsetY={font + pxToMm(2, vp)}
         fontSize={font}
         fill={CANVAS_COLORS.dimText}
+      />
+
+      {/* 부스 전체 치수 라벨(파란 배경) — 바닥 중앙 하단 (v1.1.8) */}
+      <DimPill
+        cx={(minX + maxX) / 2}
+        topY={yb + font + pxToMm(8, vp)}
+        text={`부스  ${widthMm} × ${depthMm} mm`}
+        scale={scale}
+        emphasize
       />
     </>
   );

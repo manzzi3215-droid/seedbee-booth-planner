@@ -72,6 +72,7 @@ export default function EditorCanvasArea() {
     selectedImageId,
     selectedBackgroundId,
     showFixtureNames,
+    showDimensions,
     gridSizeMm,
     select,
     move,
@@ -414,6 +415,7 @@ export default function EditorCanvasArea() {
               backgrounds={planBackgrounds}
               fixturesById={fixturesById}
               showFixtureNames={showFixtureNames}
+              showDimensions={showDimensions}
               designAssets={designAssets}
               placedProducts={placedProducts}
               products={products}

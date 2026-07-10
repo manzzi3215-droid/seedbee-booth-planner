@@ -507,8 +507,13 @@ export function renderIsoSceneToDataURL(
       y: (w.baseStart.y + w.baseEnd.y) / 2,
       z: w.heightMm / 2,
     };
-    // 벽별 개별 색(scene.color) 우선, 없으면 전역 wallColor, 그것도 없으면 기본 콘크리트 톤 (v1.1.7)
-    const wallFill = shadeFace(lighting, w.color ?? options.wallColor ?? '#c3ccd8', { x: nx, y: ny, z: 0 }, wallCenter);
+    // 벽 채움색 (v1.1.8):
+    //  - 사용자가 벽 색을 지정한 경우(w.color): 셰이딩(조명 곱)을 건너뛰고 HEX 원본을 그대로 렌더
+    //    → #ffffff=순백 · #000000=순검정 · #ff0000=빨강 정확히 표현(조명으로 인한 회색/베이지 방지).
+    //  - 미지정 벽: 기존처럼 기본 콘크리트 톤에 조명 셰이딩 적용(자연스러운 입체감 유지).
+    const wallFill = w.color
+      ? w.color
+      : shadeFace(lighting, options.wallColor ?? '#c3ccd8', { x: nx, y: ny, z: 0 }, wallCenter);
     wallUnits.push({
       depth: depthOf(quad),
       draw: () => {
@@ -785,13 +790,28 @@ export function renderIsoSceneToDataURL(
     drawSizeLabel(ctx, { x: boothAnchor.x, y: boothAnchor.y + fontPx * 1.6 }, boothText, fontPx * 1.15, true);
   }
 
-  // --- 벽면 치수(가로×높이) 표기 (v1.1.7) — 부스 3D 미리보기 전용, 벽 상단 중앙에 배치 ---
+  // --- 벽면 치수(가로×높이) 표기 (v1.1.8) — 부스 3D 미리보기 전용 ---
+  // 벽 상단 바깥으로 offset · 파란 통일 라벨 · 겹치면 자동 회피(스킵) · 줌 무관 고정 px.
   if (options.showWallDims && wallDimDraws.length) {
-    const fontPx = Math.max(10, options.targetPx / 92);
-    wallDimDraws.sort((a, b) => a.depth - b.depth);
-    // 벽 상단보다 살짝 위로 올려 디자인/집기를 덜 가리도록
+    const fontPx = Math.max(13, options.targetPx / 78);
+    const offset = fontPx * 1.6; // 벽 상단보다 위로 (디자인/집기 가림 최소화)
+    wallDimDraws.sort((a, b) => a.depth - b.depth); // 앞쪽(가까운) 벽 우선
+    const placed: { x: number; y: number; w: number; h: number }[] = [];
+    const approxW = (t: string) => t.length * fontPx * 0.62 + fontPx; // 대략 폭
+    const lh = fontPx * 1.6;
     for (const w of wallDimDraws) {
-      drawSizeLabel(ctx, { x: w.screen.x, y: w.screen.y - fontPx * 1.1 }, w.text, fontPx);
+      const x = w.screen.x;
+      const y = w.screen.y - offset;
+      const bw = approxW(w.text);
+      const rect = { x: x - bw / 2, y: y - lh / 2, w: bw, h: lh };
+      // 이미 배치된 라벨과 겹치면 건너뜀(자동 충돌 회피)
+      const clash = placed.some(
+        (p) => Math.abs(p.x + p.w / 2 - (rect.x + rect.w / 2)) < (p.w + rect.w) / 2 - 2 &&
+               Math.abs(p.y + p.h / 2 - (rect.y + rect.h / 2)) < (p.h + rect.h) / 2 - 2,
+      );
+      if (clash) continue;
+      placed.push(rect);
+      drawSizeLabel(ctx, { x, y }, w.text, fontPx, true); // emphasize=파란 배경
     }
   }
 

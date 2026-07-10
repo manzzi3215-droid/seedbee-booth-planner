@@ -256,6 +256,10 @@ interface EditorContextValue {
   showFixtureNames: boolean;
   setShowFixtureNames: (v: boolean) => void;
 
+  // 치수 표시 토글 (v1.1.8) — 부스/벽/집기 치수 + 간격선 일괄 ON·OFF (localStorage 저장)
+  showDimensions: boolean;
+  setShowDimensions: (v: boolean) => void;
+
   // 선택
   selectedItem: SelectedItem;
   selectedFixtureId: string | null; // plan 스코프
@@ -533,6 +537,22 @@ export function EditorProvider({
   const shapeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const infoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFixtureNames, setShowFixtureNames] = useState(true);
+  // 치수 표시 토글 (v1.1.8) — 기본 ON, localStorage 유지
+  const [showDimensions, setShowDimensionsState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('blp:showDimensions') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setShowDimensions = (v: boolean) => {
+    setShowDimensionsState(v);
+    try {
+      localStorage.setItem('blp:showDimensions', v ? '1' : '0');
+    } catch {
+      /* 무시 */
+    }
+  };
 
   const [layouts, setLayouts] = useState<Layout[]>([]);
   const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
@@ -2150,6 +2170,8 @@ export function EditorProvider({
       setSnapEnabled,
       showFixtureNames,
       setShowFixtureNames,
+      showDimensions,
+      setShowDimensions,
       selectedItem,
       selectedFixtureId,
       selectedTextId,
@@ -2260,6 +2282,7 @@ export function EditorProvider({
     svgDocuments,
     wallItems,
     showFixtureNames,
+    showDimensions,
     selectedItem,
     selectedSvgElementId,
     selectedFixtureId,

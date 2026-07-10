@@ -211,7 +211,7 @@ export function createBoothDrawingDataURL(
         dm = { assetId: '', mode: 'contain', transform: DEFAULT_TEXTURE_TRANSFORM };
         designImage = imageElements.get(ca.fileUrl);
       }
-      layer.add(buildFixtureGroup(p, def, scale, showFixtureNames, dm, designImage));
+      layer.add(buildFixtureGroup(p, def, scale, showFixtureNames, dm, designImage, options.showDimensions !== false));
     }
 
     // 제품 (Product Layer, 집기 위) — v0.9.3
@@ -230,12 +230,13 @@ export function createBoothDrawingDataURL(
     }
 
     // 치수선 + 부스 치수 라벨. Presentation 모드에서는 생략
-    if (options.showDimensions !== false) {
-      for (const d of dimensions) {
-        layer.add(buildDimensionGroup(d, scale));
-      }
+    // 사용자 치수선(주석)은 [치수] 토글과 무관하게 항상 출력 (화면과 동일)
+    for (const d of dimensions) {
+      layer.add(buildDimensionGroup(d, scale));
+    }
 
-      // 치수 라벨 (바운딩 박스 기준)
+    // 부스 치수(바운딩 박스) — [치수] 토글 반영 (v1.1.8)
+    if (options.showDimensions !== false) {
       const labelFont = 24 / scale;
       layer.add(
         new Konva.Text({
@@ -260,6 +261,22 @@ export function createBoothDrawingDataURL(
           fontSize: labelFont,
           fill: CANVAS_COLORS.dimText,
         }),
+      );
+      // 부스 전체 치수 라벨(파란 배경) — 바닥 중앙 하단, 화면과 동일 스타일
+      const pillFont = 26 / scale;
+      const pillText = `부스  ${boothW} × ${boothD} mm`;
+      const ptw = new Konva.Text({ text: pillText, fontSize: pillFont, fontStyle: 'bold' }).width();
+      const ppadX = pillFont * 0.6;
+      const ppadY = pillFont * 0.34;
+      const pbgW = ptw + ppadX * 2;
+      const pbgH = pillFont + ppadY * 2;
+      const pcx = (minX + maxX) / 2;
+      const pTop = maxY + 26 / scale + labelFont + 16 / scale;
+      layer.add(
+        new Konva.Rect({ x: pcx - pbgW / 2, y: pTop, width: pbgW, height: pbgH, fill: '#2563eb', cornerRadius: pillFont * 0.36 }),
+      );
+      layer.add(
+        new Konva.Text({ x: pcx - ptw / 2, y: pTop + ppadY, text: pillText, fontSize: pillFont, fontStyle: 'bold', fill: '#ffffff', listening: false }),
       );
     }
 
@@ -378,6 +395,7 @@ function buildFixtureGroup(
   showName: boolean,
   designMapping?: FaceMapping | null,
   designImage?: HTMLImageElement,
+  showDimensions = true,
 ): Konva.Group {
   const group = new Konva.Group({ x: p.xMm, y: p.yMm, rotation: p.rotationDeg });
   const w = def.widthMm;
@@ -439,23 +457,57 @@ function buildFixtureGroup(
     addDesignTexture(group, designMapping, designImage, w, d);
   }
 
-  // 이름 라벨 (토글 ON, 어떤 배경색에서도 읽히도록 흰 글자 + 어두운 외곽선)
+  // 이름 라벨 (v1.1.8, #6) — 집기 "위쪽"(상단 바깥). 어떤 배경색에서도 읽히도록 흰 글자 + 어두운 외곽선.
   if (showName && def.name) {
+    const nameFont = 20 / scale;
     group.add(
       new Konva.Text({
+        x: 0,
+        y: -nameFont * 1.35,
         width: w,
-        height: d,
         align: 'center',
-        verticalAlign: 'middle',
         wrap: 'none',
         ellipsis: true,
         text: def.name,
-        fontSize: 20 / scale,
+        fontSize: nameFont,
         fontStyle: 'bold',
         fill: '#ffffff',
         stroke: 'rgba(0,0,0,0.65)',
         strokeWidth: 2 / scale,
         fillAfterStrokeEnabled: true,
+        listening: false,
+      }),
+    );
+  }
+
+  // 사이즈 라벨 (v1.1.8, #6) — 집기 "아래쪽"(하단 바깥), 파란 통일 라벨.
+  if (showDimensions) {
+    const sizeFont = 15 / scale;
+    const text = `${Math.round(w)}×${Math.round(d)}`;
+    const tw = new Konva.Text({ text, fontSize: sizeFont, fontStyle: 'bold' }).width();
+    const padX = sizeFont * 0.5;
+    const padY = sizeFont * 0.3;
+    const bgW = tw + padX * 2;
+    const bgH = sizeFont + padY * 2;
+    const gap = sizeFont * 0.4;
+    group.add(
+      new Konva.Rect({
+        x: w / 2 - bgW / 2,
+        y: d + gap,
+        width: bgW,
+        height: bgH,
+        fill: '#2563eb',
+        cornerRadius: sizeFont * 0.32,
+      }),
+    );
+    group.add(
+      new Konva.Text({
+        x: w / 2 - tw / 2,
+        y: d + gap + padY,
+        text,
+        fontSize: sizeFont,
+        fontStyle: 'bold',
+        fill: '#ffffff',
         listening: false,
       }),
     );

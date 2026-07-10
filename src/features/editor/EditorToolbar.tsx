@@ -99,6 +99,8 @@ export default function EditorToolbar({
     fixturesById,
     showFixtureNames,
     setShowFixtureNames,
+    showDimensions,
+    setShowDimensions,
     addBackground,
     svgDocuments,
     addSvgDocument,
@@ -183,6 +185,7 @@ export default function EditorToolbar({
       images: planImages,
       backgrounds: planBackgrounds,
       showFixtureNames,
+      showDimensions,
       fixturesById,
       viewRotationDeg,
       designAssets,
@@ -713,6 +716,19 @@ export default function EditorToolbar({
             />
           }
           label={<Typography variant="caption">집기명</Typography>}
+          sx={{ ml: 0 }}
+        />
+      )}
+      {viewMode === 'plan' && (
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={showDimensions}
+              onChange={(e) => setShowDimensions(e.target.checked)}
+            />
+          }
+          label={<Typography variant="caption">치수</Typography>}
           sx={{ ml: 0 }}
         />
       )}
