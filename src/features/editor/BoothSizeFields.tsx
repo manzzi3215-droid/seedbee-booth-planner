@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
@@ -17,6 +17,9 @@ export default function BoothSizeFields() {
   const [w, setW] = useState('');
   const [d, setD] = useState('');
   const [h, setH] = useState('');
+  // 편집 중(포커스)인 필드가 있으면 boothConfig 변화로 인한 재동기화를 건너뛴다
+  // → 한 필드 커밋이 편집 중인 다른 필드 값을 덮어쓰지 않음.
+  const focused = useRef(false);
 
   const sync = () => {
     if (!bc) return;
@@ -25,6 +28,7 @@ export default function BoothSizeFields() {
     setH(bc.heightMm == null ? '' : String(bc.heightMm));
   };
   useEffect(() => {
+    if (focused.current) return; // 편집 중이면 스킵
     sync();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bc?.widthMm, bc?.depthMm, bc?.heightMm]);
@@ -50,7 +54,8 @@ export default function BoothSizeFields() {
       type="number"
       value={val}
       onChange={(e) => setVal(e.target.value)}
-      onBlur={commit}
+      onFocus={() => { focused.current = true; }}
+      onBlur={() => { focused.current = false; commit(); }}
       onKeyDown={(e) => onKey(e, commit)}
       slotProps={{ input: mm, htmlInput: { min: 100, step: 10, 'aria-label': `부스 ${label}` } }}
       sx={{ width: 104 }}
