@@ -604,21 +604,26 @@ export default function EditorToolbar({
 
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
-          {/* 부스 외곽 편집 (CAD 스타일) */}
-          <Tooltip title={shapeEditMode ? '부스 편집 종료' : '부스 외곽을 꼭짓점/벽 드래그로 편집'}>
-            <span>
-              <Button
-                variant={shapeEditMode ? 'contained' : 'outlined'}
-                color={shapeEditMode ? 'warning' : 'primary'}
-                size="small"
-                startIcon={<PolylineRoundedIcon />}
-                onClick={() => setShapeEditMode(!shapeEditMode)}
-                disabled={!canEdit}
-              >
-                {shapeEditMode ? '편집 종료' : '부스 편집'}
-              </Button>
-            </span>
-          </Tooltip>
+          {/* 부스 외곽 편집 (CAD 스타일) — 편집 중에는 캔버스 하단 액션바(취소/완료/초기화)로 조작 (v1.2.5) */}
+          {!shapeEditMode && (
+            <Tooltip title="부스 외곽을 꼭짓점/벽 드래그로 편집">
+              <span>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  startIcon={<PolylineRoundedIcon />}
+                  onClick={() => setShapeEditMode(true)}
+                  disabled={!canEdit}
+                >
+                  부스 편집
+                </Button>
+              </span>
+            </Tooltip>
+          )}
+          {shapeEditMode && (
+            <Chip size="small" color="warning" variant="outlined" label="부스 편집 중 — 하단 바에서 완료/취소" />
+          )}
           <Chip size="small" variant="outlined" label={`${boothAreaM2.toFixed(2)}㎡`} />
           {shapeEditMode && oobCount > 0 && (
             <Chip size="small" color="warning" label={`부스 밖 집기 ${oobCount}개`} />

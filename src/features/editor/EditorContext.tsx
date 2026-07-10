@@ -841,34 +841,44 @@ export function EditorProvider({
     };
     const applyStylePreset = (id: StylePresetId) => updateBoothStyling(stylingFromPreset(id));
 
-    // 부스 외곽 폴리곤(+곡선) 갱신 (드래그 중 자주 호출) → 상태 즉시, 저장은 디바운스
+    // 부스 외곽 폴리곤(+곡선) 갱신 — 부스 편집 [완료] 시 1회 적용(함수형: 최신 상태 기준).
+    // 축 정렬 사각형(4점·곡선 없음)이면 boothShape='rectangle' 로 정리(사각형 초기화 지원, v1.2.5).
     const updateBoothShape = (points: PointMm[], curves?: number[]) => {
-      if (!project || points.length < 3) return;
+      if (points.length < 3) return;
       const rounded = curves?.map((c) => Math.round(c)) ?? [];
       const hasCurve = rounded.some((c) => Math.abs(c) > 0.5);
       // bbox 는 곡선(bulge) 반영한 외곽선 기준 (바깥쪽 곡선이 잘리지 않도록, v1.0.9)
       const outline = hasCurve ? tessellatePolygon(points, rounded) : points;
       const xs = outline.map((p) => p.xMm);
       const ys = outline.map((p) => p.yMm);
-      const widthMm = Math.max(...xs) - Math.min(...xs);
-      const depthMm = Math.max(...ys) - Math.min(...ys);
-      const updated: Project = {
-        ...project,
-        boothConfig: {
-          ...project.boothConfig,
-          boothShape: 'polygon',
-          polygonPoints: points.map((p) => ({ xMm: Math.round(p.xMm), yMm: Math.round(p.yMm) })),
-          edgeCurves: hasCurve ? rounded : undefined,
-          widthMm: Math.round(widthMm),
-          depthMm: Math.round(depthMm),
-        },
-        updatedAt: Date.now(),
-      };
-      setProject(updated);
-      if (shapeSaveTimer.current) clearTimeout(shapeSaveTimer.current);
-      shapeSaveTimer.current = setTimeout(() => {
-        void storage.saveProject(updated);
-      }, 800);
+      const minX = Math.min(...xs), minY = Math.min(...ys);
+      const widthMm = Math.round(Math.max(...xs) - minX);
+      const depthMm = Math.round(Math.max(...ys) - minY);
+
+      // 축 정렬 직사각형 판정: 4점 + 곡선 없음 + 각 점이 bbox 모서리
+      const isAxisRect =
+        !hasCurve && points.length === 4 &&
+        points.every((p) => (Math.abs(p.xMm - minX) < 1 || Math.abs(p.xMm - (minX + widthMm)) < 1) &&
+                             (Math.abs(p.yMm - minY) < 1 || Math.abs(p.yMm - (minY + depthMm)) < 1));
+
+      setProject((prev) => {
+        if (!prev) return prev;
+        const updated: Project = {
+          ...prev,
+          boothConfig: {
+            ...prev.boothConfig,
+            boothShape: isAxisRect ? 'rectangle' : 'polygon',
+            polygonPoints: isAxisRect ? undefined : points.map((p) => ({ xMm: Math.round(p.xMm), yMm: Math.round(p.yMm) })),
+            edgeCurves: hasCurve ? rounded : undefined,
+            widthMm,
+            depthMm,
+          },
+          updatedAt: Date.now(),
+        };
+        if (shapeSaveTimer.current) clearTimeout(shapeSaveTimer.current);
+        shapeSaveTimer.current = setTimeout(() => void storage.saveProject(updated), 800);
+        return updated;
+      });
     };
 
     // ---------- 집기 (plan) ----------

@@ -587,7 +587,7 @@ export default function BoothCanvas({
     nextCurves.splice(edgeIndex + 1, 0, 0);
     setEditPoints(next);
     setEditCurves(nextCurves);
-    onBoothShapeChange?.(next, nextCurves);
+    // draft 만 수정 — boothConfig 는 [완료] 시에만 적용 (v1.2.5)
   };
 
   const handleShapeMouseMove = () => {
@@ -642,7 +642,35 @@ export default function BoothCanvas({
       );
       setEditPoints(pts);
     }
-    onBoothShapeChange?.(pts, editCurvesRef.current);
+    // draft 만 갱신 — boothConfig 적용은 [완료] 시 1회 (취소 시 원형 복원) (v1.2.5)
+  };
+
+  // 부스 편집 액션 (draft 대상) — v1.2.5
+  const resetDraftToRectangle = () => {
+    if (!window.confirm('현재 곡선 및 다각형 형태를 삭제하고 직사각형으로 초기화하시겠습니까?')) return;
+    const w = booth.widthMm;
+    const d = booth.depthMm;
+    const rect: PointMm[] = [
+      { xMm: 0, yMm: 0 },
+      { xMm: w, yMm: 0 },
+      { xMm: w, yMm: d },
+      { xMm: 0, yMm: d },
+    ];
+    setEditPoints(rect);
+    setEditCurves([0, 0, 0, 0]);
+    setSelectedVertex(null);
+  };
+  const removeDraftCurves = () => {
+    setEditCurves((prev) => prev.map(() => 0));
+  };
+  const cancelShapeEdit = () => {
+    // draft 폐기 → boothConfig 는 편집 중 손대지 않았으므로 편집 시작 전 형태 그대로 복원
+    onExitShapeEdit?.();
+  };
+  const confirmShapeEdit = () => {
+    const pts = editPointsRef.current;
+    if (pts && pts.length >= 3) onBoothShapeChange?.(pts, editCurvesRef.current);
+    onExitShapeEdit?.();
   };
 
   // 편집 모드 키보드: Delete(선택 꼭짓점 삭제, 최소 3개), ESC(종료)
@@ -650,7 +678,7 @@ export default function BoothCanvas({
     if (!shapeEditMode) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onExitShapeEdit?.();
+        cancelShapeEdit(); // ESC = 취소(draft 폐기, 원형 복원)
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedVertex != null) {
         const pts = editPointsRef.current;
         if (pts && pts.length > 3) {
@@ -659,13 +687,14 @@ export default function BoothCanvas({
           setEditPoints(next);
           setEditCurves(nextCurves);
           setSelectedVertex(null);
-          onBoothShapeChange?.(next, nextCurves);
+          // draft 만 수정 (v1.2.5)
         }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [shapeEditMode, selectedVertex, onExitShapeEdit, onBoothShapeChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapeEditMode, selectedVertex]);
 
   const ready =
     size.width > 0 && size.height > 0 && bounds.widthMm > 0 && bounds.depthMm > 0;
@@ -973,6 +1002,43 @@ export default function BoothCanvas({
           <Button size="small" onClick={() => zoomToFitMultiple(2)} sx={{ minWidth: 0, px: 0.75 }}>200%</Button>
         </Stack>
       </Paper>
+
+      {/* 부스 편집 액션 바 (v1.2.5) — draft 편집 · [완료]에만 적용 · [취소]는 원형 복원 */}
+      {shapeEditMode && (
+        <Paper
+          elevation={4}
+          sx={{
+            position: 'absolute',
+            bottom: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            px: 1,
+            py: 0.75,
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'warning.light',
+          }}
+        >
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: 'warning.main', px: 0.5 }}>
+              부스 편집
+            </Typography>
+            <Button size="small" variant="outlined" onClick={resetDraftToRectangle}>
+              사각형으로 초기화
+            </Button>
+            <Button size="small" variant="outlined" onClick={removeDraftCurves}>
+              모든 곡선 제거
+            </Button>
+            <Box sx={{ width: 1, height: 22, bgcolor: 'divider' }} />
+            <Button size="small" color="inherit" onClick={cancelShapeEdit}>
+              취소
+            </Button>
+            <Button size="small" variant="contained" color="primary" onClick={confirmShapeEdit}>
+              완료
+            </Button>
+          </Stack>
+        </Paper>
+      )}
 
       {/* 핸드툴(패닝) 안내 — Space 누르는 동안 */}
       {handMode && (
