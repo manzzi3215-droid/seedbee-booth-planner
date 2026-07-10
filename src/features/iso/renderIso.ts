@@ -772,16 +772,20 @@ export function renderIsoSceneToDataURL(
     for (const n of noModelDraws) drawNotice(ctx, { x: n.screen.x, y: n.screen.y + yOff }, '이 기기에 모델 파일 없음', fontPx);
   }
 
-  // --- 사이즈(치수) 표기 (실무시안, v1.0.8) — 부스 전체 + 주요 집기 ---
-  if (options.showDimensions) {
+  // --- 사이즈(치수) 표기 ---
+  // 부스 전체 치수 = [치수] 토글과 무관하게 항상 표시 (v1.2.0).
+  // 집기 치수 = [치수] 토글에 따름.
+  {
     const fontPx = Math.max(10, options.targetPx / 92);
-    // 집기 치수 (집기명 아래쪽에 살짝 내려서)
-    sizeDraws.sort((a, b) => a.depth - b.depth);
-    const yOff = options.showNames ? fontPx * 1.7 : 0;
-    for (const s of sizeDraws) {
-      drawSizeLabel(ctx, { x: s.screen.x, y: s.screen.y + yOff }, s.text, fontPx);
+    // 집기 치수 ([치수] ON 일 때만)
+    if (options.showDimensions) {
+      sizeDraws.sort((a, b) => a.depth - b.depth);
+      const yOff = options.showNames ? fontPx * 1.7 : 0;
+      for (const s of sizeDraws) {
+        drawSizeLabel(ctx, { x: s.screen.x, y: s.screen.y + yOff }, s.text, fontPx);
+      }
     }
-    // 부스 전체 치수 (앞쪽 바닥 중앙, 강조)
+    // 부스 전체 치수 (앞쪽 바닥 중앙, 강조) — 항상 표시
     const boothW = Math.round(gMaxX - gMinX);
     const boothD = Math.round(gMaxY - gMinY);
     const boothH = Math.round(Math.max(0, ...scene.walls.map((w) => w.heightMm)));

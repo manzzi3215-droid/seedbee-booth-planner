@@ -127,6 +127,8 @@ interface EditorContextValue {
   setWallEnabled: (side: WallSide, enabled: boolean) => Promise<void>;
   /** 벽면별 색상 변경 (undefined = 기본색 복원) — v1.1.7 (디바운스 저장) */
   setWallColor: (side: WallSide, color: string | undefined) => void;
+  /** 부스 크기(가로/세로/높이) 직접 수정 — v1.2.0 (사각형 부스, 디바운스 저장) */
+  updateBoothSize: (patch: { widthMm?: number; depthMm?: number; heightMm?: number | null }) => void;
   /** 프로젝트 관리 정보(행사명·브랜드·기간·장소·담당자·메모) 갱신 — v1.1.0 (디바운스 저장) */
   updateProjectInfo: (patch: Partial<Pick<Project, 'name' | 'brand' | 'eventPeriod' | 'place' | 'manager' | 'projectMemo'>>) => void;
 
@@ -754,6 +756,23 @@ export function EditorProvider({
         boothConfig: { ...project.boothConfig, wallColors: hasAny ? wallColors : undefined },
         updatedAt: Date.now(),
       };
+      setProject(updated);
+      if (shapeSaveTimer.current) clearTimeout(shapeSaveTimer.current);
+      shapeSaveTimer.current = setTimeout(() => void storage.saveProject(updated), 800);
+    };
+
+    // 부스 크기(가로/세로/높이) 직접 수정 (v1.2.0) — 사각형 부스 대상. 즉시 반영 + 디바운스 저장.
+    // height 는 null 허용(높이 미설정). 최소 100mm.
+    const updateBoothSize = (patch: { widthMm?: number; depthMm?: number; heightMm?: number | null }) => {
+      if (!project) return;
+      const bc = project.boothConfig;
+      const next = { ...bc };
+      if (patch.widthMm != null && patch.widthMm >= 100) next.widthMm = Math.round(patch.widthMm);
+      if (patch.depthMm != null && patch.depthMm >= 100) next.depthMm = Math.round(patch.depthMm);
+      if (patch.heightMm !== undefined) {
+        next.heightMm = patch.heightMm == null ? null : Math.max(100, Math.round(patch.heightMm));
+      }
+      const updated: Project = { ...project, boothConfig: next, updatedAt: Date.now() };
       setProject(updated);
       if (shapeSaveTimer.current) clearTimeout(shapeSaveTimer.current);
       shapeSaveTimer.current = setTimeout(() => void storage.saveProject(updated), 800);
@@ -2090,6 +2109,7 @@ export function EditorProvider({
       canEdit: !readOnly, // v0.8.4: 회전 상태와 무관하게 편집 가능
       setWallEnabled,
       setWallColor,
+      updateBoothSize,
       updateProjectInfo,
       shapeEditMode,
       setShapeEditMode,

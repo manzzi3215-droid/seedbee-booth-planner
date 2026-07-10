@@ -235,8 +235,8 @@ export function createBoothDrawingDataURL(
       layer.add(buildDimensionGroup(d, scale));
     }
 
-    // 부스 치수(바운딩 박스) — [치수] 토글 반영 (v1.1.8)
-    if (options.showDimensions !== false) {
+    // 부스 외곽 치수(바운딩 박스 + 전체 크기 라벨) — [치수] 토글과 무관하게 항상 출력 (v1.2.0)
+    {
       const labelFont = 24 / scale;
       layer.add(
         new Konva.Text({

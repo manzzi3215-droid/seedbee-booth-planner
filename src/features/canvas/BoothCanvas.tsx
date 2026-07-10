@@ -182,6 +182,9 @@ export default function BoothCanvas({
 }: BoothCanvasProps) {
   const { ref, size } = useContainerSize<HTMLDivElement>();
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
+  // 최초 1회 화면 맞춤 여부 + 직전 컨테이너 크기 (리사이즈 시 줌 유지용, v1.2.0)
+  const hasFitRef = useRef(false);
+  const prevSizeRef = useRef({ w: 0, h: 0 });
   const guideLayerRef = useRef<Konva.Layer>(null);
   const spacingLayerRef = useRef<Konva.Layer>(null);
   const imageMap = useImageMap([
@@ -425,16 +428,45 @@ export default function BoothCanvas({
   // 회전을 반영한 화면 맞춤 범위(회전된 바운딩 박스)
   const fb = rotatedFitBounds(bounds, viewRotationDeg);
 
-  const fit = () =>
+  const fit = () => {
     setViewport(computeFit(size.width, size.height, fb.widthMm, fb.depthMm, fb.minX, fb.minY));
+    prevSizeRef.current = { w: size.width, h: size.height };
+    hasFitRef.current = true;
+  };
 
-  // 컨테이너 크기 / 부스 / 회전이 바뀌면 화면 맞춤
+  // 부스/회전이 바뀌면 화면 맞춤(재-Fit)
   useEffect(() => {
     if (size.width > 0 && size.height > 0) {
       setViewport(computeFit(size.width, size.height, fb.widthMm, fb.depthMm, fb.minX, fb.minY));
+      prevSizeRef.current = { w: size.width, h: size.height };
+      hasFitRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size.width, size.height, bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY, viewRotationDeg]);
+  }, [bounds.widthMm, bounds.depthMm, bounds.minX, bounds.minY, viewRotationDeg]);
+
+  // 컨테이너 크기 변경(중앙 패널 리사이즈·창 크기 등):
+  //  - 최초 사이징: 화면 맞춤
+  //  - 이후: 수동 줌을 유지하고, 직전 화면 중심의 월드 좌표가 새 화면 중심에 오도록 팬만 보정 (v1.2.0, #6)
+  useEffect(() => {
+    if (size.width <= 0 || size.height <= 0) return;
+    const prev = prevSizeRef.current;
+    if (!hasFitRef.current || prev.w === 0 || prev.h === 0) {
+      setViewport(computeFit(size.width, size.height, fb.widthMm, fb.depthMm, fb.minX, fb.minY));
+      hasFitRef.current = true;
+    } else if (prev.w !== size.width || prev.h !== size.height) {
+      setViewport((vp) => {
+        const worldCx = (prev.w / 2 - vp.x) / vp.scale;
+        const worldCy = (prev.h / 2 - vp.y) / vp.scale;
+        return {
+          scale: vp.scale,
+          x: size.width / 2 - worldCx * vp.scale,
+          y: size.height / 2 - worldCy * vp.scale,
+        };
+      });
+    }
+    prevSizeRef.current = { w: size.width, h: size.height };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.width, size.height]);
 
   // 확대율 상태바 보고 (v0.9.5)
   useEffect(() => {
@@ -734,8 +766,8 @@ export default function BoothCanvas({
             </Group>
             {/* 벽체 */}
             <Walls polygon={polygon} bounds={bounds} isPolygon={isPolygon} edges={edges} booth={booth} />
-            {/* 치수 (바운딩 박스 기준) — [치수] 토글로 ON·OFF (v1.1.8) */}
-            {showDimensions && <Dimensions bounds={bounds} scale={viewport.scale} />}
+            {/* 부스 외곽 치수(가로/세로 치수선 + 값 + 부스 전체 크기 라벨) — [치수] 토글과 무관하게 항상 표시 (v1.2.0) */}
+            <Dimensions bounds={bounds} scale={viewport.scale} />
           </Layer>
 
           {/* 집기/텍스트/이미지/배경 레이어: 드래그/선택 상호작용 (회전/읽기전용/외곽편집 시 비활성) */}
