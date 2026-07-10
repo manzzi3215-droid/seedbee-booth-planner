@@ -125,6 +125,8 @@ interface EditorContextValue {
 
   /** 사용할 벽면 ON/OFF 변경 (프로젝트에 저장) — v0.7.3 */
   setWallEnabled: (side: WallSide, enabled: boolean) => Promise<void>;
+  /** 벽면별 색상 변경 (undefined = 기본색 복원) — v1.1.7 (디바운스 저장) */
+  setWallColor: (side: WallSide, color: string | undefined) => void;
   /** 프로젝트 관리 정보(행사명·브랜드·기간·장소·담당자·메모) 갱신 — v1.1.0 (디바운스 저장) */
   updateProjectInfo: (patch: Partial<Pick<Project, 'name' | 'brand' | 'eventPeriod' | 'place' | 'manager' | 'projectMemo'>>) => void;
 
@@ -717,6 +719,24 @@ export function EditorProvider({
       // 현재 보고 있는 벽면을 끄면 평면도로 전환 (출력/캔버스 일관성)
       if (!enabled && viewMode === side) setViewMode('plan');
       await storage.saveProject(updated);
+    };
+
+    // 벽면별 색상 (v1.1.7) — boothConfig.wallColors 에 저장(자동저장/Undo/공유 자동).
+    // color === undefined 면 해당 벽 색을 제거(기본색 복원). 색상 피커 드래그가 잦아 저장은 디바운스.
+    const setWallColor = (side: WallSide, color: string | undefined) => {
+      if (!project) return;
+      const wallColors = { ...(project.boothConfig.wallColors ?? {}) };
+      if (color) wallColors[side] = color;
+      else delete wallColors[side];
+      const hasAny = Object.keys(wallColors).length > 0;
+      const updated: Project = {
+        ...project,
+        boothConfig: { ...project.boothConfig, wallColors: hasAny ? wallColors : undefined },
+        updatedAt: Date.now(),
+      };
+      setProject(updated);
+      if (shapeSaveTimer.current) clearTimeout(shapeSaveTimer.current);
+      shapeSaveTimer.current = setTimeout(() => void storage.saveProject(updated), 800);
     };
 
     // 프로젝트 관리 정보 갱신 (v1.1.0) — 상태 즉시 반영, 저장은 디바운스(800ms)
@@ -2049,6 +2069,7 @@ export function EditorProvider({
       setViewRotationDeg,
       canEdit: !readOnly, // v0.8.4: 회전 상태와 무관하게 편집 가능
       setWallEnabled,
+      setWallColor,
       updateProjectInfo,
       shapeEditMode,
       setShapeEditMode,

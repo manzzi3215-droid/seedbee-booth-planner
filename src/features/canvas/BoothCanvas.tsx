@@ -23,6 +23,7 @@ import type {
   PointMm,
   Product,
   SvgDocument,
+  WallSide,
 } from '../../types';
 import { DEFAULT_TEXTURE_TRANSFORM } from '../../types';
 import { planFaceMapping, assetById } from '../design/mapping';
@@ -32,7 +33,9 @@ import { productById as findProduct, productImageUrl } from '../products/product
 import SvgHighlightOverlay from '../svg/SvgRenderer';
 import { useContainerSize } from './useContainerSize';
 import { computeFit, zoomAtPoint, pxToMm, snapMmToGrid, screenToMm, type Viewport } from './coords';
-import { computeFixtureAABB } from './fixtureGeometry';
+import { computeFixtureAABB, type AABB } from './fixtureGeometry';
+import { computeSpacing } from './spacingMeasure';
+import { getWallColor } from '../wall/constants';
 import ShapeEditor from './ShapeEditor';
 import FixtureNode from './FixtureNode';
 import TextNode from './TextNode';
@@ -177,6 +180,7 @@ export default function BoothCanvas({
   const { ref, size } = useContainerSize<HTMLDivElement>();
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
   const guideLayerRef = useRef<Konva.Layer>(null);
+  const spacingLayerRef = useRef<Konva.Layer>(null);
   const imageMap = useImageMap([
     ...backgrounds.map((i) => i.srcDataUrl),
     ...images.map((i) => i.srcDataUrl),
@@ -257,6 +261,71 @@ export default function BoothCanvas({
     layer.batchDraw();
   };
 
+  // 집기 간격 자동 측정선(v1.1.7) — 전용 레이어에 명령형으로 그린다.
+  // targetId 집기를 기준으로 상/하/좌/우 가장 가까운 집기·부스 외곽까지 간격(mm)을 치수선+숫자로 표시.
+  // liveAABB 를 주면(드래그 중) 그 위치 기준으로, 없으면 저장된 위치 기준으로 계산.
+  const drawSpacing = (targetId: string | null, liveAABB?: AABB) => {
+    const layer = spacingLayerRef.current;
+    if (!layer) return;
+    layer.destroyChildren();
+    const target = targetId ? placed.find((p) => p.id === targetId) : undefined;
+    const tdef = target ? fixturesById.get(target.fixtureDefId) : undefined;
+    const tAABB = liveAABB ?? (target && tdef ? computeFixtureAABB(target, tdef) : undefined);
+    if (targetId && tAABB) {
+      const others: AABB[] = placed
+        .filter((p) => p.id !== targetId)
+        .map((p) => {
+          const d = fixturesById.get(p.fixtureDefId);
+          return d ? computeFixtureAABB(p, d) : null;
+        })
+        .filter((a): a is AABB => a != null);
+
+      const segs = computeSpacing(tAABB, others, polygon);
+      const vp: Viewport = { scale: viewport.scale, x: 0, y: 0 };
+      const tick = pxToMm(4, vp);
+      const font = pxToMm(11, vp);
+      const pad = pxToMm(3, vp);
+
+      for (const s of segs) {
+        const color = s.kind === 'boundary' ? CANVAS_COLORS.spacingBoundary : CANVAS_COLORS.spacing;
+        const lineStyle = { stroke: color, strokeWidth: 1.2, strokeScaleEnabled: false, listening: false };
+        layer.add(new Konva.Line({ points: [s.x1, s.y1, s.x2, s.y2], dash: [6, 4], ...lineStyle }));
+        // 양끝 눈금(측정 방향에 수직)
+        if (s.axis === 'x') {
+          layer.add(new Konva.Line({ points: [s.x1, s.y1 - tick, s.x1, s.y1 + tick], ...lineStyle }));
+          layer.add(new Konva.Line({ points: [s.x2, s.y2 - tick, s.x2, s.y2 + tick], ...lineStyle }));
+        } else {
+          layer.add(new Konva.Line({ points: [s.x1 - tick, s.y1, s.x1 + tick, s.y1], ...lineStyle }));
+          layer.add(new Konva.Line({ points: [s.x2 - tick, s.y2, s.x2 + tick, s.y2], ...lineStyle }));
+        }
+        // 숫자 라벨 (중앙 정렬, 배율 무관 고정 크기)
+        const label = new Konva.Label({ x: s.midX, y: s.midY, listening: false });
+        label.add(new Konva.Tag({ fill: CANVAS_COLORS.spacingLabelBg, cornerRadius: pad }));
+        label.add(
+          new Konva.Text({
+            text: `${Math.round(s.distMm)}`,
+            fontSize: font,
+            fontStyle: 'bold',
+            fill: '#ffffff',
+            padding: pad,
+          }),
+        );
+        label.offsetX(label.width() / 2);
+        label.offsetY(label.height() / 2);
+        layer.add(label);
+      }
+    }
+    layer.batchDraw();
+  };
+
+  // 선택된 단일 집기의 간격을 표시(드래그 중이 아닐 때). placed/선택/배율 변화 시 갱신.
+  useEffect(() => {
+    const ids = selectedFixtureIds ?? (selectedFixtureId ? [selectedFixtureId] : []);
+    if (ids.length === 1) drawSpacing(ids[0]);
+    else drawSpacing(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFixtureId, selectedFixtureIds, placed, viewport.scale, viewRotationDeg]);
+
   // --- 그룹/다중 선택 드래그 (v1.0.8) ---
   // 드래그 시작 시 선택 집기들의 시작 위치를 스냅샷 → 드래그 중 델타만큼 함께 이동.
   const groupDragRef = useRef<{ origin: Map<string, { x: number; y: number }> } | null>(null);
@@ -296,14 +365,16 @@ export default function BoothCanvas({
         onMoveFixtures(entries);
       }
       drawGuides([]);
-      return { xMm: rawX, yMm: rawY };
-    }
-    if (!shift) {
-      drawGuides([]);
+      drawSpacing(null); // 그룹/다중 이동 중에는 간격 표시 생략
       return { xMm: rawX, yMm: rawY };
     }
     const dragged = placed.find((p) => p.id === id);
     const def = dragged && fixturesById.get(dragged.fixtureDefId);
+    if (!shift) {
+      drawGuides([]);
+      if (dragged && def) drawSpacing(id, computeFixtureAABB({ ...dragged, xMm: rawX, yMm: rawY }, def));
+      return { xMm: rawX, yMm: rawY };
+    }
     if (!dragged || !def) return { xMm: rawX, yMm: rawY };
 
     const others: SnapTargetFixture[] = placed
@@ -319,6 +390,7 @@ export default function BoothCanvas({
       SNAP_THRESHOLD_MM,
     );
     drawGuides(res.guides);
+    drawSpacing(id, computeFixtureAABB({ ...dragged, xMm: res.xMm, yMm: res.yMm }, def));
     return { xMm: res.xMm, yMm: res.yMm };
   };
 
@@ -657,7 +729,7 @@ export default function BoothCanvas({
               <GridLines bounds={bounds} gridSizeMm={gridSizeMm} />
             </Group>
             {/* 벽체 */}
-            <Walls polygon={polygon} bounds={bounds} isPolygon={isPolygon} edges={edges} />
+            <Walls polygon={polygon} bounds={bounds} isPolygon={isPolygon} edges={edges} booth={booth} />
             {/* 치수 (바운딩 박스 기준) */}
             <Dimensions bounds={bounds} scale={viewport.scale} />
           </Layer>
@@ -791,6 +863,9 @@ export default function BoothCanvas({
 
           {/* 스냅 가이드라인 레이어 (명령형으로 그림, 드래그 종료 시 비움) */}
           <Layer ref={guideLayerRef} listening={false} {...layerRot} />
+
+          {/* 집기 간격 측정 레이어 (v1.1.7, 명령형) */}
+          <Layer ref={spacingLayerRef} listening={false} {...layerRot} />
 
           {/* 드래그 박스(마퀴) 선택 오버레이 (v1.0.8) */}
           {marquee && (
@@ -976,13 +1051,16 @@ function Walls({
   bounds,
   isPolygon,
   edges,
+  booth,
 }: {
   polygon: PointMm[];
   bounds: BoothBounds;
   isPolygon: boolean;
   edges: ReturnType<typeof getWallEdges>;
+  booth: BoothConfig;
 }) {
   if (isPolygon) {
+    // polygon 은 외곽선 하나로 그림 — 벽별 개별 색은 사각형 부스에서만 지원(방향-세그먼트 매핑 명확).
     return (
       <Line
         points={flattenPolygon(polygon)}
@@ -996,11 +1074,12 @@ function Walls({
   }
 
   const { minX, minY, maxX, maxY } = bounds;
-  const wall = (key: string, points: number[]) => (
+  // 2D 평면도 벽 stroke 도 벽별 색을 반영(미지정 시 기존 기본색). top=후면, bottom=정면, left/right.
+  const wall = (key: string, side: WallSide, points: number[]) => (
     <Line
       key={key}
       points={points}
-      stroke={CANVAS_COLORS.wall}
+      stroke={getWallColor(booth, side) ?? CANVAS_COLORS.wall}
       strokeWidth={WALL_STROKE_PX}
       strokeScaleEnabled={false}
       lineCap="square"
@@ -1008,10 +1087,10 @@ function Walls({
   );
   return (
     <>
-      {edges.top && wall('wall-top', [minX, minY, maxX, minY])}
-      {edges.right && wall('wall-right', [maxX, minY, maxX, maxY])}
-      {edges.bottom && wall('wall-bottom', [minX, maxY, maxX, maxY])}
-      {edges.left && wall('wall-left', [minX, minY, minX, maxY])}
+      {edges.top && wall('wall-top', 'backWall', [minX, minY, maxX, minY])}
+      {edges.right && wall('wall-right', 'rightWall', [maxX, minY, maxX, maxY])}
+      {edges.bottom && wall('wall-bottom', 'frontWall', [minX, maxY, maxX, maxY])}
+      {edges.left && wall('wall-left', 'leftWall', [minX, minY, minX, maxY])}
     </>
   );
 }

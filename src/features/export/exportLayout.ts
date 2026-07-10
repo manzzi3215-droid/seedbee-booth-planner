@@ -3,6 +3,7 @@ import { productImageUrl } from '../products/productModel';
 import { getFloorLabel, getBoothSizeLabel } from '../../constants/booth';
 import { createBoothDrawingDataURL } from './renderBooth';
 import { createWallDrawingDataURL } from './renderWall';
+import { getWallColor } from '../wall/constants';
 import { computeFixtureUsage } from './fixtureUsage';
 import { buildBaseName, downloadDataURL, preloadImages } from './download';
 
@@ -307,7 +308,8 @@ export interface WallExportInput {
 /** 벽면 PNG 저장 — 파일명: 프로젝트명_배치안명_{wall}.png */
 export async function downloadWallPNG(input: WallExportInput): Promise<void> {
   const imageEls = await preloadImages(input.images.map((i) => i.srcDataUrl));
-  const url = createWallDrawingDataURL(input.wallLengthMm, input.heightMm, input.texts, input.dimensions, input.images, imageEls);
+  const wallColor = getWallColor(input.project.boothConfig, input.wall);
+  const url = createWallDrawingDataURL(input.wallLengthMm, input.heightMm, input.texts, input.dimensions, input.images, imageEls, { wallColor });
   downloadDataURL(url, `${buildBaseName(input.project.name, input.layoutName)}_${input.wall}.png`);
 }
 
@@ -359,7 +361,7 @@ async function buildWallReportDataURL(input: WallExportInput): Promise<string> {
 
   const imageEls = await preloadImages(input.images.map((i) => i.srcDataUrl));
   const wallImg = await loadImage(
-    createWallDrawingDataURL(input.wallLengthMm, input.heightMm, input.texts, input.dimensions, input.images, imageEls, { pixelRatio: 2 }),
+    createWallDrawingDataURL(input.wallLengthMm, input.heightMm, input.texts, input.dimensions, input.images, imageEls, { pixelRatio: 2, wallColor: getWallColor(input.project.boothConfig, input.wall) }),
   );
   const boxRatio = drawBoxW / drawBoxH;
   const imgRatio = wallImg.width / wallImg.height;

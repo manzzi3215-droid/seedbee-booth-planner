@@ -10,8 +10,10 @@ import type {
   PlacedProduct,
   PlacedText,
   Product,
+  WallSide,
 } from '../../types';
 import { DEFAULT_TEXTURE_TRANSFORM } from '../../types';
+import { getWallColor } from '../wall/constants';
 import { planFaceMapping, assetById, computeFitRect } from '../design/mapping';
 import { productById as findProduct, productImageUrl, productSize, DEFAULT_PRODUCT_COLOR } from '../products/productModel';
 import { TEXT_FONT_FAMILY } from '../texts/constants';
@@ -167,20 +169,21 @@ export function createBoothDrawingDataURL(
       );
     } else {
       const edges = getWallEdges(booth.openSide);
-      const addWall = (points: number[]) =>
+      // 벽별 색상 반영(미지정 시 기본색). top=후면, bottom=정면, left/right (v1.1.7)
+      const addWall = (side: WallSide, points: number[]) =>
         layer.add(
           new Konva.Line({
             points,
-            stroke: CANVAS_COLORS.wall,
+            stroke: getWallColor(booth, side) ?? CANVAS_COLORS.wall,
             strokeWidth: WALL_STROKE_PX,
             strokeScaleEnabled: false,
             lineCap: 'square',
           }),
         );
-      if (edges.top) addWall([minX, minY, maxX, minY]);
-      if (edges.right) addWall([maxX, minY, maxX, maxY]);
-      if (edges.bottom) addWall([minX, maxY, maxX, maxY]);
-      if (edges.left) addWall([minX, minY, minX, maxY]);
+      if (edges.top) addWall('backWall', [minX, minY, maxX, minY]);
+      if (edges.right) addWall('rightWall', [maxX, minY, maxX, maxY]);
+      if (edges.bottom) addWall('frontWall', [minX, maxY, maxX, maxY]);
+      if (edges.left) addWall('leftWall', [minX, minY, minX, maxY]);
     }
 
     // SVG 배경 (맨 아래)

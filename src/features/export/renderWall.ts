@@ -19,6 +19,8 @@ const WALL_FILL = '#e9edf2';
 interface WallRenderOptions {
   gridSizeMm?: number;
   pixelRatio?: number;
+  /** 벽 배경색 (v1.1.7). 미지정 시 기본 연회색. */
+  wallColor?: string;
 }
 
 export function createWallDrawingDataURL(
@@ -57,7 +59,7 @@ export function createWallDrawingDataURL(
         y: 0,
         width: wallLengthMm,
         height: heightMm,
-        fill: WALL_FILL,
+        fill: options.wallColor ?? WALL_FILL,
         stroke: CANVAS_COLORS.wall,
         strokeWidth: WALL_STROKE_PX,
         strokeScaleEnabled: false,

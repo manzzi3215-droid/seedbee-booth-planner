@@ -37,6 +37,9 @@ export const CANVAS_COLORS = {
   dimLine: '#94a3b8',
   dimText: '#475569',
   guide: '#f43f5e', // 스냅 가이드라인 (rose)
+  spacing: '#0ea5e9', // 집기 간 간격 치수선 (sky)
+  spacingBoundary: '#64748b', // 부스 외곽 경계까지의 간격 (slate)
+  spacingLabelBg: 'rgba(15,23,42,0.88)', // 간격 숫자 배경
 } as const;
 
 /**

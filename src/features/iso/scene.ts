@@ -16,7 +16,7 @@ import type {
 import { getBoothOutline, getBoothBounds } from '../canvas/boothGeometry';
 import { getFixtureCorners } from '../canvas/fixtureGeometry';
 import { generateGeometry } from './geometry/GeometryGenerator';
-import { isWallEnabled } from '../wall/constants';
+import { isWallEnabled, getWallColor } from '../wall/constants';
 import { layersForFace, assetById } from '../design/mapping';
 import { productImageUrl } from '../products/productModel';
 import { productRenderGeo, productMaterialToFixture } from '../products/productGeometry';
@@ -47,6 +47,8 @@ export interface IsoWall {
   texts: PlacedText[];
   dimensions: PlacedDimension[];
   images: PlacedImage[];
+  /** 벽별 개별 색상(v1.1.7). 미지정이면 renderIso 기본색 사용. */
+  color?: string;
 }
 
 /** 집기 면 텍스처 (디자인 매핑, v0.8.7) */
@@ -211,6 +213,7 @@ function buildWalls(booth: BoothConfig, wallItems: WallItems): IsoWall[] {
       texts: wallItems[d.side].texts,
       dimensions: wallItems[d.side].dimensions,
       images: wallItems[d.side].images,
+      color: getWallColor(booth, d.side),
     }));
 }
 

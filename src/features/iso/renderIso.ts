@@ -49,6 +49,8 @@ export interface IsoRenderOptions {
   showShadows: boolean;
   /** 사이즈(치수) 표기 — 부스 전체 + 주요 집기 치수 (실무시안, v1.0.8) */
   showDimensions?: boolean;
+  /** 벽면 치수(가로×높이) 표기 — 부스 3D 미리보기 전용 (v1.1.7). 제품/VMD 썸네일은 미사용 */
+  showWallDims?: boolean;
   /** 출력 긴 변 px */
   targetPx: number;
   /** 배경 테마 (기본 light). Presentation Dark 모드에서 dark (v0.8.8) */
@@ -491,6 +493,7 @@ export function renderIsoSceneToDataURL(
   }
 
   // --- 벽 (평면 + 벽 요소) ---
+  const wallDimDraws: { screen: Pt; depth: number; text: string }[] = [];
   for (const w of scene.walls) {
     if (w.heightMm <= 0) continue;
     const topStart: V3 = { ...w.baseStart, z: w.heightMm };
@@ -504,7 +507,8 @@ export function renderIsoSceneToDataURL(
       y: (w.baseStart.y + w.baseEnd.y) / 2,
       z: w.heightMm / 2,
     };
-    const wallFill = shadeFace(lighting, options.wallColor ?? '#c3ccd8', { x: nx, y: ny, z: 0 }, wallCenter);
+    // 벽별 개별 색(scene.color) 우선, 없으면 전역 wallColor, 그것도 없으면 기본 콘크리트 톤 (v1.1.7)
+    const wallFill = shadeFace(lighting, w.color ?? options.wallColor ?? '#c3ccd8', { x: nx, y: ny, z: 0 }, wallCenter);
     wallUnits.push({
       depth: depthOf(quad),
       draw: () => {
@@ -512,6 +516,19 @@ export function renderIsoSceneToDataURL(
         drawWallItems(ctx, w, imageElements, P, reset);
       },
     });
+    // 벽면 치수 라벨 앵커 (벽 상단 중앙) — 화면 공간 라벨로 카메라/줌 무관 가독 (v1.1.7)
+    if (options.showWallDims) {
+      const topCenter: V3 = {
+        x: (w.baseStart.x + w.baseEnd.x) / 2,
+        y: (w.baseStart.y + w.baseEnd.y) / 2,
+        z: w.heightMm,
+      };
+      wallDimDraws.push({
+        screen: P(topCenter),
+        depth: depthOf(quad),
+        text: `${Math.round(w.wallLengthMm)}×${Math.round(w.heightMm)} mm`,
+      });
+    }
   }
 
   // --- 집기 박스 ---
@@ -766,6 +783,16 @@ export function renderIsoSceneToDataURL(
     const boothText = boothH > 0 ? `부스 ${boothW}×${boothD}×${boothH}mm` : `부스 ${boothW}×${boothD}mm`;
     const boothAnchor = P({ x: cx, y: gMaxY, z: 0 });
     drawSizeLabel(ctx, { x: boothAnchor.x, y: boothAnchor.y + fontPx * 1.6 }, boothText, fontPx * 1.15, true);
+  }
+
+  // --- 벽면 치수(가로×높이) 표기 (v1.1.7) — 부스 3D 미리보기 전용, 벽 상단 중앙에 배치 ---
+  if (options.showWallDims && wallDimDraws.length) {
+    const fontPx = Math.max(10, options.targetPx / 92);
+    wallDimDraws.sort((a, b) => a.depth - b.depth);
+    // 벽 상단보다 살짝 위로 올려 디자인/집기를 덜 가리도록
+    for (const w of wallDimDraws) {
+      drawSizeLabel(ctx, { x: w.screen.x, y: w.screen.y - fontPx * 1.1 }, w.text, fontPx);
+    }
   }
 
   return canvas.toDataURL('image/png');

@@ -133,6 +133,8 @@ export default function IsoPreviewDialog({ open, onClose }: { open: boolean; onC
       transparentBg: forExport ? transparentBg || !!env.transparent : false,
       // 사이즈 표기: 실무시안 ON + 사이즈 토글 ON 일 때만 (프리뷰/내보내기 공용, v1.0.8)
       showDimensions: practical.on && practical.sizeLabels,
+      // 벽면 치수(가로×높이) — 부스 3D 미리보기에서 항상 표기 (v1.1.7)
+      showWallDims: true,
       azimuthDeg: az,
       elevationDeg: el,
       lighting,

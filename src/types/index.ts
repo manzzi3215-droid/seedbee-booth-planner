@@ -55,6 +55,18 @@ export interface BoothConfig {
    */
   usedWalls?: Partial<Record<WallSide, boolean>>;
 
+  /**
+   * 벽면별 개별 색상 (v1.1.7). 방향(WallSide)별로 벽 표면색을 저장.
+   * 2D 평면도(벽 stroke)·벽면 전개도(배경)·3D 미리보기(벽 fill)에 동일 반영.
+   * 미지정 벽은 각 렌더러의 기본색을 사용(무회귀). 헬퍼 getWallColor 로 해석.
+   */
+  wallColors?: Partial<Record<WallSide, string>>;
+  /**
+   * (레거시/폴백) 예전 단일 벽 색상. 현재는 저장하지 않지만, 과거 데이터 호환을 위해
+   * wallColors 에 값이 없을 때 이 값을 모든 벽 기본색으로 사용합니다. (v1.1.7)
+   */
+  wallColor?: string;
+
   /** --- Professional Styling System (v0.9.8) --- 바닥/벽 재질·3D 환경·스타일 프리셋 */
   styling?: BoothStyling;
 }

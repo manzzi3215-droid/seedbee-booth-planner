@@ -16,7 +16,7 @@ import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import KeyboardRoundedIcon from '@mui/icons-material/KeyboardRounded';
 import ViewSidebarRoundedIcon from '@mui/icons-material/ViewSidebarRounded';
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { WallSide } from '../../types';
 import { useEditor } from './EditorContext';
@@ -41,6 +41,7 @@ import {
   isWallEnabled,
   getViewModeLabel,
   getWallLengthMm,
+  getWallColor,
   type ViewMode,
 } from '../wall/constants';
 
@@ -104,6 +105,7 @@ export default function EditorCanvasArea() {
     updateWallImage,
     clearSelection,
     setWallEnabled,
+    setWallColor,
     // v0.9.5 명령/상태
     undo,
     redo,
@@ -273,23 +275,57 @@ export default function EditorCanvasArea() {
         </Tooltip>
         <Menu anchorEl={wallMenuAnchor} open={wallMenuAnchor !== null} onClose={() => setWallMenuAnchor(null)}>
           <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 0.5, display: 'block' }}>
-            사용할 벽면 (OFF 시 탭·출력·3D 제외)
+            사용할 벽면 (OFF 시 탭·출력·3D 제외) · 벽 색상
           </Typography>
-          {WALL_SIDES.map((side) => (
-            <MenuItem key={side} dense disableRipple sx={{ py: 0 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={isWallEnabled(boothConfig, side)}
-                    onChange={(e) => setWallEnabled(side, e.target.checked)}
-                  />
-                }
-                label={getViewModeLabel(side)}
-                sx={{ m: 0 }}
-              />
-            </MenuItem>
-          ))}
+          {WALL_SIDES.map((side) => {
+            const enabled = isWallEnabled(boothConfig, side);
+            const color = getWallColor(boothConfig, side);
+            return (
+              <MenuItem key={side} dense disableRipple sx={{ py: 0.25, gap: 1 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={enabled}
+                      onChange={(e) => setWallEnabled(side, e.target.checked)}
+                    />
+                  }
+                  label={getViewModeLabel(side)}
+                  sx={{ m: 0, flex: 1 }}
+                />
+                {/* 벽 색상: 존재(ON)하는 벽만 노출 (v1.1.7) */}
+                {enabled && (
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Box
+                      component="input"
+                      type="color"
+                      aria-label={`${getViewModeLabel(side)} 색상`}
+                      value={color ?? '#c3ccd8'}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setWallColor(side, e.target.value)}
+                      sx={{
+                        width: 26,
+                        height: 22,
+                        p: 0,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 0.75,
+                        bgcolor: 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      onClick={() => setWallColor(side, undefined)}
+                      disabled={!color}
+                      sx={{ minWidth: 0, px: 0.75, fontSize: 11 }}
+                    >
+                      기본
+                    </Button>
+                  </Stack>
+                )}
+              </MenuItem>
+            );
+          })}
         </Menu>
       </Stack>
 
@@ -318,6 +354,7 @@ export default function EditorCanvasArea() {
             <WallCanvas
               wallLengthMm={wallLengthMm}
               heightMm={boothConfig.heightMm ?? 0}
+              wallColor={currentWall ? getWallColor(boothConfig, currentWall) : undefined}
               gridSizeMm={gridSizeMm}
               texts={wallGroup.texts}
               dimensions={wallGroup.dimensions}
