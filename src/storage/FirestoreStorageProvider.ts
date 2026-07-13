@@ -145,7 +145,13 @@ export class FirestoreStorageProvider implements StorageProvider {
       const d = await getDoc(doc(db, 'projects', id));
       if (d.exists()) {
         const p = hydrateProject(d.data() as ProjectDoc);
-        await this.cache.saveProject(p);
+        // 캐시 갱신은 비치명적: localStorage 용량 초과로 실패해도 방금 받은 최신 클라우드 데이터를 버리지 않는다.
+        // (이 write 가 바깥 catch 로 새면 stale 캐시본이 반환되어 저장 성공이 "저장 안 됨"으로 오표시됨)
+        try {
+          await this.cache.saveProject(p);
+        } catch (cacheErr) {
+          console.warn('[getProject] local cache write failed; returning cloud data', cacheErr);
+        }
         return p;
       }
       return this.cache.getProject(id);
@@ -155,7 +161,15 @@ export class FirestoreStorageProvider implements StorageProvider {
   }
 
   async saveProject(project: Project): Promise<void> {
-    await this.cache.saveProject(project); // 즉시 캐시 (속도/오프라인)
+    // 캐시(localStorage)는 "속도/오프라인"용 보조 저장소일 뿐, 원본은 Firestore 다.
+    // 큰 이미지(벽/VMD 시안 dataURL)가 쌓이면 localStorage 가 QuotaExceededError 를 던지는데,
+    // 이게 아래 Firestore 저장까지 막아 "클라우드는 저장 가능한데 저장 실패"로 오표시되던 문제 →
+    // 캐시 실패는 비치명적(경고만)으로 처리하고 원본(Firestore) 저장은 계속 진행한다.
+    try {
+      await this.cache.saveProject(project); // 즉시 캐시 (속도/오프라인)
+    } catch (e) {
+      console.warn('[saveProject] local cache write failed (localStorage 용량 초과 가능) — 클라우드 저장은 계속', e);
+    }
     const { db, uid } = await this.ctx();
     await setDoc(doc(db, 'projects', project.id), toProjectDoc(project, uid));
     // 공유 링크 조회용 shares/{shareId} 문서 동기화 (인덱스 없이 getDoc 으로 해석 가능)

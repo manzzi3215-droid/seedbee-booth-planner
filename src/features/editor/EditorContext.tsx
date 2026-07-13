@@ -2060,7 +2060,9 @@ export function EditorProvider({
         }
         setSaveStatus('saved');
         setLastSavedAt(Date.now());
-      } catch {
+      } catch (e) {
+        // 실제 실패 원인(네트워크/권한/문서 1MiB 초과/직렬화 등)을 더 이상 삼키지 않고 노출한다.
+        console.error('[saveCurrent] 저장 실패', e);
         setSaveStatus('error');
       }
     };
@@ -2071,7 +2073,8 @@ export function EditorProvider({
         await persistLayout({ id: generateId(), name: name.trim() || suggestLayoutName(), ...snapshot(), createdAt: now, updatedAt: now });
         setSaveStatus('saved');
         setLastSavedAt(Date.now());
-      } catch {
+      } catch (e) {
+        console.error('[saveAs] 저장 실패', e);
         setSaveStatus('error');
       }
     };

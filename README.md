@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.2.5 - 부스 편집 draft 방식(취소=원형 복원) · 사각형으로 초기화 · 모든 곡선 제거**
+> **v1.2.6 - 저장 안정성 핫픽스: localStorage 캐시 실패가 클라우드 저장을 막지 않도록 수정**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -12,6 +12,20 @@
 ---
 
 ## 변경 이력
+
+**저장 안정성 핫픽스 (v1.2.6)**
+- **localStorage 캐시 저장 실패가 Firestore 저장까지 실패 처리되던 문제 수정:** `FirestoreStorageProvider.saveProject` 가
+  캐시(localStorage) 쓰기를 원본(Firestore)보다 **먼저·치명적**으로 실행 → 벽/VMD 시안 이미지(dataURL)가 쌓여 localStorage 가
+  `QuotaExceededError` 를 던지면 클라우드 저장까지 통째로 막혀 "저장 실패"로 오표시. → 캐시 쓰기를 **비치명적(경고만)**으로 바꿔
+  원본(Firestore) 저장은 계속 진행.
+- **Firestore 최신 데이터를 캐시 실패 시 버리지 않도록 개선:** `getProject` 가 Firestore 조회와 캐시 저장을 하나의 try 로 묶어,
+  캐시 쓰기 실패가 **조회 실패처럼** 처리되며 방금 받은 최신 데이터를 버리고 stale 캐시본을 반환. → 캐시 저장을 내부 try/catch 로
+  분리해 실패해도 **최신 클라우드 데이터를 그대로 반환**(조회 자체가 실패했을 때만 캐시 fallback).
+- **저장 상태(UI)가 실제 저장 결과와 다르게 표시되던 문제 수정:** 위 두 수정으로 실제 저장 성공 시 상단 상태가 "저장 실패"·"저장 안 됨"에
+  머무르지 않고 **"클라우드 저장됨"**으로 정상 전환.
+- **저장 실패 원인을 Console 에서 확인 가능하도록 개선:** `saveCurrent`/`saveAs` 의 삼키던 `catch {}` → `console.error('[saveCurrent] 저장 실패', e)`
+  로 실제 원인(네트워크/권한/문서 1MiB 초과/직렬화 등) 노출. 캐시 실패 지점도 `console.warn` 으로 구분 표시.
+- *Firestore·Storage·프로젝트·데이터 구조 변경 없음. 저장 경로(자동/수동/다른 이름으로) 동일.*
 
 **부스 편집 UX 안정화 (v1.2.5)**
 - **취소가 원형 복원 안 되던 원인:** 부스 편집 중 꼭짓점/곡선을 드래그할 때마다 `onBoothShapeChange`(→`updateBoothShape`)가
