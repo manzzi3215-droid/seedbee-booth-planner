@@ -22,7 +22,7 @@ import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import type { Project, SharePermission } from '../../types';
-import { storage } from '../../storage';
+import { storage, storageProviderName } from '../../storage';
 import { getSharedWith, isValidEmail, normalizeEmails } from '../../utils/project';
 import { generateId } from '../../utils/id';
 
@@ -70,6 +70,8 @@ export default function ShareProjectDialog({
 
   if (!project) return null;
 
+  // 이메일 공유는 Firebase(Google 이메일 매칭) 전제 기능. Supabase provider 에서는 아직 미지원.
+  const isSupabase = storageProviderName === 'supabase';
   const shareLink = shareId ? `${window.location.origin}/share/${shareId}` : '';
 
   // 이메일 + 링크 상태를 함께 저장
@@ -154,7 +156,13 @@ export default function ShareProjectDialog({
       </Tabs>
 
       <DialogContent dividers>
-        {tab === 0 ? (
+        {tab === 0 && isSupabase ? (
+          <Alert severity="info">
+            현재 <b>Supabase 모드</b>에서는 이메일 직접 공유가 아직 지원되지 않습니다.
+            <br />
+            <b>링크 공유</b> 탭에서 공유 링크를 만들어 사용하세요. (로그인 없이 열람 가능)
+          </Alert>
+        ) : tab === 0 ? (
           <>
             <Chip
               size="small"
@@ -229,7 +237,11 @@ export default function ShareProjectDialog({
                   링크 비활성화
                 </Button>
                 <Alert severity="info" sx={{ mt: 2 }}>
-                  링크 접속자는 <b>Google 로그인</b> 후 {permission === 'edit' ? '수정' : '보기'}만 할 수 있습니다.
+                  {isSupabase ? (
+                    <>링크 접속자는 <b>로그인 없이</b> {permission === 'edit' ? '수정' : '보기'}만 할 수 있습니다.</>
+                  ) : (
+                    <>링크 접속자는 <b>Google 로그인</b> 후 {permission === 'edit' ? '수정' : '보기'}만 할 수 있습니다.</>
+                  )}
                 </Alert>
               </>
             ) : (
@@ -238,7 +250,7 @@ export default function ShareProjectDialog({
                   공유 링크 생성
                 </Button>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                  링크를 생성하면 <code>/share/…</code> 주소로 로그인한 누구나(권한 범위 내) 접근할 수 있습니다.
+                  링크를 생성하면 <code>/share/…</code> 주소로 {isSupabase ? '로그인 없이' : '로그인한'} 누구나(권한 범위 내) 접근할 수 있습니다.
                 </Typography>
               </>
             )}
@@ -249,7 +261,7 @@ export default function ShareProjectDialog({
         <Button color="inherit" onClick={onClose} disabled={saving}>
           닫기
         </Button>
-        {tab === 0 && (
+        {tab === 0 && !isSupabase && (
           <Button variant="contained" onClick={saveEmails} disabled={saving}>
             저장
           </Button>

@@ -7,8 +7,9 @@ import NavSidebar from './components/layout/NavSidebar';
 import HomePage from './pages/HomePage';
 import ProjectListPage from './pages/ProjectListPage';
 import NewProjectPage from './pages/NewProjectPage';
-import { isCloudStorage } from './storage';
+import { storageProviderName } from './storage';
 import { getFirebase } from './firebase/app';
+import { ensureSupabaseAuth } from './supabase/auth';
 
 // 편집기는 무거운 React Konva 를 사용하므로 지연 로딩(코드 분할)
 const EditorRoute = lazy(() => import('./pages/EditorRoute'));
@@ -37,9 +38,10 @@ function FullScreenLoader() {
  * 편집기는 [집기 라이브러리 + 캔버스 + 선택 정보] 3분할 셸을 씁니다.
  */
 export default function App() {
-  // 앱 실행 시 익명 로그인 선행(클라우드 설정 시). 실패해도 LocalStorage 로 동작.
+  // 앱 실행 시 익명 로그인 선행(선택된 클라우드 provider 별). 실패해도 LocalStorage 로 동작.
   useEffect(() => {
-    if (isCloudStorage) getFirebase().catch(() => {});
+    if (storageProviderName === 'firebase') getFirebase().catch(() => {});
+    else if (storageProviderName === 'supabase') ensureSupabaseAuth().catch(() => {});
   }, []);
 
   return (

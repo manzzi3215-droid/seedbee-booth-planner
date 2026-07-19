@@ -1,22 +1,29 @@
 import type { StorageProvider } from './StorageProvider';
 import { LocalStorageProvider } from './LocalStorageProvider';
 import { FirestoreStorageProvider } from './FirestoreStorageProvider';
-import { isFirebaseConfigured } from '../firebase/config';
+import { SupabaseStorageProvider } from './SupabaseStorageProvider';
+import { storageProviderName, isCloudStorage } from './providerName';
 
 /**
  * 앱 전역에서 사용하는 단일 storage 인스턴스.
  *
- * - Firebase 설정(VITE_FIREBASE_*)이 있으면 Firestore 를 기본 저장소로 사용하고
- *   LocalStorage 를 캐시/백업/오프라인 폴백으로 씁니다.
- * - 설정이 없으면 기존과 동일하게 LocalStorage 전용으로 동작합니다(하위 호환).
+ * provider 선택은 VITE_STORAGE_PROVIDER(firebase|supabase|local) 로 결정됩니다(providerName.ts).
+ *  - firebase : Firestore + LocalStorage 캐시 (기존 동작)
+ *  - supabase : Supabase(Postgres) + LocalStorage 캐시
+ *  - local    : LocalStorage 전용
+ *  - 선택한 클라우드 설정(env)이 없으면 자동으로 local 로 폴백
  *
  * 나머지 앱 코드는 항상 `import { storage } from '@/storage'` 로만 접근하세요.
  */
-export const storage: StorageProvider = isFirebaseConfigured
-  ? new FirestoreStorageProvider()
-  : new LocalStorageProvider();
+export const storage: StorageProvider =
+  storageProviderName === 'supabase'
+    ? new SupabaseStorageProvider()
+    : storageProviderName === 'firebase'
+      ? new FirestoreStorageProvider()
+      : new LocalStorageProvider();
 
-/** Firestore(클라우드) 저장소 사용 중 여부 — UI 상태 표시용 */
-export const isCloudStorage = isFirebaseConfigured;
+/** 클라우드(firebase|supabase) 저장소 사용 중 여부 — UI 상태 표시용 */
+export { isCloudStorage, storageProviderName };
+export type { StorageProviderName } from './providerName';
 
 export type { StorageProvider } from './StorageProvider';

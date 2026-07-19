@@ -8,7 +8,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import LinkOffRoundedIcon from '@mui/icons-material/LinkOffRounded';
 import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
 import type { Project } from '../types';
-import { storage, isCloudStorage } from '../storage';
+import { storage, storageProviderName } from '../storage';
 import { useAuthUser } from '../firebase/useAuthUser';
 import { signInWithGoogle } from '../firebase/auth';
 
@@ -32,8 +32,9 @@ export default function ShareRoute() {
 
   useEffect(() => {
     if (!ready || !shareId) return;
-    // 클라우드 사용 시 Google 로그인(비익명) 필요
-    if (isCloudStorage && (!user || user.isAnonymous)) {
+    // Firebase provider 는 공유 조회에 Google 로그인(비익명) 필요.
+    // Supabase provider 는 get_project_by_share_token RPC 로 비로그인 조회 허용(로그인 게이트 없음).
+    if (storageProviderName === 'firebase' && (!user || user.isAnonymous)) {
       setState('need-login');
       return;
     }
