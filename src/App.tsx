@@ -15,6 +15,8 @@ import { ensureSupabaseAuth } from './supabase/auth';
 const EditorRoute = lazy(() => import('./pages/EditorRoute'));
 const ShareRoute = lazy(() => import('./pages/ShareRoute'));
 const VmdWorkspace = lazy(() => import('./features/vmd/VmdWorkspace'));
+// 로컬 전용 이전 도구 (메뉴 미노출, /migrate 직접 접근 + VITE_ENABLE_MIGRATION_TOOL=true 필요)
+const MigrationPage = lazy(() => import('./features/migration/MigrationPage'));
 
 function FullScreenLoader() {
   return (
@@ -92,6 +94,14 @@ export default function App() {
           element={
             <Suspense fallback={<FullScreenLoader />}>
               <ShareRoute />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/migrate"
+          element={
+            <Suspense fallback={<FullScreenLoader />}>
+              <MigrationPage />
             </Suspense>
           }
         />

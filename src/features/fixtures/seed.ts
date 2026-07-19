@@ -2,6 +2,7 @@ import type { FixtureDef } from '../../types';
 import { storage } from '../../storage';
 import { generateId } from '../../utils/id';
 import { DEFAULT_FIXTURES } from './defaults';
+import { isLibrarySeedLocked } from '../../supabase/libraryLock';
 
 /**
  * 집기 라이브러리가 비어 있으면 기본 집기를 자동 생성한다.
@@ -16,6 +17,8 @@ import { DEFAULT_FIXTURES } from './defaults';
 let seedingPromise: Promise<void> | null = null;
 
 async function seedIfEmpty(): Promise<void> {
+  // 클라우드 시드 잠금(마이그레이션 완료 사용자) → 기본 시드 추가 안 함(모든 기기 기준).
+  if (await isLibrarySeedLocked()) return;
   const existing = await storage.getFixtures();
   if (existing.length > 0) return;
   for (const seed of DEFAULT_FIXTURES) {

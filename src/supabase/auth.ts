@@ -46,31 +46,85 @@ const oauthOptions = () => ({
   scopes: 'openid email profile',
 });
 
-/** 익명 세션이 확보된 uid 를 반환. Promise 를 캐시해 동시/중복 로그인을 방지. */
-let bootstrapPromise: Promise<string> | null = null;
+/**
+ * 현재 Supabase 사용자 uid 를 반환. 세션이 없을 때만 익명 로그인.
+ *
+ * ⚠️ 캐시 규칙(중요): 완료된 uid 를 **영구 캐시하지 않습니다**.
+ *  - 매 호출마다 getSession() 으로 **현재 세션의 사용자**를 확인 → Google 로그인/로그아웃/전환이 즉시 반영.
+ *  - 캐시는 "진행 중인 익명 로그인" 하나에만 사용(동시 호출 시 익명 사용자 중복 생성 방지). finally 에서 해제.
+ *  - (과거 버그) resolved uid 를 영구 캐시해, 로그인 후에도 최초 익명 uid 를 계속 반환하던 문제를 수정.
+ */
+let anonSignInInFlight: Promise<string> | null = null;
 
-export function ensureSupabaseAuth(): Promise<string> {
+export async function ensureSupabaseAuth(): Promise<string> {
   if (!isSupabaseConfigured || !supabase) {
-    return Promise.reject(new Error('Supabase 가 설정되지 않았습니다(VITE_SUPABASE_*).'));
+    throw new Error('Supabase 가 설정되지 않았습니다(VITE_SUPABASE_*).');
   }
-  if (!bootstrapPromise) {
-    const client = supabase;
-    bootstrapPromise = (async () => {
-      // 1) 기존(영속) 세션 재사용
-      const { data: sessionData } = await client.auth.getSession();
-      const existing = sessionData.session?.user;
-      if (existing) return existing.id;
-      // 2) 없으면 익명 로그인
+  const client = supabase;
+
+  // 1) 현재 세션 사용자(최신) 우선 — 매 호출 확인
+  const { data: sessionData } = await client.auth.getSession();
+  const existing = sessionData.session?.user;
+  if (existing) return existing.id;
+
+  // 2) 세션이 없을 때만 익명 로그인. 동시 호출 중복 방지용 in-flight promise(완료 시 해제).
+  if (!anonSignInInFlight) {
+    anonSignInInFlight = (async () => {
+      // 경쟁 상황 재확인: 그 사이 세션이 생겼으면 그것을 사용
+      const { data: recheck } = await client.auth.getSession();
+      if (recheck.session?.user) return recheck.session.user.id;
       const { data, error } = await client.auth.signInAnonymously();
-      if (error || !data.user) {
-        // 실패 시 다음 호출에서 재시도할 수 있도록 캐시 해제
-        bootstrapPromise = null;
-        throw error ?? new Error('Supabase 익명 로그인 실패');
-      }
+      if (error || !data.user) throw error ?? new Error('Supabase 익명 로그인 실패');
       return data.user.id;
-    })();
+    })().finally(() => {
+      anonSignInInFlight = null; // 완료(성공/실패) 후 해제 — 영구 캐시 아님
+    });
   }
-  return bootstrapPromise;
+  return anonSignInInFlight;
+}
+
+/**
+ * 이전(import) 등 소유권이 중요한 쓰기 직전, 현재 Supabase 사용자가
+ * "확정된 비익명 Google 사용자"인지 검증(읽기 전용). getSession/getUser/ensureSupabaseAuth 를 모두 대조.
+ */
+export interface SupabaseUserCheck {
+  ok: boolean;
+  reason?: string;
+  uidTail: string | null;
+  isAnonymous: boolean | null;
+  google: boolean;
+  allSame: boolean;
+}
+
+function hasGoogle(u: User | null | undefined): boolean {
+  if (!u) return false;
+  const meta = (u.app_metadata ?? {}) as { provider?: string; providers?: string[] };
+  return (
+    (u.identities ?? []).some((i) => i.provider === 'google') ||
+    meta.provider === 'google' ||
+    (meta.providers ?? []).includes('google')
+  );
+}
+
+export async function verifySupabaseGoogleUser(): Promise<SupabaseUserCheck> {
+  if (!supabase) {
+    return { ok: false, reason: 'Supabase 미설정', uidTail: null, isAnonymous: null, google: false, allSame: false };
+  }
+  const { data: s } = await supabase.auth.getSession();
+  const { data: u } = await supabase.auth.getUser();
+  const ensureUid = await ensureSupabaseAuth();
+  const sUser = s.session?.user ?? null;
+  const uUser = u.user ?? null;
+  const uidTail = uUser ? `…${uUser.id.slice(-4)}` : sUser ? `…${sUser.id.slice(-4)}` : null;
+  const isAnonymous = uUser?.is_anonymous ?? sUser?.is_anonymous ?? null;
+  const google = hasGoogle(uUser) || hasGoogle(sUser);
+  const allSame = !!sUser && !!uUser && sUser.id === uUser.id && uUser.id === ensureUid;
+
+  if (!sUser || !uUser) return { ok: false, reason: '세션/사용자 없음', uidTail, isAnonymous, google, allSame };
+  if (isAnonymous === true) return { ok: false, reason: '게스트(익명) 상태', uidTail, isAnonymous, google, allSame };
+  if (!google) return { ok: false, reason: 'Google 로그인 아님', uidTail, isAnonymous, google, allSame };
+  if (!allSame) return { ok: false, reason: '세션 불일치(getSession/getUser/ensure)', uidTail, isAnonymous, google, allSame };
+  return { ok: true, uidTail, isAnonymous, google, allSame };
 }
 
 /**
@@ -101,9 +155,9 @@ export async function signInWithGoogleSupabase(): Promise<void> {
 export async function signOutSupabase(): Promise<void> {
   if (!supabase) return;
   await supabase.auth.signOut();
-  bootstrapPromise = null; // 다음 ensureSupabaseAuth 가 새 익명 세션을 만들도록 캐시 해제
+  anonSignInInFlight = null; // 진행 중 익명 로그인 있으면 해제(ensureSupabaseAuth 는 getSession 재확인)
   try {
-    await ensureSupabaseAuth();
+    await ensureSupabaseAuth(); // 세션 없음 → 새 익명 세션 확보
   } catch {
     /* 익명 로그인 실패해도 앱은 로컬로 계속 동작 */
   }

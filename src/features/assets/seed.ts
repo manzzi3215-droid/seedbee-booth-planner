@@ -2,6 +2,7 @@ import type { Asset } from '../../types';
 import { storage } from '../../storage';
 import { generateId } from '../../utils/id';
 import { DEFAULT_ASSETS } from './defaults';
+import { isLibrarySeedLocked } from '../../supabase/libraryLock';
 
 /**
  * 에셋 라이브러리가 비어 있으면 기본 샘플 에셋을 자동 생성한다(v0.9.7).
@@ -21,6 +22,8 @@ const SEED_VERSION_KEY = 'blp:assetSeedVersion';
 const SEED_VERSION = 2;
 
 async function seedIfEmpty(): Promise<void> {
+  // 클라우드 시드 잠금(마이그레이션 완료 사용자) → 기본 시드/ top-up 추가 안 함(모든 기기 기준).
+  if (await isLibrarySeedLocked()) return;
   const existing = await storage.getAssets();
   const now = Date.now();
 
