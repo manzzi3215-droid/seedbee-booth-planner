@@ -20,6 +20,12 @@ dist-ssr
 # Firebase 배포 캐시
 .firebase
 
+# 마이그레이션 산출물(백업/유실 집기 export) — 커밋 금지
+booth-planner-firebase-backup-*.json
+booth-planner-supabase-library-backup-*.json
+kobe-unresolved-fixtures-*.json
+kobe-unresolved-fixtures-*.csv
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

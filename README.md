@@ -1,6 +1,6 @@
 # Booth Layout Planner
 
-> **v1.2.6 - 저장 안정성 핫픽스: localStorage 캐시 실패가 클라우드 저장을 막지 않도록 수정**
+> **v1.3.0 - Supabase 저장 provider 전환: Supabase Auth·RLS 저장·보기 전용 공유 링크·로컬 마이그레이션 도구(기본 비활성). Firebase provider·원본 유지**
 
 백화점 · 박람회 · 팝업스토어 등 다양한 행사장의 부스를 직접 설계하는
 **2D 레이아웃 편집 웹앱**입니다. CAD 같은 전문 설계 도구가 아니라
@@ -12,6 +12,16 @@
 ---
 
 ## 변경 이력
+
+**Supabase 저장 provider 전환 (v1.3.0)**
+- **Supabase 저장 provider 추가:** 기존 Firebase(Firestore)·LocalStorage 외에 **Supabase(Postgres)** 를 저장 provider 로 선택 가능(`VITE_STORAGE_PROVIDER=supabase`). Firebase provider 코드와 원본 데이터는 그대로 유지(무삭제·읽기 전용 이전).
+- **Supabase Auth:** 익명 세션 + Google 연결(계정 링크) / 기존 Google 계정 로그인 지원(Manual Linking).
+- **RLS 저장 구조:** `projects` / `project_shares` / `user_libraries` 를 owner 기준 Row Level Security 로 분리 저장.
+- **로컬 마이그레이션 도구(`/migrate`):** Firebase→Supabase 1회성 로컬 전용 이전 도구. **기본 비활성**(`VITE_ENABLE_MIGRATION_TOOL=false`), 메뉴 미노출·직접 접근, production 노출 금지.
+- **라이브러리 seed lock:** `seed_locked=true` 로 다른 기기·새 브라우저·시크릿·데이터삭제·SEED_VERSION 증가 상황에서도 기본 시드가 재추가되지 않도록 잠금.
+- **로그인 없는 보기 전용 공유 링크:** `permission=view` 공유 행 + 익명 RPC 로 로그인 없이 열람 가능한 공유 링크 생성.
+- **인증 세션 stale 캐시 수정:** 세션 전환 시 이전 계정의 캐시가 남던 문제 수정.
+- **GLB 바이너리:** 기존과 동일하게 **기기별 IndexedDB 로컬 저장**이며 클라우드로 자동 이전되지 않음 → 다른 기기에서는 **재등록 필요**.
 
 **저장 안정성 핫픽스 (v1.2.6)**
 - **localStorage 캐시 저장 실패가 Firestore 저장까지 실패 처리되던 문제 수정:** `FirestoreStorageProvider.saveProject` 가
